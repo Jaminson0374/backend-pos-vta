@@ -29,17 +29,20 @@ public class ManageDebitCreditNoteUseCase {
     private final ThirdPartyRepository thirdPartyRepository;
     private final SupplierInvoiceRepository supplierInvoiceRepository;
     private final SupplierBalanceService supplierBalanceService;
+    private final AccountsPayableUseCase accountsPayableUseCase;
 
     public ManageDebitCreditNoteUseCase(
             DebitCreditNoteRepository repository,
             ThirdPartyRepository thirdPartyRepository,
             SupplierInvoiceRepository supplierInvoiceRepository,
-            SupplierBalanceService supplierBalanceService
+            SupplierBalanceService supplierBalanceService,
+            AccountsPayableUseCase accountsPayableUseCase
     ) {
         this.repository = repository;
         this.thirdPartyRepository = thirdPartyRepository;
         this.supplierInvoiceRepository = supplierInvoiceRepository;
         this.supplierBalanceService = supplierBalanceService;
+        this.accountsPayableUseCase = accountsPayableUseCase;
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +95,11 @@ public class ManageDebitCreditNoteUseCase {
 
         var saved = repository.save(note);
 
+        // Update AccountsPayable for the linked invoice
+        if (saved.supplierInvoiceId() != null) {
+            accountsPayableUseCase.applyDebitNote(saved);
+        }
+
         // Adjust supplier balance:
         // DEBIT_NOTE → increases debt → isCredit=false
         // CREDIT_NOTE → reduces debt → isCredit=true
@@ -143,6 +151,12 @@ public class ManageDebitCreditNoteUseCase {
         );
 
         var saved = repository.save(updated);
+
+        // Update AccountsPayable for the linked invoice
+        if (saved.supplierInvoiceId() != null) {
+            accountsPayableUseCase.applyDebitNote(saved);
+        }
+
         var supplier = thirdPartyRepository.findById(saved.supplierId()).orElse(null);
         return DebitCreditNoteResponse.from(saved, supplier != null ? supplier.name() : null);
     }

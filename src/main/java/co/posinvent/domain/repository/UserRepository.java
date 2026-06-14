@@ -12,6 +12,6 @@ public interface UserRepository {
     Optional<User> findById(UUID id);
     Optional<User> findByUsername(String username);
     Page<User> findAll(Pageable pageable);
-    Page<User> findFiltered(String search, String roleName, Boolean active, Pageable pageable);
+    Page<User> findFiltered(String searchPattern, String roleName, Boolean active, Pageable pageable);
     long countByRoleNameAndActive(String roleName, boolean active);
 }

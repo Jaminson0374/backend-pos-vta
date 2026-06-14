@@ -12,6 +12,12 @@ public record PurchaseOrder(
         LocalDate orderDate,
         String documentNumber,
         String notes,
+        LocalDate dueDate,
+        UUID buyerId,
+        String paymentMethod,
+        String supportDocumentType,
+        String supportDocumentNumber,
+        String currency,
         UUID createdBy,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
@@ -20,6 +26,7 @@ public record PurchaseOrder(
 ) {
     public PurchaseOrder {
         if (lines == null) lines = List.of();
+        if (currency == null || currency.isBlank()) currency = "COP";
     }
 
     public boolean isMutable() {

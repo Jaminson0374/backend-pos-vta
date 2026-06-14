@@ -52,6 +52,7 @@ public record ProductResponse(
         UUID incomeAccountId,
         UUID inventoryAccountId,
         UUID costOfSalesAcctId,
+        UUID accountingTemplateId,
 
         boolean active,
         int version,
@@ -104,6 +105,7 @@ public record ProductResponse(
                 p.incomeAccountId(),
                 p.inventoryAccountId(),
                 p.costOfSalesAcctId(),
+                p.accountingTemplateId(),
                 p.active(),
                 p.version(),
                 p.createdAt(),

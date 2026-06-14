@@ -19,8 +19,8 @@ interface ThirdPartyJpaRepository extends JpaRepository<ThirdPartyEntity, UUID> 
 
     @Query("""
              SELECT t FROM ThirdPartyEntity t
-             WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR t.numIdentification LIKE CONCAT('%', :q, '%')
+             WHERE LOWER(t.name) LIKE :q
+                OR t.numIdentification LIKE :q
              """)
     Page<ThirdPartyEntity> search(@Param("q") String query, Pageable pageable);
 

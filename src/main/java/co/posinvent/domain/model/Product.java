@@ -46,6 +46,7 @@ public record Product(
         UUID incomeAccountId,
         UUID inventoryAccountId,
         UUID costOfSalesAcctId,
+        UUID accountingTemplateId,
         boolean active,
         int version,
         OffsetDateTime createdAt,

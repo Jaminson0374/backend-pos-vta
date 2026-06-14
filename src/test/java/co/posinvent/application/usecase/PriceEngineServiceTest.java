@@ -222,8 +222,8 @@ class PriceEngineServiceTest {
                 taxType, salePrice, "PROMEDIO_PONDERADO",
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.TEN,
                 BigDecimal.ZERO,
-                false, false, false, false, false, false, true,
-                null, null, null, null, null, null, false, 0,
+                false, false, false, false, false, false,                 true,
+                null, null, null, null, null, null, null, false, 0,
                 null, null,
                 List.of(), List.of(), List.of(), List.of(), priceEntries,
                 List.of()

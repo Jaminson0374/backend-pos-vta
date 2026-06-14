@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.AccountsReceivableResponse;
 import co.posinvent.application.dto.ArAgingResponse;
+import co.posinvent.application.service.InterestCalculationService;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.AccountsReceivable;
@@ -29,15 +30,18 @@ public class AccountsReceivableUseCase {
     private final AccountsReceivableRepository arRepo;
     private final ThirdPartyRepository thirdPartyRepo;
     private final SalesDocumentRepository documentRepo;
+    private final InterestCalculationService interestCalculationService;
 
     public AccountsReceivableUseCase(
             AccountsReceivableRepository arRepo,
             ThirdPartyRepository thirdPartyRepo,
-            SalesDocumentRepository documentRepo
+            SalesDocumentRepository documentRepo,
+            InterestCalculationService interestCalculationService
     ) {
         this.arRepo = arRepo;
         this.thirdPartyRepo = thirdPartyRepo;
         this.documentRepo = documentRepo;
+        this.interestCalculationService = interestCalculationService;
     }
 
     // ── Create from Invoice ────────────────────────────────────────────────
@@ -129,6 +133,12 @@ public class AccountsReceivableUseCase {
                 count++;
             }
         }
+
+        // After marking ARs as overdue, calculate interest
+        if (count > 0) {
+            interestCalculationService.calculateOverdueInterest();
+        }
+
         return count;
     }
 

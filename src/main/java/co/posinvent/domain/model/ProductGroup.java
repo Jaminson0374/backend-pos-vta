@@ -8,5 +8,6 @@ public record ProductGroup(
     String name,
     UUID categoryId,
     boolean active,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    UUID accountingTemplateId
 ) {}

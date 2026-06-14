@@ -199,9 +199,11 @@ public class PosCheckoutUseCase {
         // 7. Calculate change
         var change = totalPaid.subtract(totals.total()).max(BigDecimal.ZERO);
 
-        // 8. Publish accounting + DIAN event
-        var taxAmount = totals.tax0().add(totals.tax5()).add(totals.tax8()).add(totals.tax19());
-        eventPublisher.publishEvent(new InvoiceIssuedEvent(this, savedInvoice.id(), savedInvoice.documentNumber(), totals.net(), taxAmount, totals.total()));
+        // 8. Publish accounting + DIAN event with per-rate tax amounts
+        eventPublisher.publishEvent(new InvoiceIssuedEvent(this, savedInvoice.id(), savedInvoice.documentNumber(),
+                totals.net(),
+                totals.tax0(), totals.tax5(), totals.tax8(), totals.tax19(),
+                totals.total()));
 
         // 9. Return INVOICE
         return CheckoutResponse.from(documentRepo.findById(savedInvoice.id())

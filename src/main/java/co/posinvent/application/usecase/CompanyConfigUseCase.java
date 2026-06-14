@@ -60,6 +60,7 @@ public class CompanyConfigUseCase {
                 request.dianResolutionId(),
                 request.softwarePin(),
                 request.certificateId(),
+                request.autoGenerateJournalEntries() != null ? request.autoGenerateJournalEntries() : true,
                 null,
                 null
         );

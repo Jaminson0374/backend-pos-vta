@@ -43,7 +43,8 @@ public class ThirdPartyUseCase {
 
     @Transactional(readOnly = true)
     public PageResponse<ThirdPartyResponse> search(String query, Pageable pageable) {
-        return PageResponse.from(thirdPartyRepository.search(query, pageable), ThirdPartyResponse::from);
+        var searchPattern = query != null && !query.isBlank() ? "%" + query.toLowerCase() + "%" : null;
+        return PageResponse.from(thirdPartyRepository.search(searchPattern, pageable), ThirdPartyResponse::from);
     }
 
     @Transactional(readOnly = true)

@@ -9,9 +9,10 @@ public record ProductGroupResponse(
     String name,
     UUID categoryId,
     boolean active,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    UUID accountingTemplateId
 ) {
     public static ProductGroupResponse from(ProductGroup d) {
-        return new ProductGroupResponse(d.id(), d.name(), d.categoryId(), d.active(), d.createdAt());
+        return new ProductGroupResponse(d.id(), d.name(), d.categoryId(), d.active(), d.createdAt(), d.accountingTemplateId());
     }
 }

@@ -72,15 +72,14 @@ CREATE TABLE units_of_measure (
     created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
--- 8. Listas de precios (Pv1=Normal, Pv2=Mayorista, Pv3=Crédito, etc.)
-CREATE TABLE price_lists (
-    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    code        VARCHAR(20)  NOT NULL UNIQUE,
-    name        VARCHAR(100) NOT NULL UNIQUE,
-    description VARCHAR(300),
-    active      BOOLEAN      NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
+-- 8. Listas de precios — extender tabla existente de V8 con columna code
+ALTER TABLE price_lists ADD COLUMN IF NOT EXISTS code VARCHAR(20);
+-- Renombrar is_active → active si existe (V8 usó is_active)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='price_lists' AND column_name='is_active') THEN
+    ALTER TABLE price_lists RENAME COLUMN is_active TO active;
+  END IF;
+END $$;
 
 -- 9. Ubicaciones dentro de bodegas (estanterías, rieles, zonas)
 CREATE TABLE warehouse_locations (

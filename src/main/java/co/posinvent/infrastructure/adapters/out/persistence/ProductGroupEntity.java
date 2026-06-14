@@ -25,6 +25,9 @@ class ProductGroupEntity {
     @Column(name = "category_id")
     private UUID categoryId;
 
+    @Column(name = "accounting_template_id")
+    private UUID accountingTemplateId;
+
     @Column(nullable = false)
     private boolean active;
 

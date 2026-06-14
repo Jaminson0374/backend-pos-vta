@@ -154,6 +154,10 @@ public class ManageSalesDocumentUseCase {
             validateInvoiceTransition(current, target);
             return;
         }
+        if (doc.type() == SalesDocumentType.CREDIT_NOTE || doc.type() == SalesDocumentType.DEBIT_NOTE) {
+            validateInvoiceTransition(current, target);
+            return;
+        }
 
         throw illegalTransition(doc.type(), current, target);
     }

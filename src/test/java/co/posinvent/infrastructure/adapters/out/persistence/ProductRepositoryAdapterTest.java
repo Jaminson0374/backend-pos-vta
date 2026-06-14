@@ -688,6 +688,7 @@ class ProductRepositoryAdapterTest {
                 null,
                 null,
                 null,
+                null,
                 true,
                 0,
                 now,

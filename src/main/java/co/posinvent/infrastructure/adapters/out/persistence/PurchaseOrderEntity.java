@@ -37,6 +37,24 @@ public class PurchaseOrderEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "due_date")
+    private LocalDate dueDate;
+
+    @Column(name = "buyer_id")
+    private UUID buyerId;
+
+    @Column(name = "payment_method", length = 50)
+    private String paymentMethod;
+
+    @Column(name = "support_document_type", length = 50)
+    private String supportDocumentType;
+
+    @Column(name = "support_document_number", length = 50)
+    private String supportDocumentNumber;
+
+    @Column(length = 10)
+    private String currency;
+
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 

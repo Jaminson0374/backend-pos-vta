@@ -53,6 +53,7 @@ public record ProductRequest(
         UUID incomeAccountId,
         UUID inventoryAccountId,
         UUID costOfSalesAcctId,
+        UUID accountingTemplateId,
 
         int version,
 

@@ -6,5 +6,6 @@ import java.util.UUID;
 
 public record ProductGroupRequest(
     @NotBlank @Size(max = 100) String name,
-    UUID categoryId
+    UUID categoryId,
+    UUID accountingTemplateId
 ) {}

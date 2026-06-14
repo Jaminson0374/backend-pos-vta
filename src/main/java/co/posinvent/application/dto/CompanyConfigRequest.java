@@ -25,5 +25,6 @@ public record CompanyConfigRequest(
     java.math.BigDecimal overheadRate,
     java.util.UUID dianResolutionId,
     String softwarePin,
-    java.util.UUID certificateId
+    java.util.UUID certificateId,
+    Boolean autoGenerateJournalEntries
 ) {}

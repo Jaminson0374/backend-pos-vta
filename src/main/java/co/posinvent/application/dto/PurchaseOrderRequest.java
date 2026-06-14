@@ -12,6 +12,12 @@ public record PurchaseOrderRequest(
         @NotNull UUID supplierId,
         @NotNull LocalDate orderDate,
         @Size(max = 500) String notes,
+        LocalDate dueDate,
+        UUID buyerId,
+        @Size(max = 50) String paymentMethod,
+        @Size(max = 50) String supportDocumentType,
+        @Size(max = 50) String supportDocumentNumber,
+        @Size(max = 10) String currency,
         @NotNull @NotEmpty @Valid List<LineItem> lines
 ) {
     public record LineItem(

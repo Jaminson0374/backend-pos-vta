@@ -3,6 +3,7 @@ package co.posinvent.infrastructure.adapters.out.persistence;
 import co.posinvent.domain.model.User;
 import co.posinvent.domain.repository.UserRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
@@ -48,8 +49,11 @@ class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
-    public Page<User> findFiltered(String search, String roleName, Boolean active, Pageable pageable) {
-        return jpa.findFiltered(search, roleName, active, pageable).map(mapper::toDomain);
+    public Page<User> findFiltered(String searchPattern, String roleName, Boolean active, Pageable pageable) {
+        // Strip Sort to avoid Hibernate appending entity property names (e.g. u.fullName)
+        // to the native query ORDER BY — the native query already has ORDER BY u.full_name
+        var unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        return jpa.findFiltered(searchPattern, roleName, active, unsorted).map(mapper::toDomain);
     }
 
     @Override

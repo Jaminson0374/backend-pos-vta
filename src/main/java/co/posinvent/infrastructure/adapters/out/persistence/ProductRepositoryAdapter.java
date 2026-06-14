@@ -260,6 +260,7 @@ class ProductRepositoryAdapter implements ProductRepository {
                 base.incomeAccountId(),
                 base.inventoryAccountId(),
                 base.costOfSalesAcctId(),
+                base.accountingTemplateId(),
                 base.active(),
                 base.version(),
                 base.createdAt(),

@@ -67,7 +67,7 @@ public class ProductController {
                 product.perishable(), product.belongsToProduct(), product.sellBelowMin(),
                 product.inventoriable(), product.serialNumber(), product.originCountry(),
                 product.specifications(), product.incomeAccountId(), product.inventoryAccountId(),
-                product.costOfSalesAcctId(), product.active(), product.version(),
+                product.costOfSalesAcctId(), product.accountingTemplateId(), product.active(), product.version(),
                 product.createdAt(), product.updatedAt(),
                 product.warehouses(), product.suppliers(), product.images(),
                 product.promotions(), product.priceEntries(), product.presentations(),

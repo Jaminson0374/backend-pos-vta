@@ -43,6 +43,9 @@ public class CompanyConfigEntity {
     @JoinColumn(name = "main_warehouse_id")
     private WarehouseEntity mainWarehouse;
 
+    @Column(name = "auto_generate_journal_entries", nullable = false)
+    private boolean autoGenerateJournalEntries;
+
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
 

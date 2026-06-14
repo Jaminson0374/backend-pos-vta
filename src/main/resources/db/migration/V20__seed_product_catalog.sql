@@ -55,7 +55,8 @@ INSERT INTO units_of_measure (code, name, base_unit) VALUES
 INSERT INTO price_lists (code, name, description) VALUES
 ('PV1', 'Normal (Detal)',    'Precio público general, venta al detal en mostrador'),
 ('PV2', 'Mayorista',         'Precio para clientes mayoristas y restaurantes con volumen'),
-('PV3', 'Crédito',           'Precio para clientes con cupo de crédito aprobado');
+('PV3', 'Crédito',           'Precio para clientes con cupo de crédito aprobado')
+ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, description = EXCLUDED.description;
 
 -- ──────────────────────────────────────────────────────────
 -- 5. Categorías de productos (Tabla 1 del PDF)

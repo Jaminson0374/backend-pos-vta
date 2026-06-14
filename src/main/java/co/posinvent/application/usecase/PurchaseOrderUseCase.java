@@ -85,8 +85,9 @@ public class PurchaseOrderUseCase {
 
     @Transactional(readOnly = true)
     public PageResponse<PurchaseOrderResponse> search(String q, Pageable pageable) {
+        var searchPattern = q != null && !q.isBlank() ? "%" + q.toLowerCase() + "%" : q;
         return PageResponse.from(
-                purchaseOrderRepository.search(q, pageable)
+                purchaseOrderRepository.search(searchPattern, pageable)
                         .map(PurchaseOrderResponse::from)
                         .map(this::enrichSupplierName),
                 r -> r
@@ -104,6 +105,18 @@ public class PurchaseOrderUseCase {
                     "El tercero seleccionado no es un proveedor. Tipo: " + supplier.type());
         }
 
+        if (request.buyerId() != null) {
+            var buyer = thirdPartyRepository.findById(request.buyerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Comprador", request.buyerId()));
+            if (buyer.type() != ThirdParty.ThirdPartyType.EMPLOYEE) {
+                throw new IllegalArgumentException("El comprador debe ser un empleado");
+            }
+        }
+
+        var dueDate = request.dueDate() != null
+                ? request.dueDate()
+                : request.orderDate().plusDays(supplier.creditDays());
+
         var lineItems = buildLineItems(null, request);
         var docNumber = generateDocumentNumber();
 
@@ -114,6 +127,12 @@ public class PurchaseOrderUseCase {
                 request.orderDate(),
                 docNumber,
                 request.notes(),
+                dueDate,
+                request.buyerId(),
+                request.paymentMethod(),
+                request.supportDocumentType(),
+                request.supportDocumentNumber(),
+                request.currency(),
                 operatorId,
                 null,
                 null,
@@ -147,7 +166,7 @@ public class PurchaseOrderUseCase {
                     "Estado actual: " + existing.status());
         }
 
-        thirdPartyRepository.findById(request.supplierId())
+        var supplier = thirdPartyRepository.findById(request.supplierId())
                 .orElseThrow(() -> new ResourceNotFoundException("Proveedor", request.supplierId()));
 
         // Validate all warehouses exist
@@ -155,6 +174,18 @@ public class PurchaseOrderUseCase {
             warehouseRepository.findById(line.warehouseId())
                     .orElseThrow(() -> new ResourceNotFoundException("Bodega", line.warehouseId()));
         }
+
+        if (request.buyerId() != null) {
+            var buyer = thirdPartyRepository.findById(request.buyerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Comprador", request.buyerId()));
+            if (buyer.type() != ThirdParty.ThirdPartyType.EMPLOYEE) {
+                throw new IllegalArgumentException("El comprador debe ser un empleado");
+            }
+        }
+
+        var dueDate = request.dueDate() != null
+                ? request.dueDate()
+                : request.orderDate().plusDays(supplier.creditDays());
 
         var lineItems = buildLineItems(id, request);
 
@@ -165,6 +196,12 @@ public class PurchaseOrderUseCase {
                 request.orderDate(),
                 existing.documentNumber(),
                 request.notes(),
+                dueDate,
+                request.buyerId(),
+                request.paymentMethod(),
+                request.supportDocumentType(),
+                request.supportDocumentNumber(),
+                request.currency(),
                 existing.createdBy(),
                 existing.createdAt(),
                 null,
@@ -190,6 +227,12 @@ public class PurchaseOrderUseCase {
                 existing.orderDate(),
                 existing.documentNumber(),
                 existing.notes(),
+                existing.dueDate(),
+                existing.buyerId(),
+                existing.paymentMethod(),
+                existing.supportDocumentType(),
+                existing.supportDocumentNumber(),
+                existing.currency(),
                 existing.createdBy(),
                 existing.createdAt(),
                 null,
@@ -233,11 +276,29 @@ public class PurchaseOrderUseCase {
     }
 
     private PurchaseOrderResponse enrichSupplierName(PurchaseOrderResponse r) {
-        if (r.supplierId() == null) return r;
-        return thirdPartyRepository.findById(r.supplierId())
-                .map(tp -> new PurchaseOrderResponse(
-                        r.id(), r.supplierId(), tp.name(), r.status(), r.orderDate(),
-                        r.documentNumber(), r.notes(), r.createdBy(), r.createdAt(), r.lines()))
-                .orElse(r);
+        var enriched = r;
+        if (r.supplierId() != null) {
+            enriched = thirdPartyRepository.findById(r.supplierId())
+                    .map(tp -> new PurchaseOrderResponse(
+                            r.id(), r.supplierId(), tp.name(), r.status(), r.orderDate(),
+                            r.documentNumber(), r.notes(), r.dueDate(), r.buyerId(), r.buyerName(),
+                            r.paymentMethod(), r.supportDocumentType(), r.supportDocumentNumber(),
+                            r.currency(), r.createdBy(), r.createdAt(), r.lines()))
+                    .orElse(r);
+        }
+        if (enriched.buyerId() != null) {
+            enriched = thirdPartyRepository.findById(enriched.buyerId())
+                    .map(tp -> new PurchaseOrderResponse(
+                            enriched.id(), enriched.supplierId(), enriched.supplierName(),
+                            enriched.status(), enriched.orderDate(),
+                            enriched.documentNumber(), enriched.notes(), enriched.dueDate(),
+                            enriched.buyerId(), tp.name(),
+                            enriched.paymentMethod(), enriched.supportDocumentType(),
+                            enriched.supportDocumentNumber(),
+                            enriched.currency(), enriched.createdBy(), enriched.createdAt(),
+                            enriched.lines()))
+                    .orElse(enriched);
+        }
+        return enriched;
     }
 }

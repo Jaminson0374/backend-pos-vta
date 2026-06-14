@@ -69,4 +69,23 @@ class SalesDocumentRepositoryAdapter implements SalesDocumentRepository {
                 .map(mapper::toDomain)
                 .toList();
     }
+
+    @Override
+    public Optional<SalesDocument> findByIdWithItems(UUID id) {
+        return jpa.findWithItemsById(id).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<SalesDocument> findBySourceDocumentId(UUID sourceDocumentId) {
+        return jpa.findBySourceDocumentId(sourceDocumentId).stream()
+                .map(mapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<SalesDocument> findBySourceDocumentIdAndType(UUID sourceDocumentId, SalesDocumentType type) {
+        return jpa.findBySourceDocumentIdAndType(sourceDocumentId, type).stream()
+                .map(mapper::toDomain)
+                .toList();
+    }
 }

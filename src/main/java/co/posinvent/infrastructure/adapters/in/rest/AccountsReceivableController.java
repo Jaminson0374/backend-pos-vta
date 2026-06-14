@@ -66,9 +66,15 @@ public class AccountsReceivableController {
 
     @GetMapping("/intereses")
     @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
-    public ResponseEntity<Page<AccountsReceivableResponse>> getInterestSummary() {
-        var all = arRepo.findAll(PageRequest.of(0, 100));
-        var withInterest = all.stream()
+    public ResponseEntity<Page<AccountsReceivableResponse>> getInterestSummary(
+            @RequestParam(required = false) UUID clientId) {
+        Page<AccountsReceivable> page;
+        if (clientId != null) {
+            page = arRepo.findByClientId(clientId, PageRequest.of(0, 100));
+        } else {
+            page = arRepo.findAll(PageRequest.of(0, 100));
+        }
+        var withInterest = page.stream()
                 .filter(ar -> ar.interestAmount() != null
                         && ar.interestAmount().compareTo(BigDecimal.ZERO) > 0)
                 .map(AccountsReceivableResponse::from)

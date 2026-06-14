@@ -139,8 +139,9 @@ public class UserUseCase {
     @Transactional(readOnly = true)
     public PageResponse<UserResponse> list(int page, int size, String search, String role, Boolean active) {
         var pageable = PageRequest.of(page, size, Sort.by("fullName").ascending());
+        var searchPattern = search != null && !search.isBlank() ? "%" + search.toLowerCase() + "%" : null;
         var userPage = userRepository.findFiltered(
-                search != null && !search.isBlank() ? search : null,
+                searchPattern,
                 role != null && !role.isBlank() ? role : null,
                 active,
                 pageable

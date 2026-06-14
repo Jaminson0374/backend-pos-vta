@@ -24,6 +24,14 @@ public interface AccountsReceivableRepository {
 
     List<AccountsReceivable> findOverdueBefore(LocalDate date);
 
+    /**
+     * Find all AR that are overdue, excluding those within the grace period.
+     * @param today reference date (usually LocalDate.now())
+     * @param graceDays number of days of grace before interest starts accruing
+     * @return list of AR with dueDate &lt; (today - graceDays) and status != PAID
+     */
+    List<AccountsReceivable> findOverdueBeforeGrace(LocalDate today, int graceDays);
+
     Optional<AccountsReceivable> findByDocumentId(UUID documentId);
 
     List<AccountsReceivable> findByStatusAndOutstandingGreaterThan(AccountsReceivable.ArStatus status, java.math.BigDecimal minOutstanding, LocalDate dueDateBefore);

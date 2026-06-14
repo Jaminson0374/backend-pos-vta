@@ -58,6 +58,14 @@ public class AccountsReceivableRepositoryAdapter implements AccountsReceivableRe
     }
 
     @Override
+    public List<AccountsReceivable> findOverdueBeforeGrace(LocalDate today, int graceDays) {
+        LocalDate cutoffDate = today.minusDays(graceDays);
+        return jpa.findByDueDateBeforeAndStatusNot(cutoffDate, "PAID").stream()
+                .map(mapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<AccountsReceivable> findByDocumentId(UUID documentId) {
         return jpa.findByDocumentId(documentId).map(mapper::toDomain);
     }

@@ -6,5 +6,6 @@ import java.util.List;
 public record InterestCalculationResponse(
         int processedCount,
         BigDecimal totalInterestCalculated,
+        int skippedCount,
         List<String> errors
 ) {}

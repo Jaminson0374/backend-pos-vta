@@ -8,7 +8,9 @@ import co.posinvent.application.usecase.CheckoutRequest;
 import co.posinvent.application.usecase.CheckoutResponse;
 import co.posinvent.application.usecase.PosCheckoutUseCase;
 import co.posinvent.application.usecase.PosDevolutionUseCase;
+import co.posinvent.domain.model.SalesDocument;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +20,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/pos")
 public class PosController {
@@ -25,13 +30,16 @@ public class PosController {
     private final PosCheckoutUseCase checkoutUseCase;
     private final PosDevolutionUseCase devolutionUseCase;
     private final ProductRepository productRepo;
+    private final SalesDocumentRepository salesDocumentRepo;
 
     public PosController(PosCheckoutUseCase checkoutUseCase,
                          PosDevolutionUseCase devolutionUseCase,
-                         ProductRepository productRepo) {
+                         ProductRepository productRepo,
+                         SalesDocumentRepository salesDocumentRepo) {
         this.checkoutUseCase = checkoutUseCase;
         this.devolutionUseCase = devolutionUseCase;
         this.productRepo = productRepo;
+        this.salesDocumentRepo = salesDocumentRepo;
     }
 
     @PostMapping("/checkout")
@@ -52,6 +60,12 @@ public class PosController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(devolutionUseCase.processDevolution(request, principal.userId()));
+    }
+
+    @GetMapping("/devolutions")
+    @PreAuthorize("hasAnyRole('ADMIN','VENDEDOR')")
+    public ResponseEntity<List<SalesDocument>> getDevolutions(@RequestParam UUID invoiceId) {
+        return ResponseEntity.ok(salesDocumentRepo.findBySourceDocumentId(invoiceId));
     }
 
     @GetMapping("/products/search")

@@ -122,6 +122,10 @@ class ProductEntity {
     @Column(columnDefinition = "TEXT")
     private String specifications;
 
+    // Accounting template
+    @Column(name = "accounting_template_id")
+    private UUID accountingTemplateId;
+
     // Accounting FK references
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "income_account_id")

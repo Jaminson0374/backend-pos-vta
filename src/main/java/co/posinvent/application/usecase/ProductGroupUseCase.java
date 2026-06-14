@@ -35,7 +35,7 @@ public class ProductGroupUseCase {
         if (repository.existsByName(request.name())) {
             throw new BusinessException("DUPLICATE_NAME", "Ya existe un grupo con ese nombre.");
         }
-        var entity = new ProductGroup(null, request.name(), request.categoryId(), true, null);
+        var entity = new ProductGroup(null, request.name(), request.categoryId(), true, null, request.accountingTemplateId());
         return ProductGroupResponse.from(repository.save(entity));
     }
 }

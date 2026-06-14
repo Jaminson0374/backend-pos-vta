@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -212,9 +213,15 @@ public class CreateGoodsReceiptUseCase {
                 oc.orderDate(),
                 oc.documentNumber(),
                 oc.notes(),
+                oc.dueDate(),
+                oc.buyerId(),
+                oc.paymentMethod(),
+                oc.supportDocumentType(),
+                oc.supportDocumentNumber(),
+                oc.currency(),
                 oc.createdBy(),
                 oc.createdAt(),
-                null,
+                OffsetDateTime.now(),
                 oc.version(),
                 updatedOcLines
         ));

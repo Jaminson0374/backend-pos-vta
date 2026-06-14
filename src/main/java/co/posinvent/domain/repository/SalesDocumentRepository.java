@@ -27,4 +27,10 @@ public interface SalesDocumentRepository {
     Page<SalesDocument> findByClientId(UUID clientId, Pageable pageable);
 
     List<SalesDocument> findByShiftIdAndType(UUID shiftId, SalesDocumentType type);
+
+    Optional<SalesDocument> findByIdWithItems(UUID id);
+
+    List<SalesDocument> findBySourceDocumentId(UUID sourceDocumentId);
+
+    List<SalesDocument> findBySourceDocumentIdAndType(UUID sourceDocumentId, SalesDocumentType type);
 }

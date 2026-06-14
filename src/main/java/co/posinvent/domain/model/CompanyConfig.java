@@ -24,6 +24,7 @@ public record CompanyConfig(
     java.util.UUID dianResolutionId,
     String softwarePin,
     java.util.UUID certificateId,
+    boolean autoGenerateJournalEntries,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
 ) {}

@@ -18,8 +18,8 @@ interface PurchaseOrderJpaRepository extends JpaRepository<PurchaseOrderEntity, 
 
     @Query("""
         SELECT p FROM PurchaseOrderEntity p
-        WHERE (:q IS NULL OR :q = '' OR LOWER(p.documentNumber) LIKE LOWER(CONCAT('%', :q, '%'))
-               OR p.supplierId IN (SELECT t.id FROM ThirdPartyEntity t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%'))))
+        WHERE (:q IS NULL OR :q = '' OR LOWER(p.documentNumber) LIKE :q
+               OR p.supplierId IN (SELECT t.id FROM ThirdPartyEntity t WHERE LOWER(t.name) LIKE :q))
         ORDER BY p.orderDate DESC
         """)
     Page<PurchaseOrderEntity> search(@Param("q") String q, Pageable pageable);

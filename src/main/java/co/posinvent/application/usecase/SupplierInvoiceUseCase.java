@@ -6,11 +6,13 @@ import co.posinvent.application.dto.SupplierInvoiceResponse;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.InvoiceStatus;
+import co.posinvent.domain.model.PurchaseAccountedEvent;
 import co.posinvent.domain.model.SupplierInvoice;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.repository.SupplierInvoiceRepository;
 import co.posinvent.domain.repository.ThirdPartyCategoryRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,15 +27,21 @@ public class SupplierInvoiceUseCase {
     private final SupplierInvoiceRepository invoiceRepository;
     private final ThirdPartyRepository thirdPartyRepository;
     private final ThirdPartyCategoryRepository thirdPartyCategoryRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final AccountsPayableUseCase accountsPayableUseCase;
 
     public SupplierInvoiceUseCase(
             SupplierInvoiceRepository invoiceRepository,
             ThirdPartyRepository thirdPartyRepository,
-            ThirdPartyCategoryRepository thirdPartyCategoryRepository
+            ThirdPartyCategoryRepository thirdPartyCategoryRepository,
+            ApplicationEventPublisher eventPublisher,
+            AccountsPayableUseCase accountsPayableUseCase
     ) {
         this.invoiceRepository = invoiceRepository;
         this.thirdPartyRepository = thirdPartyRepository;
         this.thirdPartyCategoryRepository = thirdPartyCategoryRepository;
+        this.eventPublisher = eventPublisher;
+        this.accountsPayableUseCase = accountsPayableUseCase;
     }
 
     @Transactional(readOnly = true)
@@ -128,6 +136,17 @@ public class SupplierInvoiceUseCase {
 
         var saved = invoiceRepository.save(invoice);
 
+        // Publish PurchaseAccountedEvent for automatic journal entry generation
+        eventPublisher.publishEvent(new PurchaseAccountedEvent(
+                this,
+                saved.id(),
+                saved.invoiceNumber(),
+                saved.subtotal(),
+                saved.total(),          // netPayable = total
+                saved.retentionTotal(), // retefuente
+                BigDecimal.ZERO         // ica (not yet tracked separately)
+        ));
+
         // Update ThirdParty.currentBalance
         updateSupplierBalance(supplier, request.total());
 
@@ -164,7 +183,12 @@ public class SupplierInvoiceUseCase {
                 existing.ocIds()
         );
 
-        return SupplierInvoiceResponse.from(invoiceRepository.save(reconciled));
+        var saved = invoiceRepository.save(reconciled);
+
+        // Create AccountsPayable record for this reconciled invoice
+        accountsPayableUseCase.createFromInvoice(saved);
+
+        return SupplierInvoiceResponse.from(saved);
     }
 
     @Transactional

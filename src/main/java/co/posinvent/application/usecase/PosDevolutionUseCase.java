@@ -10,6 +10,7 @@ import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.SaleItemRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
+import co.posinvent.domain.repository.ThirdPartyRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class PosDevolutionUseCase {
     private final ProductRepository productRepo;
     private final RecordMovementUseCase recordMovement;
     private final AccountsReceivableRepository arRepo;
+    private final ThirdPartyRepository thirdPartyRepo;
     private final ApplicationEventPublisher eventPublisher;
 
     public PosDevolutionUseCase(
@@ -44,6 +46,7 @@ public class PosDevolutionUseCase {
             ProductRepository productRepo,
             RecordMovementUseCase recordMovement,
             AccountsReceivableRepository arRepo,
+            ThirdPartyRepository thirdPartyRepo,
             ApplicationEventPublisher eventPublisher
     ) {
         this.documentRepo = documentRepo;
@@ -52,6 +55,7 @@ public class PosDevolutionUseCase {
         this.productRepo = productRepo;
         this.recordMovement = recordMovement;
         this.arRepo = arRepo;
+        this.thirdPartyRepo = thirdPartyRepo;
         this.eventPublisher = eventPublisher;
     }
 
@@ -70,7 +74,15 @@ public class PosDevolutionUseCase {
                     "La factura debe estar ISSUED para procesar devolución. Estado actual: " + invoice.status());
         }
 
-        // 2. Validate each item exists in invoice with sufficient quantity
+        // 2. Check that no prior credit note already exists for this invoice
+        var existingCreditNotes = documentRepo.findBySourceDocumentIdAndType(
+                request.invoiceId(), SalesDocumentType.CREDIT_NOTE);
+        if (!existingCreditNotes.isEmpty()) {
+            throw new BusinessException("DEV_DUPLICATE_CN",
+                    "La factura ya tiene una nota crédito asociada");
+        }
+
+        // 3. Validate each item exists in invoice with sufficient quantity
         var totalReturned = BigDecimal.ZERO.setScale(2);
         var returnItems = new ArrayList<SaleItem>();
         int lineNumber = 1;
@@ -111,7 +123,7 @@ public class PosDevolutionUseCase {
             totalReturned = totalReturned.add(subtotal);
         }
 
-        // 3. Create CREDIT_NOTE document
+        // 4. Create CREDIT_NOTE document
         var docNumber = generateCreditNoteNumber();
         var totals = calculateTotals(returnItems);
 
@@ -152,7 +164,7 @@ public class PosDevolutionUseCase {
             ));
         }
 
-        // 4. Reverse inventory: for each item, increment stock and record RETURN movement
+        // 5. Reverse inventory: for each item, increment stock and record RETURN movement
         for (var devItem : request.items()) {
             var invoiceItem = invoice.items().stream()
                     .filter(i -> i.productId().equals(devItem.productId()))
@@ -182,7 +194,7 @@ public class PosDevolutionUseCase {
 
             recordMovement.record(
                     devItem.productId(), fallbackBatchId, invoice.warehouseId(),
-                    MovementType.RETURN,
+                    MovementType.ENTRY,
                     devItem.quantity(), stock.unitCost(),
                     previousQty, newQty,
                     "SALE", savedCreditNote.id(),
@@ -198,13 +210,15 @@ public class PosDevolutionUseCase {
             }
         }
 
-        // 5. If original invoice was credit sale, reduce AR outstanding
-        var stockReversed = false;
+        // 6. If original invoice was credit sale, reduce AR outstanding and adjust ThirdParty balance
+        var arAdjustment = BigDecimal.ZERO.setScale(2);
         if (Boolean.TRUE.equals(invoice.isCreditSale())) {
             var arOpt = arRepo.findByDocumentId(invoice.id());
             if (arOpt.isPresent()) {
                 var ar = arOpt.get();
-                var newOutstanding = ar.outstanding().subtract(totalReturned).max(BigDecimal.ZERO);
+                var adjustmentAmount = ar.outstanding().min(totalReturned);
+                arAdjustment = adjustmentAmount;
+                var newOutstanding = ar.outstanding().subtract(adjustmentAmount);
                 var newStatus = AccountsReceivable.computeStatus(ar.totalAmount(), ar.paidAmount());
 
                 var updatedAr = new AccountsReceivable(
@@ -215,34 +229,50 @@ public class PosDevolutionUseCase {
                         ar.interestRate(), ar.interestAmount(), ar.lastInterestCalcDate()
                 );
                 arRepo.save(updatedAr);
-                stockReversed = true;
+
+                // Reduce ThirdParty.currentBalance by the adjusted amount
+                var thirdParty = thirdPartyRepo.findById(ar.clientId());
+                if (thirdParty.isPresent()) {
+                    var tp = thirdParty.get();
+                    var newBalance = tp.currentBalance() != null
+                            ? tp.currentBalance().subtract(adjustmentAmount).max(BigDecimal.ZERO)
+                            : BigDecimal.ZERO;
+                    var updatedTp = new ThirdParty(
+                            tp.id(), tp.numIdentification(), tp.name(), tp.type(),
+                            tp.priceListId(), tp.creditLimit(), newBalance,
+                            tp.personType(), tp.taxRegime(), tp.taxResponsibilities(),
+                            tp.cityCode(), tp.dianClassification(), tp.active(),
+                            tp.createdAt(), tp.updatedAt(),
+                            tp.thirdPartyCategoryId(), tp.identificationTypeId(),
+                            tp.dv(), tp.lastName(), tp.commonName(), tp.phone(),
+                            tp.address(), tp.departmentId(), tp.cityId(), tp.email(),
+                            tp.website(), tp.entryDate(), tp.creditDays(),
+                            tp.contactName(), tp.contactPhone(), tp.contactAddress(),
+                            tp.contactEmail(), tp.taxContactFirstName(),
+                            tp.taxContactLastName(), tp.taxEmail(), tp.billingPhone(),
+                            tp.isGranContribuyente(), tp.isAutoretenedor(),
+                            tp.isAgenteRetencionIva(), tp.isRegimenSimple(),
+                            tp.otherTaxResp(), tp.employeeData()
+                    );
+                    thirdPartyRepo.save(updatedTp);
+                }
             }
         }
 
-        // 6. Publish event (credit note)
-        var taxAmount = savedCreditNote.totalTax0().add(savedCreditNote.totalTax5())
-                .add(savedCreditNote.totalTax8()).add(savedCreditNote.totalTax19());
-        eventPublisher.publishEvent(new InvoiceIssuedEvent(this, savedCreditNote.id(), savedCreditNote.documentNumber(), savedCreditNote.totalNet(), taxAmount, savedCreditNote.totalAmount()));
+        // 7. Publish event (credit note) with per-rate tax amounts
+        eventPublisher.publishEvent(new InvoiceIssuedEvent(this, savedCreditNote.id(), savedCreditNote.documentNumber(),
+                savedCreditNote.totalNet(),
+                savedCreditNote.totalTax0(), savedCreditNote.totalTax5(),
+                savedCreditNote.totalTax8(), savedCreditNote.totalTax19(),
+                savedCreditNote.totalAmount()));
 
-        // 7. Build response
-        var itemResponses = request.items().stream()
-                .map(di -> {
-                    var invItem = invoice.items().stream()
-                            .filter(i -> i.productId().equals(di.productId()))
-                            .findFirst().orElseThrow();
-                    var subtotal = di.quantity().multiply(invItem.unitPrice());
-                    return new DevolutionResponse.DevolutionItemResponse(
-                            di.productId(), di.quantity(), invItem.unitPrice(), subtotal
-                    );
-                })
-                .toList();
-
+        // 8. Build response
         return new DevolutionResponse(
                 savedCreditNote.id(),
                 savedCreditNote.documentNumber(),
-                itemResponses,
-                totalReturned,
-                stockReversed
+                savedCreditNote.totalAmount(),
+                request.items().size(),
+                arAdjustment
         );
     }
 

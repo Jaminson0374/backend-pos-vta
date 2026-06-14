@@ -122,6 +122,7 @@ class ProductRequestValidationTest {
                 null,
                 null,
                 null,
+                null,
                 0,
                 List.of(),
                 suppliers,
