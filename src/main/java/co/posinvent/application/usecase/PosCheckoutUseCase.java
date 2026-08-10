@@ -7,6 +7,7 @@ import co.posinvent.domain.repository.SaleItemRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.service.FefoPicker;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,12 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -32,7 +31,9 @@ public class PosCheckoutUseCase {
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;
     private final PriceEngineService priceEngine;
+    private final FefoPicker fefoPicker;
     private final RecordMovementUseCase recordMovement;
+    private final CostingService costingService;
     private final ApplicationEventPublisher eventPublisher;
 
     public PosCheckoutUseCase(
@@ -41,7 +42,9 @@ public class PosCheckoutUseCase {
             StockRepository stockRepo,
             ProductRepository productRepo,
             PriceEngineService priceEngine,
+            FefoPicker fefoPicker,
             RecordMovementUseCase recordMovement,
+            CostingService costingService,
             ApplicationEventPublisher eventPublisher
     ) {
         this.documentRepo = documentRepo;
@@ -49,7 +52,9 @@ public class PosCheckoutUseCase {
         this.stockRepo = stockRepo;
         this.productRepo = productRepo;
         this.priceEngine = priceEngine;
+        this.fefoPicker = fefoPicker;
         this.recordMovement = recordMovement;
+        this.costingService = costingService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -88,52 +93,51 @@ public class PosCheckoutUseCase {
             ));
         }
 
-        // 3 & 4. Decrement stock — auto-create if no stock record exists (demo mode)
-        for (var item : pricedItems) {
-            var fallbackBatchId = item.batchId(); // may be null for products without lots
-            var stock = stockRepo.findByProductBatchWarehouse(
-                            item.productId(), fallbackBatchId, order.warehouseId())
-                    .orElseGet(() -> {
-                        var now = OffsetDateTime.now();
-                        return stockRepo.save(new InventoryStock(
-                                null, item.productId(), fallbackBatchId, order.warehouseId(),
-                                new BigDecimal("1000000"),
-                                BigDecimal.ZERO, BigDecimal.ZERO, now, now));
-                    });
-
-            if (!stock.hasStock(item.quantity())) {
-                throw new BusinessException("POS_INSUFFICIENT_STOCK",
-                        "Stock insuficiente para producto " + item.productId()
-                        + ". Disponible: " + stock.availableQuantity()
-                        + ", Requerido: " + item.quantity());
-            }
-
-            // Decrement currentQuantity AND committedQuantity (reservation was done on CONFIRMED)
-            var previousQty = stock.currentQuantity();
-            var newQty = stock.currentQuantity().subtract(item.quantity());
-            var updated = new InventoryStock(
-                    stock.id(), stock.productId(), stock.batchId(), stock.warehouseId(),
-                    newQty,
-                    stock.committedQuantity().subtract(item.quantity()).max(BigDecimal.ZERO),
-                    stock.unitCost(), stock.createdAt(), stock.updatedAt()
-            );
-            stockRepo.save(updated);
-            recordMovement.record(
-                    item.productId(), item.batchId(), order.warehouseId(),
-                    MovementType.EXIT,
-                    item.quantity(), stock.unitCost(),
-                    previousQty, newQty,
-                    "SALE", order.id(),
-                    "Venta #" + order.id()
-            );
-        }
-
-        // Recalculate totalStock for affected products
+        // 3 & 4. Decrement stock using FEFO: pick batches by expiration date
         var touchedProductIds = new HashSet<UUID>();
         for (var item : pricedItems) {
-            if (touchedProductIds.add(item.productId())) {
-                productRepo.recalculateTotalStock(item.productId());
+            touchedProductIds.add(item.productId());
+
+            // FEFO: pick batches by expiration date
+            var allocations = fefoPicker.pick(item.productId(), order.warehouseId(), item.quantity());
+
+            // Decrement stock and record movement for each batch consumed
+            for (var alloc : allocations) {
+                var stock = stockRepo.findByProductBatchWarehouse(
+                        item.productId(), alloc.batchId(), order.warehouseId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Stock", item.productId()));
+
+                var previousQty = stock.currentQuantity();
+                var newQty = previousQty.subtract(alloc.quantity());
+
+                stockRepo.save(new InventoryStock(
+                        stock.id(),
+                        stock.productId(),
+                        stock.batchId(),
+                        stock.warehouseId(),
+                        newQty,
+                        stock.committedQuantity(),
+                        stock.unitCost(),
+                        stock.createdAt(),
+                        null
+                ));
+
+                recordMovement.record(
+                        item.productId(), alloc.batchId(), order.warehouseId(),
+                        MovementType.EXIT,
+                        alloc.quantity(), alloc.unitCost(),
+                        previousQty, newQty,
+                        "SALE", order.id(),
+                        "Venta #" + order.id()
+                );
+
+                costingService.resolveCostOnExit(item.productId(), alloc.batchId(), order.warehouseId(), alloc.quantity());
             }
+        }
+
+        // Recalculate totalStock for affected products (once per product, not per batch)
+        for (var productId : touchedProductIds) {
+            productRepo.recalculateTotalStock(productId);
         }
 
         // 5. Create INVOICE document

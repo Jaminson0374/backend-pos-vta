@@ -5,6 +5,7 @@ import co.posinvent.domain.repository.GoodsReceiptRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -44,16 +45,19 @@ class GoodsReceiptRepositoryAdapter implements GoodsReceiptRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<GoodsReceipt> findById(UUID id) {
         return jpa.findById(id).map(mapper::toDomain);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<GoodsReceipt> findAll(Pageable pageable) {
         return jpa.findAll(pageable).map(mapper::toDomain);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<GoodsReceipt> findByOcId(UUID ocId, Pageable pageable) {
         return jpa.findByOcId(ocId, pageable).map(mapper::toDomain);
     }

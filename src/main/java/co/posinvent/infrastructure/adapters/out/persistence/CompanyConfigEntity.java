@@ -3,13 +3,18 @@ package co.posinvent.infrastructure.adapters.out.persistence;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "company_config")
 @Getter
 @Setter
+@EntityListeners(AuditingEntityListener.class)
 public class CompanyConfigEntity {
 
     @Id
@@ -68,17 +73,28 @@ public class CompanyConfigEntity {
     private java.math.BigDecimal overheadRate;
 
     @Column(name = "dian_resolution_id")
-    private java.util.UUID dianResolutionId;
+    private UUID dianResolutionId;
 
     @Column(name = "software_pin", length = 100)
     private String softwarePin;
 
     @Column(name = "certificate_id")
-    private java.util.UUID certificateId;
+    private UUID certificateId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+    @Column(name = "created_by")
+    @CreatedBy
+    private UUID createdBy;
+
+    @Column(name = "updated_by")
+    @LastModifiedBy
+    private UUID updatedBy;
+
+    @Column(name = "purchase_retefuente_rate", precision = 5, scale = 2)
+    private java.math.BigDecimal purchaseRetefuenteRate = java.math.BigDecimal.ZERO;
 }

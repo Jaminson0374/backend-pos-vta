@@ -6,10 +6,12 @@ import co.posinvent.application.dto.ProduceResponse;
 import co.posinvent.application.usecase.FormulaProductionUseCase;
 import co.posinvent.application.usecase.ProductFormulaUseCase;
 import co.posinvent.domain.model.ProductFormula;
+import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,7 +32,11 @@ public class ProductionController {
     @PostMapping("/production/batches")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ProduceResponse> produce(@Valid @RequestBody ProduceRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(productionUseCase.produce(request));
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        UUID operatorId = (auth != null && auth.getPrincipal() instanceof PosUserDetails user)
+                ? user.userId()
+                : null;
+        return ResponseEntity.status(HttpStatus.CREATED).body(productionUseCase.produce(request, operatorId));
     }
 
     @GetMapping("/production/batches")

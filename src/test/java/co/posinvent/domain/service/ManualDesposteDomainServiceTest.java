@@ -63,6 +63,7 @@ class ManualDesposteDomainServiceTest {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                UUID.randomUUID(),
                 LocalDate.of(2026, 5, 13),
                 new BigDecimal("100"),
                 new BigDecimal("1000"),
@@ -73,7 +74,8 @@ class ManualDesposteDomainServiceTest {
                 OffsetDateTime.now().minusDays(1),
                 OffsetDateTime.now().minusHours(1),
                 null,
-                null
+                null,
+                null, null, null
         );
 
         var plan = service.planForExistingBatch(batch, new ManualDespostePlan.Command(

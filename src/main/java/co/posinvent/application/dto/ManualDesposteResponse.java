@@ -5,6 +5,7 @@ import co.posinvent.domain.model.ManualDespostePlan;
 import co.posinvent.domain.model.ManualDespostePlan.SourceBatchAction;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,7 +16,8 @@ public record ManualDesposteResponse(
         BigDecimal totalAllocatedCost,
         List<ManualDesposteCutResultResponse> cuts,
         List<StockUpsertDraftResponse> stockUpserts,
-        SourceBatchTransitionResponse sourceBatchTransition
+        SourceBatchTransitionResponse sourceBatchTransition,
+        List<UUID> childBatchIds
 ) {
     public static ManualDesposteResponse from(ManualDespostePlan plan) {
         return new ManualDesposteResponse(
@@ -25,7 +27,27 @@ public record ManualDesposteResponse(
                 plan.totalAllocatedCost(),
                 plan.cuts().stream().map(ManualDesposteCutResultResponse::from).toList(),
                 plan.stockUpserts().stream().map(StockUpsertDraftResponse::from).toList(),
-                SourceBatchTransitionResponse.from(plan.sourceBatchTransition())
+                SourceBatchTransitionResponse.from(plan.sourceBatchTransition()),
+                List.of() // populated by the use case after child batches are created
+        );
+    }
+
+    /**
+     * Factory for building a response with childBatchIds populated from created batches.
+     */
+    public static ManualDesposteResponse withChildBatches(
+            ManualDespostePlan plan,
+            List<UUID> childBatchIds
+    ) {
+        return new ManualDesposteResponse(
+                plan.sourceBatchId(),
+                DesposteMassBalanceResponse.from(plan.massBalance()),
+                plan.totalCommercialValue(),
+                plan.totalAllocatedCost(),
+                plan.cuts().stream().map(ManualDesposteCutResultResponse::from).toList(),
+                plan.stockUpserts().stream().map(StockUpsertDraftResponse::from).toList(),
+                SourceBatchTransitionResponse.from(plan.sourceBatchTransition()),
+                List.copyOf(childBatchIds)
         );
     }
 
@@ -58,7 +80,8 @@ public record ManualDesposteResponse(
             BigDecimal suggestedSalePrice,
             BigDecimal commercialValue,
             BigDecimal allocatedCost,
-            BigDecimal unitCost
+            BigDecimal unitCost,
+            LocalDate expirationDate
     ) {
         static ManualDesposteCutResultResponse from(ManualDespostePlan.ManualDesposteCutResult cut) {
             return new ManualDesposteCutResultResponse(
@@ -68,7 +91,8 @@ public record ManualDesposteResponse(
                     cut.suggestedSalePrice(),
                     cut.commercialValue(),
                     cut.allocatedCost(),
-                    cut.unitCost()
+                    cut.unitCost(),
+                    cut.expirationDate()
             );
         }
     }

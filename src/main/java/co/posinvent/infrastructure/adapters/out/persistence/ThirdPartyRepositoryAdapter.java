@@ -124,4 +124,21 @@ class ThirdPartyRepositoryAdapter implements ThirdPartyRepository {
     public boolean existsByNumIdentificationAndIdNot(String numIdentification, UUID id) {
         return jpa.existsByNumIdentificationAndIdNot(numIdentification, id);
     }
+
+    @Override
+    public Page<ThirdParty> findByTypeAndActive(ThirdParty.ThirdPartyType type, boolean active, Pageable pageable) {
+        return jpa.findByTypeAndActive(type, active, pageable).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<ThirdParty> findEmployeesWithoutUser() {
+        return jpa.findEmployeesWithoutUser().stream()
+                .map(mapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public Optional<ThirdParty> findByNumIdentification(String numIdentification) {
+        return jpa.findByNumIdentification(numIdentification).map(mapper::toDomain);
+    }
 }

@@ -22,4 +22,9 @@ public class StockDisposalRepositoryAdapter implements StockDisposalRepository {
     public List<Map<String, Object>> findExpiringBatches(int days) {
         return jpa.findExpiringBatchesNative(days);
     }
+
+    @Override
+    public List<Map<String, Object>> findExpiredBatches() {
+        return jpa.findExpiredBatchesNative();
+    }
 }

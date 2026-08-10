@@ -7,5 +7,6 @@ public record LoginResponse(
         long expiresIn,
         String role,
         UUID userId,
-        String fullName
+        String fullName,
+        UUID employeeId
 ) {}

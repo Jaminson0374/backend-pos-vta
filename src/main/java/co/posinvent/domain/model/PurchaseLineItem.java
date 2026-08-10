@@ -11,5 +11,7 @@ public record PurchaseLineItem(
         BigDecimal orderedQty,
         BigDecimal receivedQty,
         BigDecimal unitCost,
+        BigDecimal discountPct,
+        String taxType,
         int lineNumber
 ) {}

@@ -63,7 +63,8 @@ public class CreateGoodsReceiptUseCase {
         var receiptInputs = request.lines().stream()
                 .map(line -> new ReceiptLineItemInput(
                         line.productId(), line.warehouseId(),
-                        line.receivedQty(), line.actualCost()))
+                        line.receivedQty(), line.actualCost(),
+                        line.expirationDate()))
                 .toList();
 
         // 3. Validate lines against OC
@@ -78,6 +79,7 @@ public class CreateGoodsReceiptUseCase {
         var receiptId = UUID.randomUUID();
         var receiptDate = LocalDate.now();
         var batchIds = new ArrayList<UUID>();
+        var expirationDates = new ArrayList<LocalDate>();
         var receiptLineItems = new ArrayList<ReceiptLineItem>();
 
         // Build receipt line items from inputs
@@ -119,6 +121,7 @@ public class CreateGoodsReceiptUseCase {
             // 6a. Create Batch with sourceReceiptId (FK now valid)
             var batch = batchRepository.save(new Batch(
                     null,
+                    input.productId(),
                     oc.supplierId(),
                     input.warehouseId(),
                     receiptDate,
@@ -126,14 +129,22 @@ public class CreateGoodsReceiptUseCase {
                     input.actualCost(),
                     BatchStatus.OPEN,
                     "Recepción #" + receiptId + " vs OC #" + oc.id(),
-                    null,            // expirationDate
+                    input.expirationDate(),
                     operatorId,
                     null,
                     null,
+                    null,
                     receiptId,
-                    oc.id()
+                    oc.id(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    BatchType.PARENT,
+                    null
             ));
             batchIds.add(batch.id());
+            expirationDates.add(input.expirationDate());
 
             // 6b. Upsert stock: find existing or create new stock entry
             var existingStock = stockRepository.findByProductBatchWarehouse(
@@ -192,7 +203,9 @@ public class CreateGoodsReceiptUseCase {
                         return new PurchaseLineItem(
                                 ocLine.id(), ocLine.ocId(), ocLine.productId(),
                                 ocLine.warehouseId(), ocLine.orderedQty(),
-                                newReceived, ocLine.unitCost(), ocLine.lineNumber()
+                                newReceived, ocLine.unitCost(),
+                                ocLine.discountPct(), ocLine.taxType(),
+                                ocLine.lineNumber()
                         );
                     }
                     return ocLine;
@@ -227,6 +240,6 @@ public class CreateGoodsReceiptUseCase {
         ));
 
         // 9. Return response (batchIds collected during loop, deviations from domain service)
-        return GoodsReceiptResponse.from(goodsReceipt, batchIds, deviations);
+        return GoodsReceiptResponse.from(goodsReceipt, batchIds, expirationDates, deviations);
     }
 }

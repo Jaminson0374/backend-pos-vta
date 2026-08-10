@@ -6,12 +6,14 @@ import co.posinvent.application.dto.PageResponse;
 import co.posinvent.application.dto.ThirdPartyRequest;
 import co.posinvent.application.dto.ThirdPartyResponse;
 import co.posinvent.application.dto.ThirdPartySupplierOptionResponse;
+import co.posinvent.application.dto.ThirdPartySummaryResponse;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.EmployeeBasicData;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.model.ThirdParty.ThirdPartyType;
 import co.posinvent.domain.repository.ThirdPartyRepository;
+import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyCategoryJpaRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +26,25 @@ import java.util.UUID;
 public class ThirdPartyUseCase {
 
     private final ThirdPartyRepository thirdPartyRepository;
+    private final ThirdPartyCategoryJpaRepository categoryJpaRepository;
 
-    public ThirdPartyUseCase(ThirdPartyRepository thirdPartyRepository) {
+    public ThirdPartyUseCase(
+            ThirdPartyRepository thirdPartyRepository,
+            ThirdPartyCategoryJpaRepository categoryJpaRepository) {
         this.thirdPartyRepository = thirdPartyRepository;
+        this.categoryJpaRepository = categoryJpaRepository;
     }
 
     @Transactional(readOnly = true)
     public PageResponse<ThirdPartyResponse> list(Pageable pageable) {
         return PageResponse.from(thirdPartyRepository.findAll(pageable), ThirdPartyResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ThirdPartyResponse> listByTypeAndActive(ThirdPartyType type, boolean active, Pageable pageable) {
+        return PageResponse.from(
+                thirdPartyRepository.findByTypeAndActive(type, active, pageable),
+                ThirdPartyResponse::from);
     }
 
     @Transactional(readOnly = true)
@@ -169,8 +182,30 @@ public class ThirdPartyUseCase {
         return ThirdPartyResponse.from(thirdPartyRepository.save(updated));
     }
 
+    @Transactional(readOnly = true)
+    public List<ThirdPartySummaryResponse> findEmployeesWithoutUser() {
+        return thirdPartyRepository.findEmployeesWithoutUser().stream()
+                .map(ThirdPartySummaryResponse::from)
+                .toList();
+    }
+
     private ThirdPartyType resolveType(ThirdPartyRequest request) {
-        return request.type() != null ? request.type() : ThirdPartyType.CLIENT;
+        // 1. Explicit type from request takes priority
+        if (request.type() != null) return request.type();
+        // 2. Resolve from category's baseType
+        if (request.thirdPartyCategoryId() != null) {
+            return categoryJpaRepository.findById(request.thirdPartyCategoryId())
+                    .map(cat -> {
+                        try {
+                            return ThirdPartyType.valueOf(cat.getBaseType());
+                        } catch (IllegalArgumentException e) {
+                            return ThirdPartyType.CLIENT;
+                        }
+                    })
+                    .orElse(ThirdPartyType.CLIENT);
+        }
+        // 3. Fallback
+        return ThirdPartyType.CLIENT;
     }
 
     private EmployeeBasicData toEmployeeData(EmployeeBasicDataRequest r) {

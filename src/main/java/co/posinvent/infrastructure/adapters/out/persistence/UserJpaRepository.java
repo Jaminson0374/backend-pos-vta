@@ -12,6 +12,7 @@ import java.util.UUID;
 public interface UserJpaRepository extends JpaRepository<UserEntity, UUID> {
     Optional<UserEntity> findByUsernameAndActiveTrue(String username);
     Optional<UserEntity> findByUsername(String username);
+    Optional<UserEntity> findByEmail(String email);
 
     @Query(value = """
         SELECT u.* FROM users u JOIN roles r ON r.id = u.role_id
@@ -39,4 +40,8 @@ public interface UserJpaRepository extends JpaRepository<UserEntity, UUID> {
     );
 
     long countByRoleNameAndActive(String roleName, boolean active);
+
+    boolean existsByEmployeeId(UUID employeeId);
+
+    boolean existsByEmployeeIdAndIdNot(UUID employeeId, UUID id);
 }

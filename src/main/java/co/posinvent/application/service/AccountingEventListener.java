@@ -231,7 +231,10 @@ public class AccountingEventListener {
                         }
                     }
                     case "PURCHASE_TAX" -> {
-                        // Tax on purchase — not in legacy but available via template
+                        if (event.ivaTotal() != null && event.ivaTotal().compareTo(BigDecimal.ZERO) > 0) {
+                            lines.add(debitLine(account.id(), event.ivaTotal(),
+                                    "IVA descontable " + event.invoiceNumber()));
+                        }
                     }
                 }
             }

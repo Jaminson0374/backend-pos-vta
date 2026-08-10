@@ -5,6 +5,8 @@ import co.posinvent.application.dto.ManualDesposteResponse;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Batch;
+import co.posinvent.domain.model.Batch.BatchStatus;
+import co.posinvent.domain.model.BatchType;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.ManualDespostePlan;
 import co.posinvent.domain.model.MovementType;
@@ -13,12 +15,14 @@ import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.WarehouseRepository;
 import co.posinvent.domain.service.ManualDesposteDomainService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -56,13 +60,71 @@ public class ManualDesposteUseCase {
 
         var plan = domainService.planForExistingBatch(batch, toDomainCommand(request));
 
-        for (var stockUpsert : plan.stockUpserts()) {
-            upsertStock(stockUpsert);
+        // --- Step 1: Create child batches and per-child InventoryStock ---
+        List<UUID> childBatchIds = new ArrayList<>();
+        for (var childPlan : plan.childBatchPlans()) {
+            var childBatch = createChildBatch(batch, childPlan);
+            childBatchIds.add(childBatch.id());
+            createChildStock(childBatch, childPlan);
+            recordChildOutputMovement(childBatch, childPlan);
         }
 
-        closeBatch(batch);
-        return ManualDesposteResponse.from(plan);
+        // --- Step 2: Decrement parent batch stock ---
+        var consumedWeight = plan.massBalance().inputWeight();
+        decrementParentStock(batch, consumedWeight);
+
+        // --- Step 3: Record PRODUCTION_CONSUMPTION for the parent ---
+        var parentStock = stockRepository
+                .findByProductBatchWarehouse(batch.productId(), batch.id(), batch.warehouseId())
+                .orElseThrow(() -> new BusinessException(
+                        "PARENT_STOCK_NOT_FOUND",
+                        "No se encontró stock para el lote padre: " + batch.id()));
+
+        recordMovement.record(
+                batch.productId(),
+                batch.id(),
+                batch.warehouseId(),
+                MovementType.PRODUCTION_CONSUMPTION,
+                consumedWeight,
+                parentStock.unitCost(),
+                parentStock.currentQuantity().add(consumedWeight), // previousQty before decrement
+                parentStock.currentQuantity(),
+                "DESPOSTE",
+                batch.id(),
+                "Desposte — consumo en producción");
+
+        productRepository.recalculateTotalStock(batch.productId());
+
+        // --- Step 4: Transition parent batch ---
+        var newStatus = resolveParentStatus(parentStock.currentQuantity());
+        if (newStatus != batch.status()) {
+            batchRepository.save(new Batch(
+                    batch.id(),
+                    batch.productId(),
+                    batch.supplierId(),
+                    batch.warehouseId(),
+                    batch.entryDate(),
+                    batch.initialWeight(),
+                    batch.purchaseCost(),
+                    newStatus,
+                    batch.notes(),
+                    batch.expirationDate(),
+                    batch.createdBy(),
+                    batch.createdAt(),
+                    batch.updatedAt(),
+                    batch.updatedBy(),
+                    batch.sourceReceiptId(),
+                    batch.ocId(),
+                    null, null, null,
+                    batch.parentBatchId(),
+                    batch.batchType(),
+                    batch.unitOfMeasureId()));
+        }
+
+        return ManualDesposteResponse.withChildBatches(plan, childBatchIds);
     }
+
+    // ── Helpers ────────────────────────────────────────────────────────
 
     private void validateCutReferences(ManualDesposteRequest request) {
         var productIds = new LinkedHashSet<UUID>();
@@ -80,15 +142,13 @@ public class ManualDesposteUseCase {
             if (!product.active()) {
                 throw new BusinessException(
                         "INACTIVE_DESPOSTE_PRODUCT",
-                        "El producto resultante esta inactivo: " + productId
-                );
+                        "El producto resultante esta inactivo: " + productId);
             }
 
             if (!product.inventoriable()) {
                 throw new BusinessException(
                         "NON_INVENTORIABLE_DESPOSTE_PRODUCT",
-                        "El producto resultante debe ser inventariable: " + productId
-                );
+                        "El producto resultante debe ser inventariable: " + productId);
             }
         }
 
@@ -99,8 +159,7 @@ public class ManualDesposteUseCase {
             if (!warehouse.active()) {
                 throw new BusinessException(
                         "INACTIVE_DESPOSTE_WAREHOUSE",
-                        "La bodega destino esta inactiva: " + warehouseId
-                );
+                        "La bodega destino esta inactiva: " + warehouseId);
             }
         }
     }
@@ -118,95 +177,142 @@ public class ManualDesposteUseCase {
                                 cut.productId(),
                                 cut.warehouseId(),
                                 cut.weight(),
-                                cut.suggestedSalePrice()
-                        ))
-                        .toList()
-        );
+                                cut.suggestedSalePrice(),
+                                cut.expirationDate()))
+                        .toList());
     }
 
-    private void upsertStock(ManualDespostePlan.StockUpsertDraft stockUpsert) {
+    /**
+     * Creates a child Batch record with batchType=CHILD, parentBatchId pointing to the
+     * source, and inheriting supplierId, entryDate, and unitOfMeasureId from the parent.
+     */
+    private Batch createChildBatch(Batch parent, ManualDespostePlan.ChildBatchPlan plan) {
+        var child = new Batch(
+                null,                           // id — generated by the database
+                plan.productId(),
+                plan.supplierId(),
+                plan.warehouseId(),
+                plan.entryDate(),
+                plan.initialWeight(),
+                plan.purchaseCost(),
+                BatchStatus.OPEN,
+                plan.notes(),
+                plan.expirationDate(),
+                null,                           // createdBy — filled by JPA audit
+                null,                           // createdAt
+                null,                           // updatedAt
+                null,                           // updatedBy
+                null,                           // sourceReceiptId
+                null,                           // ocId
+                null, null, null,              // enriched display fields
+                parent.id(),                    // parentBatchId
+                BatchType.CHILD,
+                parent.unitOfMeasureId());
+        return batchRepository.save(child);
+    }
+
+    /**
+     * Creates an InventoryStock entry for a newly minted child batch.
+     * If stock already exists at this (product, batch, warehouse) key, the quantity
+     * is accumulated and the average unit cost is recalculated.
+     */
+    private void createChildStock(Batch childBatch, ManualDespostePlan.ChildBatchPlan plan) {
+        var unitCost = plan.initialWeight().compareTo(BigDecimal.ZERO) > 0
+                ? plan.purchaseCost().divide(plan.initialWeight(), 6, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
         var existing = stockRepository.findByProductBatchWarehouse(
-                stockUpsert.productId(),
-                stockUpsert.batchId(),
-                stockUpsert.warehouseId());
+                plan.productId(),
+                childBatch.id(),
+                plan.warehouseId());
 
         if (existing.isPresent()) {
-            var stock = existing.get();
-            var updatedQuantity = stock.currentQuantity().add(stockUpsert.quantityDelta());
-            var updatedUnitCost = resolveUnitCost(stock, stockUpsert, updatedQuantity);
+            var s = existing.get();
+            var existingAllocated = s.currentQuantity().multiply(s.unitCost());
+            var newAllocated = plan.initialWeight().multiply(unitCost);
+            var newQty = s.currentQuantity().add(plan.initialWeight());
+            var avgUnitCost = existingAllocated.add(newAllocated)
+                    .divide(newQty, 6, RoundingMode.HALF_UP);
 
             stockRepository.save(new InventoryStock(
-                    stock.id(),
-                    stock.productId(),
-                    stock.batchId(),
-                    stock.warehouseId(),
-                    updatedQuantity,
-                    stock.committedQuantity(),
-                    updatedUnitCost,
-                    stock.createdAt(),
-                    stock.updatedAt()
-            ));
-            productRepository.recalculateTotalStock(stockUpsert.productId());
-            recordMovement.record(
-                    stockUpsert.productId(), stockUpsert.batchId(), stockUpsert.warehouseId(),
-                    MovementType.ENTRY,
-                    stockUpsert.quantityDelta(), stockUpsert.unitCost(),
-                    stock.currentQuantity(), updatedQuantity,
-                    "DESPOSTE", stockUpsert.batchId(),
-                    "Desposte — corte de producto"
-            );
-            return;
+                    s.id(), s.productId(), s.batchId(), s.warehouseId(),
+                    newQty, s.committedQuantity(), avgUnitCost,
+                    s.createdAt(), null));
+        } else {
+            stockRepository.save(new InventoryStock(
+                    null,
+                    plan.productId(),
+                    childBatch.id(),
+                    plan.warehouseId(),
+                    plan.initialWeight(),
+                    BigDecimal.ZERO,
+                    unitCost,
+                    null, null));
+        }
+        productRepository.recalculateTotalStock(plan.productId());
+    }
+
+    /**
+     * Records a PRODUCTION_OUTPUT kardex movement for a child batch.
+     */
+    private void recordChildOutputMovement(Batch childBatch, ManualDespostePlan.ChildBatchPlan plan) {
+        var unitCost = plan.initialWeight().compareTo(BigDecimal.ZERO) > 0
+                ? plan.purchaseCost().divide(plan.initialWeight(), 6, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        recordMovement.record(
+                plan.productId(),
+                childBatch.id(),
+                plan.warehouseId(),
+                MovementType.PRODUCTION_OUTPUT,
+                plan.initialWeight(),
+                unitCost,
+                BigDecimal.ZERO,
+                plan.initialWeight(),
+                "DESPOSTE",
+                childBatch.id(),
+                "Desposte — producción de corte");
+    }
+
+    /**
+     * Decrements the parent batch's InventoryStock by the consumed weight.
+     * Throws {@link BusinessException} if the parent stock is missing or insufficient.
+     */
+    private void decrementParentStock(Batch batch, BigDecimal consumedWeight) {
+        var stock = stockRepository
+                .findByProductBatchWarehouse(batch.productId(), batch.id(), batch.warehouseId())
+                .orElseThrow(() -> new BusinessException(
+                        "PARENT_STOCK_NOT_FOUND",
+                        "No se encontró stock para el lote padre: " + batch.id()));
+
+        var newQty = stock.currentQuantity().subtract(consumedWeight);
+        if (newQty.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException(
+                    "INSUFFICIENT_PARENT_STOCK",
+                    "Stock insuficiente en lote padre " + batch.id()
+                    + ": disponible " + stock.currentQuantity().setScale(3, RoundingMode.HALF_UP)
+                    + " vs consumido " + consumedWeight.setScale(3, RoundingMode.HALF_UP));
         }
 
         stockRepository.save(new InventoryStock(
-                null,
-                stockUpsert.productId(),
-                stockUpsert.batchId(),
-                stockUpsert.warehouseId(),
-                stockUpsert.quantityDelta(),
-                BigDecimal.ZERO,
-                stockUpsert.unitCost(),
-                null,
-                null
-        ));
-        productRepository.recalculateTotalStock(stockUpsert.productId());
-        recordMovement.record(
-                stockUpsert.productId(), stockUpsert.batchId(), stockUpsert.warehouseId(),
-                MovementType.ENTRY,
-                stockUpsert.quantityDelta(), stockUpsert.unitCost(),
-                BigDecimal.ZERO, stockUpsert.quantityDelta(),
-                "DESPOSTE", stockUpsert.batchId(),
-                "Desposte — nuevo producto"
-        );
+                stock.id(),
+                stock.productId(),
+                stock.batchId(),
+                stock.warehouseId(),
+                newQty,
+                stock.committedQuantity(),
+                stock.unitCost(),
+                stock.createdAt(),
+                null));
     }
 
-    private BigDecimal resolveUnitCost(
-            InventoryStock existing,
-            ManualDespostePlan.StockUpsertDraft stockUpsert,
-            BigDecimal updatedQuantity
-    ) {
-        var existingAllocated = existing.currentQuantity().multiply(existing.unitCost());
-        var newAllocated = stockUpsert.quantityDelta().multiply(stockUpsert.unitCost());
-        return existingAllocated.add(newAllocated)
-                .divide(updatedQuantity, 6, java.math.RoundingMode.HALF_UP);
-    }
-
-    private void closeBatch(Batch batch) {
-        batchRepository.save(new Batch(
-                batch.id(),
-                batch.supplierId(),
-                batch.warehouseId(),
-                batch.entryDate(),
-                batch.initialWeight(),
-                batch.purchaseCost(),
-                Batch.BatchStatus.CLOSED,
-                batch.notes(),
-                null,              // expirationDate
-                batch.createdBy(),
-                batch.createdAt(),
-                batch.updatedAt(),
-                batch.sourceReceiptId(),
-                batch.ocId()
-        ));
+    /**
+     * Resolves the new batch status based on remaining stock.
+     * stock ≈ 0 → CLOSED, stock > 0 → PROCESSING.
+     */
+    private BatchStatus resolveParentStatus(BigDecimal remainingQty) {
+        return remainingQty.compareTo(new BigDecimal("0.0005")) <= 0
+                ? BatchStatus.CLOSED
+                : BatchStatus.PROCESSING;
     }
 }

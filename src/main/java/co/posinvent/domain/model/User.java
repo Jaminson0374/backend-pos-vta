@@ -11,5 +11,7 @@ public record User(
     Role role,
     boolean isActive,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt
+    OffsetDateTime updatedAt,
+    UUID employeeId,
+    String employeeName
 ) {}

@@ -45,6 +45,7 @@ public class PucAccountUseCase {
             request.accountNature(),
             request.allowsTransactions(),
             true,
+            null,
             null
         );
         return PucAccountResponse.from(repository.save(entity));
@@ -74,7 +75,8 @@ public class PucAccountUseCase {
             request.accountNature(),
             request.allowsTransactions(),
             existing.active(),
-            existing.createdAt()
+            existing.createdAt(),
+            existing.updatedAt()
         );
         return PucAccountResponse.from(repository.save(updated));
     }
@@ -104,7 +106,8 @@ public class PucAccountUseCase {
             existing.accountNature(),
             existing.allowsTransactions(),
             false,
-            existing.createdAt()
+            existing.createdAt(),
+            existing.updatedAt()
         );
         repository.save(deactivated);
     }

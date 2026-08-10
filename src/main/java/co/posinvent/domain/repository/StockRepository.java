@@ -17,4 +17,6 @@ public interface StockRepository {
     List<InventoryStock> findByProduct(UUID productId);
 
     List<InventoryStock> findByBatch(UUID batchId);
+
+    List<InventoryStock> findAvailableByProductWarehouse(UUID productId, UUID warehouseId);
 }

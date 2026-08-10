@@ -7,13 +7,17 @@ import co.posinvent.application.dto.UserResponse;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Role;
+import co.posinvent.domain.model.ThirdParty.ThirdPartyType;
 import co.posinvent.domain.model.User;
 import co.posinvent.domain.repository.UserRepository;
 import co.posinvent.infrastructure.adapters.out.persistence.RoleJpaRepository;
 import co.posinvent.infrastructure.adapters.out.persistence.RoleMapper;
+import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyJpaRepository;
 import co.posinvent.infrastructure.adapters.out.persistence.UserEntity;
 import co.posinvent.infrastructure.adapters.out.persistence.UserJpaRepository;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -32,9 +36,12 @@ public class UserUseCase {
     private final UserRepository userRepository;
     private final UserJpaRepository userJpaRepository;
     private final RoleJpaRepository roleJpaRepository;
+    private final ThirdPartyJpaRepository thirdPartyJpaRepository;
     private final RoleMapper roleMapper;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordResetUseCase passwordResetUseCase;
 
+    private static final Logger log = LoggerFactory.getLogger(UserUseCase.class);
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -42,14 +49,18 @@ public class UserUseCase {
             UserRepository userRepository,
             UserJpaRepository userJpaRepository,
             RoleJpaRepository roleJpaRepository,
+            ThirdPartyJpaRepository thirdPartyJpaRepository,
             RoleMapper roleMapper,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            PasswordResetUseCase passwordResetUseCase
     ) {
         this.userRepository = userRepository;
         this.userJpaRepository = userJpaRepository;
         this.roleJpaRepository = roleJpaRepository;
+        this.thirdPartyJpaRepository = thirdPartyJpaRepository;
         this.roleMapper = roleMapper;
         this.passwordEncoder = passwordEncoder;
+        this.passwordResetUseCase = passwordResetUseCase;
     }
 
     @Auditable(entityType = "USER", action = "CREATE")
@@ -59,17 +70,54 @@ public class UserUseCase {
         var roleEntity = roleJpaRepository.findById(request.roleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Rol", request.roleId()));
 
+        // Validar empleado
+        var employee = thirdPartyJpaRepository.findById(request.employeeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Empleado", request.employeeId()));
+
+        if (employee.getType() != ThirdPartyType.EMPLOYEE) {
+            throw new BusinessException("NOT_EMPLOYEE",
+                    "El tercero seleccionado no es un empleado. Tipo: " + employee.getType());
+        }
+
+        if (!employee.isActive()) {
+            throw new BusinessException("INACTIVE_EMPLOYEE",
+                    "El empleado seleccionado está inactivo.");
+        }
+
+        // Validar que el empleado no tenga ya un usuario
+        if (userJpaRepository.existsByEmployeeId(request.employeeId())) {
+            throw new BusinessException("EMPLOYEE_HAS_USER",
+                    "Este empleado ya tiene un usuario asignado.");
+        }
+
+        // Generar username automáticamente del numIdentification
+        var username = employee.getNumIdentification();
+
+        // FullName del empleado
+        var fullName = employee.getName();
+
+        // Email: el del request si se especifica, si no el del empleado
+        var email = request.email() != null && !request.email().isBlank()
+                ? request.email()
+                : employee.getEmail();
+
+        if (email == null || email.isBlank()) {
+            throw new BusinessException("MISSING_EMAIL",
+                    "El empleado no tiene email. Especifícalo en el campo email o asígnaselo al empleado.");
+        }
+
         // Generar password temporal
         var tempPassword = generateTempPassword();
 
         // Crear entidad
         var now = OffsetDateTime.now();
         var entity = new UserEntity();
-        entity.setUsername(request.username());
-        entity.setFullName(request.fullName());
-        entity.setEmail(request.email());
+        entity.setUsername(username);
+        entity.setFullName(fullName);
+        entity.setEmail(email);
         entity.setRole(roleEntity);
         entity.setActive(request.isActive());
+        entity.setEmployee(employee);
         entity.setPasswordHash(passwordEncoder.encode(tempPassword));
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
@@ -79,7 +127,15 @@ public class UserUseCase {
         var reloaded = userJpaRepository.findById(saved.getId()).orElseThrow();
         var domain = toDomain(reloaded);
 
-        return UserResponse.withTempPassword(domain, tempPassword);
+        // Enviar email de invitación con enlace para setear contraseña
+        try {
+            passwordResetUseCase.generateToken(saved.getId());
+        } catch (Exception e) {
+            log.error("Failed to send set-password email for user {}: {}", saved.getId(), e.getMessage());
+            // No fallar la creación del usuario si el email falla
+        }
+
+        return UserResponse.from(domain);
     }
 
     @Auditable(entityType = "USER", action = "UPDATE")
@@ -123,11 +179,35 @@ public class UserUseCase {
             }
         }
 
-        entity.setUsername(request.username());
-        entity.setFullName(request.fullName());
-        entity.setEmail(request.email());
+        // Si cambió el empleado, validar el nuevo
+        var newEmployee = thirdPartyJpaRepository.findById(request.employeeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Empleado", request.employeeId()));
+
+        if (newEmployee.getType() != ThirdPartyType.EMPLOYEE) {
+            throw new BusinessException("NOT_EMPLOYEE",
+                    "El tercero seleccionado no es un empleado. Tipo: " + newEmployee.getType());
+        }
+
+        if (!newEmployee.isActive()) {
+            throw new BusinessException("INACTIVE_EMPLOYEE",
+                    "El empleado seleccionado está inactivo.");
+        }
+
+        // Si cambió el empleado, verificar que el nuevo no tenga otro usuario
+        if (!entity.getEmployee().getId().equals(newEmployee.getId())
+                && userJpaRepository.existsByEmployeeIdAndIdNot(request.employeeId(), id)) {
+            throw new BusinessException("EMPLOYEE_HAS_USER",
+                    "El nuevo empleado ya tiene un usuario asignado.");
+        }
+
+        entity.setUsername(newEmployee.getNumIdentification());
+        entity.setFullName(newEmployee.getName());
+        entity.setEmail(request.email() != null && !request.email().isBlank()
+                ? request.email()
+                : newEmployee.getEmail());
         entity.setRole(newRole);
         entity.setActive(request.isActive());
+        entity.setEmployee(newEmployee);
         entity.setUpdatedAt(OffsetDateTime.now());
 
         var saved = userJpaRepository.save(entity);
@@ -174,6 +254,7 @@ public class UserUseCase {
 
     private User toDomain(UserEntity entity) {
         var role = entity.getRole() != null ? roleMapper.toDomain(entity.getRole()) : null;
+        var employee = entity.getEmployee();
         return new User(
                 entity.getId(),
                 entity.getUsername(),
@@ -182,7 +263,9 @@ public class UserUseCase {
                 role,
                 entity.isActive(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                employee != null ? employee.getId() : null,
+                employee != null ? employee.getName() : null
         );
     }
 }

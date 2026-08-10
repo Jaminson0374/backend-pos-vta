@@ -62,7 +62,7 @@ public class GoodsReceiptController {
 
         return ResponseEntity.ok(PageResponse.from(
                 result,
-                r -> GoodsReceiptResponse.from(r, r.batchIds(), List.of())
+                r -> GoodsReceiptResponse.from(r, r.batchIds(), List.of(), List.of())
         ));
     }
 
@@ -73,11 +73,15 @@ public class GoodsReceiptController {
                 .orElseThrow(() -> new co.posinvent.domain.exception.ResourceNotFoundException(
                         "Recepción", id));
 
-        // Resolve batch IDs from the source_receipt_id foreign key
-        var batchIds = batchRepository.findBySourceReceiptId(id).stream()
+        // Resolve batch IDs and expiration dates from the source_receipt_id foreign key
+        var batches = batchRepository.findBySourceReceiptId(id);
+        var batchIds = batches.stream()
                 .map(co.posinvent.domain.model.Batch::id)
                 .toList();
+        var expirationDates = batches.stream()
+                .map(co.posinvent.domain.model.Batch::expirationDate)
+                .toList();
 
-        return ResponseEntity.ok(GoodsReceiptResponse.from(receipt, batchIds, List.of()));
+        return ResponseEntity.ok(GoodsReceiptResponse.from(receipt, batchIds, expirationDates, List.of()));
     }
 }

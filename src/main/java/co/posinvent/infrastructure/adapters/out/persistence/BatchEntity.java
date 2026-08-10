@@ -4,6 +4,11 @@ import co.posinvent.domain.model.Batch.BatchStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,11 +19,15 @@ import java.util.UUID;
 @Table(name = "batches")
 @Getter
 @Setter
+@EntityListeners(AuditingEntityListener.class)
 public class BatchEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Column(name = "product_id", nullable = false)
+    private UUID productId;
 
     @Column(name = "supplier_id", nullable = false)
     private UUID supplierId;
@@ -46,13 +55,20 @@ public class BatchEntity {
     private LocalDate expirationDate;
 
     @Column(name = "created_by", nullable = false)
+    @CreatedBy
     private UUID createdBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
     private OffsetDateTime updatedAt;
+
+    @Column(name = "updated_by")
+    @LastModifiedBy
+    private UUID updatedBy;
 
     @Column(name = "source_receipt_id")
     private UUID sourceReceiptId;
@@ -60,14 +76,23 @@ public class BatchEntity {
     @Column(name = "oc_id")
     private UUID ocId;
 
-    @PrePersist
-    void prePersist() {
-        createdAt = OffsetDateTime.now();
-        updatedAt = createdAt;
-    }
+    @Column(name = "parent_batch_id")
+    private UUID parentBatchId;
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = OffsetDateTime.now();
-    }
+    @Column(name = "batch_type", length = 20)
+    private String batchType;
+
+    @Column(name = "unit_of_measure_id")
+    private UUID unitOfMeasureId;
+
+    // --- Enriched display fields (populated via LEFT JOIN projection, not persisted) ---
+
+    @Transient
+    private String productName;
+
+    @Transient
+    private String supplierName;
+
+    @Transient
+    private String warehouseName;
 }

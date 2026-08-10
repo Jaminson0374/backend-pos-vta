@@ -40,4 +40,10 @@ class StockRepositoryAdapter implements StockRepository {
     @Override public List<InventoryStock> findByBatch(UUID batchId) {
         return jpa.findByBatchId(batchId).stream().map(mapper::toDomain).toList();
     }
+
+    @Override public List<InventoryStock> findAvailableByProductWarehouse(
+            UUID productId, UUID warehouseId) {
+        return jpa.findAvailableByProductWarehouse(productId, warehouseId)
+                  .stream().map(mapper::toDomain).toList();
+    }
 }

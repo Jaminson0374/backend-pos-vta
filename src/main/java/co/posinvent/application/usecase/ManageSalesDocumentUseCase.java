@@ -6,6 +6,7 @@ import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
+import co.posinvent.domain.service.FefoPicker;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -32,6 +33,8 @@ public class ManageSalesDocumentUseCase {
     private final WarehouseRepository warehouseRepo;
     private final ProductRepository productRepo;
     private final AccountsReceivableUseCase accountsReceivableUseCase;
+    private final FefoPicker fefoPicker;
+    private final RecordMovementUseCase recordMovement;
 
     public ManageSalesDocumentUseCase(
             SalesDocumentRepository documentRepo,
@@ -40,7 +43,9 @@ public class ManageSalesDocumentUseCase {
             StockRepository stockRepo,
             WarehouseRepository warehouseRepo,
             ProductRepository productRepo,
-            AccountsReceivableUseCase accountsReceivableUseCase
+            AccountsReceivableUseCase accountsReceivableUseCase,
+            FefoPicker fefoPicker,
+            RecordMovementUseCase recordMovement
     ) {
         this.documentRepo = documentRepo;
         this.itemRepo = itemRepo;
@@ -49,6 +54,8 @@ public class ManageSalesDocumentUseCase {
         this.warehouseRepo = warehouseRepo;
         this.productRepo = productRepo;
         this.accountsReceivableUseCase = accountsReceivableUseCase;
+        this.fefoPicker = fefoPicker;
+        this.recordMovement = recordMovement;
     }
 
     // ── Create ────────────────────────────────────────────────────────────
@@ -292,19 +299,39 @@ public class ManageSalesDocumentUseCase {
 
     private void decrementStock(SalesDocument doc) {
         for (var item : doc.items()) {
-            var fallbackBatchId = item.batchId() != null ? item.batchId() : item.productId();
-            stockRepo.findByProductBatchWarehouse(item.productId(), fallbackBatchId, doc.warehouseId())
-                    .ifPresent(stock -> {
-                        var newQty = stock.currentQuantity().subtract(item.quantity());
-                        if (newQty.compareTo(BigDecimal.ZERO) < 0) newQty = BigDecimal.ZERO;
-                        var updated = new InventoryStock(
-                                stock.id(), stock.productId(), stock.batchId(), stock.warehouseId(),
-                                newQty,
-                                stock.committedQuantity(),
-                                stock.unitCost(), stock.createdAt(), stock.updatedAt()
-                        );
-                        stockRepo.save(updated);
-                    });
+            // FEFO: pick batches by expiration date
+            var allocations = fefoPicker.pick(item.productId(), doc.warehouseId(), item.quantity());
+
+            // Decrement stock and record kardex movement for each batch consumed
+            for (var alloc : allocations) {
+                var stock = stockRepo.findByProductBatchWarehouse(
+                        item.productId(), alloc.batchId(), doc.warehouseId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Stock", item.productId()));
+
+                var previousQty = stock.currentQuantity();
+                var newQty = previousQty.subtract(alloc.quantity());
+
+                stockRepo.save(new InventoryStock(
+                        stock.id(),
+                        stock.productId(),
+                        stock.batchId(),
+                        stock.warehouseId(),
+                        newQty,
+                        stock.committedQuantity(),
+                        stock.unitCost(),
+                        stock.createdAt(),
+                        null
+                ));
+
+                recordMovement.record(
+                        item.productId(), alloc.batchId(), doc.warehouseId(),
+                        MovementType.EXIT,
+                        alloc.quantity(), alloc.unitCost(),
+                        previousQty, newQty,
+                        "SALE", doc.id(),
+                        "Venta #" + doc.id()
+                );
+            }
         }
     }
 

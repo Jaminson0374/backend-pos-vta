@@ -22,15 +22,19 @@ public class JwtService {
         this.expirationMs = props.expirationMs();
     }
 
-    public String generateToken(UUID userId, String username, String role) {
-        return Jwts.builder()
+    public String generateToken(UUID userId, String username, String role, UUID employeeId) {
+        var builder = Jwts.builder()
                 .subject(username)
                 .claim("uid", userId.toString())
                 .claim("role", role)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + expirationMs))
-                .signWith(key, Jwts.SIG.HS512)
-                .compact();
+                .expiration(new Date(System.currentTimeMillis() + expirationMs));
+
+        if (employeeId != null) {
+            builder.claim("eid", employeeId.toString());
+        }
+
+        return builder.signWith(key, Jwts.SIG.HS512).compact();
     }
 
     public Claims extractAllClaims(String token) {

@@ -3,8 +3,10 @@ package co.posinvent.infrastructure.adapters.in.rest;
 import co.posinvent.application.dto.PageResponse;
 import co.posinvent.application.dto.ThirdPartyRequest;
 import co.posinvent.application.dto.ThirdPartyResponse;
+import co.posinvent.application.dto.ThirdPartySummaryResponse;
 import co.posinvent.application.dto.ThirdPartySupplierOptionResponse;
 import co.posinvent.application.usecase.ThirdPartyUseCase;
+import co.posinvent.domain.model.ThirdParty.ThirdPartyType;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -31,12 +33,21 @@ public class ThirdPartyController {
     public ResponseEntity<PageResponse<ThirdPartyResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String q
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) ThirdPartyType type,
+            @RequestParam(defaultValue = "true") boolean active
     ) {
         var pageable = PageRequest.of(page, size, Sort.by("name"));
-        var result = (q != null && !q.isBlank())
-                ? thirdPartyUseCase.search(q, pageable)
-                : thirdPartyUseCase.list(pageable);
+        PageResponse<ThirdPartyResponse> result;
+
+        if (type != null) {
+            result = thirdPartyUseCase.listByTypeAndActive(type, active, pageable);
+        } else if (q != null && !q.isBlank()) {
+            result = thirdPartyUseCase.search(q, pageable);
+        } else {
+            result = thirdPartyUseCase.list(pageable);
+        }
+
         return ResponseEntity.ok(result);
     }
 
@@ -44,6 +55,12 @@ public class ThirdPartyController {
     @PreAuthorize("hasAnyRole('ADMIN','CARNICERO','AUXILIAR','CAJERO','CONTADOR')")
     public ResponseEntity<List<ThirdPartySupplierOptionResponse>> listSuppliers() {
         return ResponseEntity.ok(thirdPartyUseCase.listSupplierOptions());
+    }
+
+    @GetMapping("/employees/available")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ThirdPartySummaryResponse>> listAvailableEmployees() {
+        return ResponseEntity.ok(thirdPartyUseCase.findEmployeesWithoutUser());
     }
 
     @GetMapping("/{id}")

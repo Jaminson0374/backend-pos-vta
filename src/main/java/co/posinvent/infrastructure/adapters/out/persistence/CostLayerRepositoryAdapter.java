@@ -31,6 +31,12 @@ public class CostLayerRepositoryAdapter implements CostLayerRepository {
     }
 
     @Override
+    public List<CostLayer> findByProductBatchWarehouseFefo(UUID productId, UUID batchId, UUID warehouseId) {
+        return jpa.findByProductBatchWarehouseFefo(productId, batchId, warehouseId)
+                .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
     @Transactional
     public void deleteAllByProductBatchWarehouse(UUID productId, UUID batchId, UUID warehouseId) {
         jpa.deleteAllByProductBatchWarehouse(productId, batchId, warehouseId);

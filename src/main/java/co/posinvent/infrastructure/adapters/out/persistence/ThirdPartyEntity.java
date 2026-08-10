@@ -8,6 +8,11 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,7 +24,8 @@ import java.util.UUID;
 @Table(name = "third_parties")
 @Getter
 @Setter
-class ThirdPartyEntity {
+@EntityListeners(AuditingEntityListener.class)
+public class ThirdPartyEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -66,9 +72,11 @@ class ThirdPartyEntity {
     private boolean active;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
     private OffsetDateTime updatedAt;
 
     // New fields
@@ -156,14 +164,11 @@ class ThirdPartyEntity {
     @Version
     private Integer version;
 
-    @PrePersist
-    void prePersist() {
-        createdAt = OffsetDateTime.now();
-        updatedAt = createdAt;
-    }
+    @Column(name = "created_by")
+    @CreatedBy
+    private UUID createdBy;
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = OffsetDateTime.now();
-    }
+    @Column(name = "updated_by")
+    @LastModifiedBy
+    private UUID updatedBy;
 }

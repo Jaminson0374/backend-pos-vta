@@ -18,5 +18,6 @@ public record ProductionBatch(
         BigDecimal shrinkageCost,
         String notes,
         UUID createdBy,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        UUID batchId
 ) {}

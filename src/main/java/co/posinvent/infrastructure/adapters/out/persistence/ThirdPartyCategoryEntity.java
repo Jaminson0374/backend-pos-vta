@@ -10,7 +10,7 @@ import java.util.UUID;
 @Table(name = "third_party_categories")
 @Getter
 @Setter
-class ThirdPartyCategoryEntity {
+public class ThirdPartyCategoryEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

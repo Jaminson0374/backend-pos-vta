@@ -27,6 +27,7 @@ public record CompanyConfigResponse(
     String softwarePin,
     java.util.UUID certificateId,
     boolean autoGenerateJournalEntries,
+    java.math.BigDecimal purchaseRetefuenteRate,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
 ) {
@@ -53,6 +54,7 @@ public record CompanyConfigResponse(
             c.softwarePin(),
             c.certificateId(),
             c.autoGenerateJournalEntries(),
+            c.purchaseRetefuenteRate(),
             c.createdAt(),
             c.updatedAt()
         );

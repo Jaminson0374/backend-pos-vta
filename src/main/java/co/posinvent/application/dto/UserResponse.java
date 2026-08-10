@@ -14,7 +14,9 @@ public record UserResponse(
     boolean isActive,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
-    String tempPassword
+    String tempPassword,
+    UUID employeeId,
+    String employeeName
 ) {
     public record RoleSummary(UUID id, String name) {}
 
@@ -28,7 +30,9 @@ public record UserResponse(
             u.isActive(),
             u.createdAt(),
             u.updatedAt(),
-            null
+            null,
+            u.employeeId(),
+            u.employeeName()
         );
     }
 
@@ -42,7 +46,9 @@ public record UserResponse(
             u.isActive(),
             u.createdAt(),
             u.updatedAt(),
-            tempPassword
+            tempPassword,
+            u.employeeId(),
+            u.employeeName()
         );
     }
 }

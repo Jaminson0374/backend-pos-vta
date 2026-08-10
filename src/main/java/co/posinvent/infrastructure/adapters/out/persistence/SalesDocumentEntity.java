@@ -5,6 +5,11 @@ import co.posinvent.domain.model.SalesDocumentType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -17,6 +22,7 @@ import java.util.UUID;
 @Table(name = "sales_documents")
 @Getter
 @Setter
+@EntityListeners(AuditingEntityListener.class)
 public class SalesDocumentEntity {
 
     @Id
@@ -68,13 +74,20 @@ public class SalesDocumentEntity {
     private BigDecimal totalAmount;
 
     @Column(name = "created_by", nullable = false)
+    @CreatedBy
     private UUID createdBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at")
+    @LastModifiedDate
     private OffsetDateTime updatedAt;
+
+    @Column(name = "updated_by")
+    @LastModifiedBy
+    private UUID updatedBy;
 
     @Column(name = "due_date")
     private LocalDate dueDate;
@@ -88,16 +101,4 @@ public class SalesDocumentEntity {
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("lineNumber ASC")
     private List<SaleItemEntity> items = new ArrayList<>();
-
-    @PrePersist
-    void prePersist() {
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now();
-        }
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = OffsetDateTime.now();
-    }
 }

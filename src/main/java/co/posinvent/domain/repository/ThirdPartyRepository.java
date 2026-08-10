@@ -23,4 +23,10 @@ public interface ThirdPartyRepository {
     boolean existsByNumIdentification(String numIdentification);
 
     boolean existsByNumIdentificationAndIdNot(String numIdentification, UUID id);
+
+    Page<ThirdParty> findByTypeAndActive(ThirdParty.ThirdPartyType type, boolean active, Pageable pageable);
+
+    List<ThirdParty> findEmployeesWithoutUser();
+
+    Optional<ThirdParty> findByNumIdentification(String numIdentification);
 }

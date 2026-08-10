@@ -9,9 +9,10 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-interface ThirdPartyJpaRepository extends JpaRepository<ThirdPartyEntity, UUID> {
+public interface ThirdPartyJpaRepository extends JpaRepository<ThirdPartyEntity, UUID> {
 
     boolean existsByNumIdentification(String numIdentification);
 
@@ -35,4 +36,17 @@ interface ThirdPartyJpaRepository extends JpaRepository<ThirdPartyEntity, UUID> 
             @Param("types") Collection<ThirdPartyType> types,
             @Param("baseTypes") Collection<String> baseTypes
     );
+
+    Page<ThirdPartyEntity> findByTypeAndActive(ThirdPartyType type, boolean active, Pageable pageable);
+
+    @Query("""
+            SELECT t FROM ThirdPartyEntity t
+            WHERE t.type = 'EMPLOYEE'
+              AND t.active = true
+              AND t.id NOT IN (SELECT u.employee.id FROM UserEntity u WHERE u.employee IS NOT NULL)
+            ORDER BY t.name ASC
+            """)
+    List<ThirdPartyEntity> findEmployeesWithoutUser();
+
+    Optional<ThirdPartyEntity> findByNumIdentification(String numIdentification);
 }

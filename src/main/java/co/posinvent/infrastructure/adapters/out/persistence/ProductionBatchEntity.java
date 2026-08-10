@@ -59,6 +59,9 @@ public class ProductionBatchEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    @Column(name = "batch_id")
+    private UUID batchId;
+
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<ProductionBatchItemEntity> batchItems = new ArrayList<>();
 

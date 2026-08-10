@@ -244,8 +244,8 @@ class PosDevolutionUseCaseTest {
 
         // Verify credit note saved with negative amounts
         var docCaptor = ArgumentCaptor.forClass(SalesDocument.class);
-        verify(documentRepo, times(2)).save(docCaptor.capture());
-        var creditNote = docCaptor.getAllValues().get(0); // first capture is the credit note
+        verify(documentRepo).save(docCaptor.capture());
+        var creditNote = docCaptor.getValue();
         assertThat(creditNote.type()).isEqualTo(SalesDocumentType.CREDIT_NOTE);
         assertThat(creditNote.status()).isEqualTo(SalesDocumentStatus.ISSUED);
         assertThat(creditNote.sourceDocumentId()).isEqualTo(INVOICE_ID);

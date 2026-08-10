@@ -36,6 +36,10 @@ public class UserEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
+    private ThirdPartyEntity employee;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

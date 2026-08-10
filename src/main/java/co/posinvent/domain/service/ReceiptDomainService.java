@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +100,17 @@ public final class ReceiptDomainService {
                                 + " no puede ser negativo"
                 );
             }
+
+            // expirationDate validation: if provided, must not be in the past
+            if (receiptLine.expirationDate() != null
+                    && receiptLine.expirationDate().isBefore(LocalDate.now())) {
+                throw new BusinessException(
+                        "EXPIRATION_DATE_IN_PAST",
+                        "La fecha de vencimiento del producto " + receiptLine.productId()
+                                + " no puede estar en el pasado: "
+                                + receiptLine.expirationDate()
+                );
+            }
         }
     }
 
@@ -149,7 +161,8 @@ public final class ReceiptDomainService {
             UUID productId,
             UUID warehouseId,
             BigDecimal receivedQty,
-            BigDecimal actualCost
+            BigDecimal actualCost,
+            LocalDate expirationDate
     ) {}
 
     public record CostDeviation(

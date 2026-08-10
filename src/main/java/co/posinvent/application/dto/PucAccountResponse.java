@@ -14,12 +14,14 @@ public record PucAccountResponse(
     String accountNature,
     boolean allowsTransactions,
     boolean active,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    OffsetDateTime updatedAt
 ) {
     public static PucAccountResponse from(PucAccount d) {
         return new PucAccountResponse(
             d.id(), d.code(), d.name(), d.level(), d.parentCode(),
-            d.accountClass(), d.accountNature(), d.allowsTransactions(), d.active(), d.createdAt()
+            d.accountClass(), d.accountNature(), d.allowsTransactions(), d.active(),
+            d.createdAt(), d.updatedAt()
         );
     }
 }

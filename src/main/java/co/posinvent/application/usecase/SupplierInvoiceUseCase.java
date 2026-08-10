@@ -142,6 +142,7 @@ public class SupplierInvoiceUseCase {
                 saved.id(),
                 saved.invoiceNumber(),
                 saved.subtotal(),
+                saved.ivaTotal(),
                 saved.total(),          // netPayable = total
                 saved.retentionTotal(), // retefuente
                 BigDecimal.ZERO         // ica (not yet tracked separately)

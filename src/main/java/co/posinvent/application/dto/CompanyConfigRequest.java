@@ -26,5 +26,6 @@ public record CompanyConfigRequest(
     java.util.UUID dianResolutionId,
     String softwarePin,
     java.util.UUID certificateId,
+    java.math.BigDecimal purchaseRetefuenteRate,
     Boolean autoGenerateJournalEntries
 ) {}

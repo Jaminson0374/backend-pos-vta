@@ -25,6 +25,7 @@ public record CompanyConfig(
     String softwarePin,
     java.util.UUID certificateId,
     boolean autoGenerateJournalEntries,
+    java.math.BigDecimal purchaseRetefuenteRate,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
 ) {}

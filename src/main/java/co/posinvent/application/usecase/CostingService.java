@@ -96,15 +96,18 @@ public class CostingService {
         if (product == null) return BigDecimal.ZERO;
 
         String method = product.costingMethod();
-        var layers = new ArrayList<>(layerRepo.findByProductBatchWarehouse(productId, batchId, warehouseId));
-
-        if (layers.isEmpty()) return BigDecimal.ZERO;
 
         if ("PEPS".equals(method)) {
+            // FEFO: consume layers ordered by batch expirationDate ASC (earliest expires first)
+            var layers = new ArrayList<>(layerRepo.findByProductBatchWarehouseFefo(productId, batchId, warehouseId));
+            if (layers.isEmpty()) return BigDecimal.ZERO;
             return consumeFifo(layers, quantity);
         }
 
         // PROMEDIO_PONDERADO or default: consume from the single averaged layer
+        var layers = new ArrayList<>(layerRepo.findByProductBatchWarehouse(productId, batchId, warehouseId));
+        if (layers.isEmpty()) return BigDecimal.ZERO;
+
         var layer = layers.get(0);
         var consumedCost = layer.unitCost();
 

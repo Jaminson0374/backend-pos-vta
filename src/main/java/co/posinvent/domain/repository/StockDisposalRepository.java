@@ -14,4 +14,6 @@ public interface StockDisposalRepository {
     Page<StockDisposal> findAll(Pageable pageable);
 
     List<Map<String, Object>> findExpiringBatches(int days);
+
+    List<Map<String, Object>> findExpiredBatches();
 }

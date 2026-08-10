@@ -39,14 +39,20 @@ public class AuthenticateUserUseCase {
         var user = userRepo.findByUsernameAndActiveTrue(request.username())
                 .orElseThrow();
 
-        var token = jwtService.generateToken(user.getId(), user.getUsername(), user.getRole().getName());
+        var token = jwtService.generateToken(
+                user.getId(),
+                user.getUsername(),
+                user.getRole().getName(),
+                user.getEmployee() != null ? user.getEmployee().getId() : null
+        );
 
         return new LoginResponse(
                 token,
                 jwtProperties.expirationMs(),
                 user.getRole().getName(),
                 user.getId(),
-                user.getFullName()
+                user.getFullName(),
+                user.getEmployee() != null ? user.getEmployee().getId() : null
         );
     }
 }

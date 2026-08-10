@@ -4,6 +4,9 @@ import co.posinvent.domain.model.ShiftStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -13,6 +16,7 @@ import java.util.UUID;
 @Table(name = "shifts")
 @Getter
 @Setter
+@EntityListeners(AuditingEntityListener.class)
 public class ShiftEntity {
 
     @Id
@@ -45,15 +49,10 @@ public class ShiftEntity {
     private String zReportUrl;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private OffsetDateTime createdAt;
 
-    @PrePersist
-    void prePersist() {
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now();
-        }
-        if (openingTime == null) {
-            openingTime = OffsetDateTime.now();
-        }
-    }
+    @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
+    private OffsetDateTime updatedAt;
 }

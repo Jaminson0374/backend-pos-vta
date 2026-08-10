@@ -145,7 +145,7 @@ public class PurchaseOrderUseCase {
 
     private String generateDocumentNumber() {
         var today = java.time.LocalDate.now();
-        var prefix = "PO-" + today.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
+        var prefix = "OC-" + today.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
         var last = purchaseOrderRepository.findFirstByDocumentNumberStartingWith(prefix);
         var seq = last.map(po -> {
             var parts = po.documentNumber().split("-");
@@ -256,6 +256,8 @@ public class PurchaseOrderUseCase {
                             line.orderedQty(),
                             java.math.BigDecimal.ZERO,
                             line.unitCost(),
+                            line.discountPct() != null ? line.discountPct() : java.math.BigDecimal.ZERO,
+                            line.taxType() != null ? line.taxType() : "EXENTO",
                             counter.getAndIncrement()
                     );
                 })
@@ -283,21 +285,24 @@ public class PurchaseOrderUseCase {
                             r.id(), r.supplierId(), tp.name(), r.status(), r.orderDate(),
                             r.documentNumber(), r.notes(), r.dueDate(), r.buyerId(), r.buyerName(),
                             r.paymentMethod(), r.supportDocumentType(), r.supportDocumentNumber(),
-                            r.currency(), r.createdBy(), r.createdAt(), r.lines()))
+                            r.currency(), r.createdBy(), r.createdAt(), r.lines(),
+                            r.taxTotal(), r.discountTotal(), r.grandTotal()))
                     .orElse(r);
         }
         if (enriched.buyerId() != null) {
-            enriched = thirdPartyRepository.findById(enriched.buyerId())
+            final var current = enriched;
+            enriched = thirdPartyRepository.findById(current.buyerId())
                     .map(tp -> new PurchaseOrderResponse(
-                            enriched.id(), enriched.supplierId(), enriched.supplierName(),
-                            enriched.status(), enriched.orderDate(),
-                            enriched.documentNumber(), enriched.notes(), enriched.dueDate(),
-                            enriched.buyerId(), tp.name(),
-                            enriched.paymentMethod(), enriched.supportDocumentType(),
-                            enriched.supportDocumentNumber(),
-                            enriched.currency(), enriched.createdBy(), enriched.createdAt(),
-                            enriched.lines()))
-                    .orElse(enriched);
+                            current.id(), current.supplierId(), current.supplierName(),
+                            current.status(), current.orderDate(),
+                            current.documentNumber(), current.notes(), current.dueDate(),
+                            current.buyerId(), tp.name(),
+                            current.paymentMethod(), current.supportDocumentType(),
+                            current.supportDocumentNumber(),
+                            current.currency(), current.createdBy(), current.createdAt(),
+                            current.lines(),
+                            current.taxTotal(), current.discountTotal(), current.grandTotal()))
+                    .orElse(current);
         }
         return enriched;
     }

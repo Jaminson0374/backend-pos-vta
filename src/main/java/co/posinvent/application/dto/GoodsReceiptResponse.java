@@ -13,6 +13,7 @@ public record GoodsReceiptResponse(
         UUID ocId,
         LocalDate receiptDate,
         List<UUID> batchIds,
+        List<LocalDate> expirationDates,
         List<Deviation> deviations
 ) {
     public record Deviation(
@@ -25,6 +26,7 @@ public record GoodsReceiptResponse(
     public static GoodsReceiptResponse from(
             GoodsReceipt receipt,
             List<UUID> batchIds,
+            List<LocalDate> expirationDates,
             List<CostDeviation> deviations
     ) {
         return new GoodsReceiptResponse(
@@ -32,6 +34,7 @@ public record GoodsReceiptResponse(
                 receipt.ocId(),
                 receipt.receiptDate(),
                 batchIds,
+                expirationDates,
                 deviations.stream()
                         .map(d -> new Deviation(d.productId(), d.ocUnitCost(), d.actualCost(), d.deviationPct()))
                         .toList()

@@ -4,7 +4,14 @@ import co.posinvent.application.dto.BatchRequest;
 import co.posinvent.application.dto.BatchResponse;
 import co.posinvent.application.dto.PageResponse;
 import co.posinvent.application.usecase.BatchUseCase;
+import co.posinvent.application.usecase.RecordMovementUseCase;
+import co.posinvent.domain.exception.ResourceNotFoundException;
+import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
+import co.posinvent.domain.model.InventoryStock;
+import co.posinvent.domain.model.MovementType;
+import co.posinvent.domain.repository.BatchRepository;
+import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
@@ -15,6 +22,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -22,9 +32,20 @@ import java.util.UUID;
 public class BatchController {
 
     private final BatchUseCase batchUseCase;
+    private final BatchRepository batchRepository;
+    private final StockRepository stockRepository;
+    private final RecordMovementUseCase recordMovement;
 
-    public BatchController(BatchUseCase batchUseCase) {
+    public BatchController(
+            BatchUseCase batchUseCase,
+            BatchRepository batchRepository,
+            StockRepository stockRepository,
+            RecordMovementUseCase recordMovement
+    ) {
         this.batchUseCase = batchUseCase;
+        this.batchRepository = batchRepository;
+        this.stockRepository = stockRepository;
+        this.recordMovement = recordMovement;
     }
 
     @GetMapping
@@ -62,5 +83,57 @@ public class BatchController {
             @RequestParam BatchStatus status
     ) {
         return ResponseEntity.ok(batchUseCase.updateStatus(id, status));
+    }
+
+    @GetMapping("/{id}/children")
+    @PreAuthorize("hasAnyRole('ADMIN','CARNICERO','AUXILIAR')")
+    public ResponseEntity<List<BatchResponse>> listChildren(@PathVariable UUID id) {
+        return ResponseEntity.ok(batchUseCase.listChildren(id));
+    }
+
+    @PostMapping("/{id}/dispose-expired")
+    @PreAuthorize("hasAnyRole('ADMIN','CARNICERO')")
+    public ResponseEntity<?> disposeExpired(@PathVariable UUID id) {
+        // Find batch
+        var batch = batchRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Lote", id));
+
+        // Get stock
+        var stocks = stockRepository.findByBatch(id);
+        if (stocks.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "El lote no tiene stock registrado"));
+        }
+
+        // Dispose each stock entry
+        for (var stock : stocks) {
+            if (stock.currentQuantity().compareTo(BigDecimal.ZERO) > 0) {
+                recordMovement.record(
+                        stock.productId(), id, stock.warehouseId(),
+                        MovementType.DISPOSAL,
+                        stock.currentQuantity(), stock.unitCost(),
+                        stock.currentQuantity(), BigDecimal.ZERO,
+                        "EXPIRATION", id,
+                        "Disposición manual por vencimiento — lote #" + id
+                );
+                stockRepository.save(new InventoryStock(
+                        stock.id(), stock.productId(), stock.batchId(), stock.warehouseId(),
+                        BigDecimal.ZERO, stock.committedQuantity(), stock.unitCost(),
+                        stock.createdAt(), null
+                ));
+            }
+        }
+
+        // Close batch
+        batchRepository.save(new Batch(
+                batch.id(), batch.productId(), batch.supplierId(), batch.warehouseId(), batch.entryDate(),
+                batch.initialWeight(), batch.purchaseCost(), BatchStatus.CLOSED,
+                batch.notes(), batch.expirationDate(), batch.createdBy(),
+                batch.createdAt(), null, batch.updatedBy(), batch.sourceReceiptId(), batch.ocId(),
+                null, null, null,
+                batch.parentBatchId(), batch.batchType(), batch.unitOfMeasureId()
+        ));
+
+        return ResponseEntity.ok(Map.of("message", "Lote dispuesto por vencimiento", "batchId", id));
     }
 }

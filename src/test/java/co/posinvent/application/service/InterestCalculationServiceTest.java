@@ -347,6 +347,7 @@ class InterestCalculationServiceTest {
                 compoundFrequency,
                 null, null, null, null, null, null,
                 false,
+                java.math.BigDecimal.ZERO,
                 null, null);
     }
 

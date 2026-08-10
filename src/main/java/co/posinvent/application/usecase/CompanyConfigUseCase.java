@@ -61,6 +61,7 @@ public class CompanyConfigUseCase {
                 request.softwarePin(),
                 request.certificateId(),
                 request.autoGenerateJournalEntries() != null ? request.autoGenerateJournalEntries() : true,
+                request.purchaseRetefuenteRate(),
                 null,
                 null
         );

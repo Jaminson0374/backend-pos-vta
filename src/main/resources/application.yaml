@@ -3,8 +3,8 @@ spring:
     name: pos-invent
   servlet:
     multipart:
-      max-file-size: 2MB
-      max-request-size: 3MB
+      max-file-size: 10MB
+      max-request-size: 15MB
   threads:
     virtual:
       enabled: true
@@ -14,6 +14,9 @@ spring:
 app:
   media:
     storage-path: ${APP_MEDIA_STORAGE_PATH:./media}
+  inventory:
+    auto-dispose: false
+    expiration-warning-days: 30
 
 ---
 spring:
@@ -42,6 +45,18 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${SMTP_USER}
+    password: ${SMTP_PASS}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
 
 server:
   port: 8080
@@ -50,6 +65,7 @@ app:
   jwt:
     secret: ${JWT_SECRET:posinvent-dev-jwt-secret-key-v1-must-be-at-least-64-bytes-for-hs512!!}
     expiration-ms: 86400000
+  frontend-url: ${FRONTEND_URL:http://localhost:4200}
 
 ---
 spring:

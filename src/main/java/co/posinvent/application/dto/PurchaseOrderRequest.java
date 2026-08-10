@@ -24,6 +24,8 @@ public record PurchaseOrderRequest(
             @NotNull UUID productId,
             @NotNull @DecimalMin("0.001") BigDecimal orderedQty,
             @NotNull @DecimalMin("0") BigDecimal unitCost,
-            @NotNull UUID warehouseId
+            @NotNull UUID warehouseId,
+            @DecimalMin("0") @DecimalMax("100") BigDecimal discountPct,
+            @Size(max = 10) String taxType
     ) {}
 }

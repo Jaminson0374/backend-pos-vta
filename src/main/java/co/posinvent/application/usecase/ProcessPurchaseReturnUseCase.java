@@ -142,11 +142,13 @@ public class ProcessPurchaseReturnUseCase {
                         : BatchStatus.OPEN;
 
                 batchRepository.save(new Batch(
-                        batch.id(), batch.supplierId(), batch.warehouseId(),
+                        batch.id(), batch.productId(), batch.supplierId(), batch.warehouseId(),
                         batch.entryDate(), newBatchQty, batch.purchaseCost(),
                         batchStatus, batch.notes(), batch.expirationDate(),
-                        batch.createdBy(), batch.createdAt(), null,
-                        batch.sourceReceiptId(), batch.ocId()
+                        batch.createdBy(), batch.createdAt(), null, batch.updatedBy(),
+                        batch.sourceReceiptId(), batch.ocId(),
+                        null, null, null,
+                        batch.parentBatchId(), batch.batchType(), batch.unitOfMeasureId()
                 ));
             }
 

@@ -5,7 +5,8 @@ import java.util.List;
 import java.util.UUID;
 
 public record ProduceResponse(
-        UUID batchId,
+        UUID productionBatchId,
+        UUID inventoryBatchId,
         String productName,
         BigDecimal quantityProduced,
         BigDecimal mpd,

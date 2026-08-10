@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record Batch(
         UUID id,
+        UUID productId,
         UUID supplierId,
         UUID warehouseId,
         LocalDate entryDate,
@@ -18,8 +19,16 @@ public record Batch(
         UUID createdBy,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
+        UUID updatedBy,
         UUID sourceReceiptId,
-        UUID ocId
+        UUID ocId,
+        // Enriched display fields — populated by LEFT JOIN queries, null otherwise
+        String productName,
+        String supplierName,
+        String warehouseName,
+        UUID parentBatchId,
+        BatchType batchType,
+        UUID unitOfMeasureId
 ) {
     public enum BatchStatus { OPEN, PROCESSING, CLOSED }
 

@@ -8,6 +8,7 @@ import co.posinvent.domain.model.Animal;
 import co.posinvent.domain.model.Animal.AnimalStatus;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
+import co.posinvent.domain.model.BatchType;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.model.Slaughter;
@@ -99,6 +100,7 @@ public class ProcessSlaughterUseCase {
         // 6. Crear el lote (Batch) en la bodega CANAL
         var batch = batchRepository.save(new Batch(
                 null,                           // id
+                canalProduct.id(),              // productId — producto CANAL
                 animal.supplierId(),            // supplierId — heredado del animal
                 canalWarehouse.id(),            // warehouseId
                 request.slaughterDate(),        // entryDate
@@ -110,8 +112,13 @@ public class ProcessSlaughterUseCase {
                 operatorId,                     // createdBy
                 null,
                 null,
+                null,                           // updatedBy
                 null,                           // sourceReceiptId — no aplica para faena directa
-                null                            // ocId — no aplica para faena directa
+                null,                           // ocId — no aplica para faena directa
+                null, null, null,               // productName, supplierName, warehouseName
+                null,                           // parentBatchId
+                BatchType.STANDARD,             // batchType
+                null                            // unitOfMeasureId
         ));
 
         // 7. Upsert de stock para el producto CANAL con el nuevo lote

@@ -4,6 +4,11 @@ import co.posinvent.domain.model.PurchaseOrderStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -15,6 +20,7 @@ import java.util.UUID;
 @Table(name = "purchase_orders")
 @Getter
 @Setter
+@EntityListeners(AuditingEntityListener.class)
 public class PurchaseOrderEntity {
 
     @Id
@@ -56,28 +62,24 @@ public class PurchaseOrderEntity {
     private String currency;
 
     @Column(name = "created_by", nullable = false)
+    @CreatedBy
     private UUID createdBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
     private OffsetDateTime updatedAt;
+
+    @Column(name = "updated_by")
+    @LastModifiedBy
+    private UUID updatedBy;
 
     @Version
     private Long version;
 
     @OneToMany(mappedBy = "purchaseOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PurchaseLineItemEntity> lines = new ArrayList<>();
-
-    @PrePersist
-    void prePersist() {
-        createdAt = OffsetDateTime.now();
-        updatedAt = createdAt;
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = OffsetDateTime.now();
-    }
 }

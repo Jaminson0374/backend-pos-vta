@@ -4,6 +4,7 @@ import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.MassBalanceException;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
+import co.posinvent.domain.model.BatchType;
 import co.posinvent.domain.model.ManualDespostePlan;
 import co.posinvent.domain.model.ManualDespostePlan.Command;
 import co.posinvent.domain.model.ManualDespostePlan.DesposteMassBalance;
@@ -41,6 +42,20 @@ public final class ManualDesposteDomainService {
                 command.shrinkWeight());
         var costing = calculateYieldCosting(batch.purchaseCost(), command.cuts());
 
+        var childBatchPlans = costing.cuts().stream()
+                .map(cut -> new ManualDespostePlan.ChildBatchPlan(
+                        cut.productId(),
+                        cut.warehouseId(),
+                        batch.supplierId(),
+                        batch.entryDate(),
+                        cut.weight(),
+                        cut.allocatedCost(),
+                        cut.expirationDate() != null ? cut.expirationDate() : batch.expirationDate(),
+                        "Desposte — " + (command.notes() != null ? command.notes() : ""),
+                        BatchType.CHILD
+                ))
+                .toList();
+
         return new ManualDespostePlan(
                 batch.id(),
                 massBalance,
@@ -48,6 +63,7 @@ public final class ManualDesposteDomainService {
                 costing.totalAllocatedCost(),
                 costing.cuts(),
                 buildStockUpserts(batch.id(), costing.cuts()),
+                childBatchPlans,
                 new SourceBatchTransition(
                         batch.id(),
                         batch.status(),
@@ -150,7 +166,8 @@ public final class ManualDesposteDomainService {
                     cut.suggestedSalePrice(),
                     commercialValue,
                     allocatedCost,
-                    allocatedCost.divide(cut.weight(), SCALE, RoundingMode.HALF_UP)
+                    allocatedCost.divide(cut.weight(), SCALE, RoundingMode.HALF_UP),
+                    cut.expirationDate()
             ));
         }
 
@@ -227,7 +244,8 @@ public final class ManualDesposteDomainService {
                 requirePositive(
                         cut.suggestedSalePrice(),
                         "El corte " + (index + 1) + " debe tener precio sugerido mayor a cero"
-                )
+                ),
+                cut.expirationDate()
         );
     }
 

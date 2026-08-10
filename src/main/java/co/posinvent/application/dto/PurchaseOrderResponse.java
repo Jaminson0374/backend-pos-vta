@@ -5,9 +5,11 @@ import co.posinvent.domain.model.PurchaseLineItem;
 import co.posinvent.domain.model.PurchaseOrderStatus;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public record PurchaseOrderResponse(
@@ -27,8 +29,18 @@ public record PurchaseOrderResponse(
         String currency,
         UUID createdBy,
         OffsetDateTime createdAt,
-        List<LineItemResponse> lines
+        List<LineItemResponse> lines,
+        BigDecimal taxTotal,
+        BigDecimal discountTotal,
+        BigDecimal grandTotal
 ) {
+    private static final Map<String, BigDecimal> TAX_RATES = Map.of(
+            "EXENTO", BigDecimal.ZERO,
+            "IVA_5", new BigDecimal("5"),
+            "IVA_8", new BigDecimal("8"),
+            "IVA_19", new BigDecimal("19")
+    );
+
     public record LineItemResponse(
             UUID id,
             UUID productId,
@@ -38,10 +50,36 @@ public record PurchaseOrderResponse(
             BigDecimal unitCost,
             UUID warehouseId,
             String warehouseName,
+            BigDecimal discountPct,
+            String taxType,
             int lineNumber
     ) {}
 
     public static PurchaseOrderResponse from(PurchaseOrder po) {
+        var lines = po.lines().stream()
+                .map(PurchaseOrderResponse::fromLineItem)
+                .toList();
+
+        var discountTotal = BigDecimal.ZERO;
+        var taxTotal = BigDecimal.ZERO;
+        var grandTotal = BigDecimal.ZERO;
+
+        for (var line : po.lines()) {
+            var subtotal = line.orderedQty().multiply(line.unitCost());
+            var discPct = line.discountPct() != null ? line.discountPct() : BigDecimal.ZERO;
+            var discountAmount = subtotal.multiply(discPct)
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            var afterDiscount = subtotal.subtract(discountAmount);
+            var taxRate = TAX_RATES.getOrDefault(line.taxType(), BigDecimal.ZERO);
+            var taxAmount = afterDiscount.multiply(taxRate)
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            var lineTotal = afterDiscount.add(taxAmount);
+
+            discountTotal = discountTotal.add(discountAmount);
+            taxTotal = taxTotal.add(taxAmount);
+            grandTotal = grandTotal.add(lineTotal);
+        }
+
         return new PurchaseOrderResponse(
                 po.id(),
                 po.supplierId(),
@@ -59,9 +97,10 @@ public record PurchaseOrderResponse(
                 po.currency(),
                 po.createdBy(),
                 po.createdAt(),
-                po.lines().stream()
-                        .map(PurchaseOrderResponse::fromLineItem)
-                        .toList()
+                lines,
+                taxTotal,
+                discountTotal,
+                grandTotal
         );
     }
 
@@ -75,6 +114,8 @@ public record PurchaseOrderResponse(
                 li.unitCost(),
                 li.warehouseId(),
                 null,
+                li.discountPct(),
+                li.taxType(),
                 li.lineNumber()
         );
     }

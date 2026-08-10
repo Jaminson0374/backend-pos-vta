@@ -13,5 +13,6 @@ public record PucAccount(
     String accountNature,
     boolean allowsTransactions,
     boolean active,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    OffsetDateTime updatedAt
 ) {}

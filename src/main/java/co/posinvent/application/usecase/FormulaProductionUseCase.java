@@ -3,15 +3,18 @@ package co.posinvent.application.usecase;
 import co.posinvent.application.dto.BatchItemResponse;
 import co.posinvent.application.dto.ProduceRequest;
 import co.posinvent.application.dto.ProduceResponse;
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.BomExploder;
+import co.posinvent.domain.service.FefoPicker;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +29,11 @@ public class FormulaProductionUseCase {
     private final CompanyConfigRepository configRepo;
     private final ProductRepository productRepo;
     private final BomExploder bomExploder;
+    private final FefoPicker fefoPicker;
+    private final StockRepository stockRepository;
+    private final CostingService costingService;
+    private final ThirdPartyRepository thirdPartyRepo;
+    private final BatchRepository batchInventoryRepo;
 
     public FormulaProductionUseCase(
             ProductFormulaRepository formulaRepo,
@@ -34,7 +42,12 @@ public class FormulaProductionUseCase {
             ProductionBatchRepository batchRepo,
             CompanyConfigRepository configRepo,
             ProductRepository productRepo,
-            BomExploder bomExploder) {
+            BomExploder bomExploder,
+            FefoPicker fefoPicker,
+            StockRepository stockRepository,
+            CostingService costingService,
+            ThirdPartyRepository thirdPartyRepo,
+            BatchRepository batchInventoryRepo) {
         this.formulaRepo = formulaRepo;
         this.kardexRepo = kardexRepo;
         this.recordMovementUseCase = recordMovementUseCase;
@@ -42,12 +55,22 @@ public class FormulaProductionUseCase {
         this.configRepo = configRepo;
         this.productRepo = productRepo;
         this.bomExploder = bomExploder;
+        this.fefoPicker = fefoPicker;
+        this.stockRepository = stockRepository;
+        this.costingService = costingService;
+        this.thirdPartyRepo = thirdPartyRepo;
+        this.batchInventoryRepo = batchInventoryRepo;
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
-    public ProduceResponse produce(ProduceRequest request) {
+    public ProduceResponse produce(ProduceRequest request, UUID operatorId) {
         var parentProduct = productRepo.findById(request.formulaProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado"));
+
+        // Validate product is configured for in-house manufacturing
+        if (!parentProduct.manufacturedInHouse()) {
+            throw new IllegalArgumentException("El producto no está configurado como fabricado internamente");
+        }
 
         // Step 1: Explode BOM recursively to get all leaf raw materials
         var explodedComponents = bomExploder.explode(request.formulaProductId(), request.quantity());
@@ -61,8 +84,9 @@ public class FormulaProductionUseCase {
             merged.merge(ec.productId(), ec.totalQuantity(), BigDecimal::add);
         }
 
-        // Step 3: Validate stock for each merged raw material
+        // Step 3: Validate stock for each merged raw material using FEFO
         var components = new ArrayList<ComponentCalc>();
+        var materialAllocations = new java.util.HashMap<UUID, java.util.List<BatchAllocation>>();
         for (var entry : merged.entrySet()) {
             UUID productId = entry.getKey();
             BigDecimal requiredQty = entry.getValue();
@@ -70,13 +94,9 @@ public class FormulaProductionUseCase {
             var component = productRepo.findById(productId)
                     .orElseThrow(() -> new IllegalArgumentException("Componente no encontrado: " + productId));
 
-            BigDecimal currentStock = kardexRepo.getCurrentStock(productId, request.warehouseId());
-            if (currentStock.compareTo(requiredQty) < 0) {
-                throw new IllegalArgumentException(
-                        "Stock insuficiente para " + component.name()
-                                + ": requiere " + requiredQty + ", disponible " + currentStock);
-            }
-            components.add(new ComponentCalc(component, requiredQty, currentStock));
+            java.util.List<BatchAllocation> allocations = fefoPicker.pick(productId, request.warehouseId(), requiredQty);
+            materialAllocations.put(productId, allocations);
+            components.add(new ComponentCalc(component, requiredQty, allocations));
         }
 
         // Step 4: Calculate costs
@@ -120,42 +140,122 @@ public class FormulaProductionUseCase {
         var batch = new ProductionBatch(
                 null, request.formulaProductId(), request.quantity(), request.quantity(),
                 mpdTotal, laborCost, overheadCost, totalCost, unitCost,
-                BigDecimal.ZERO, BigDecimal.ZERO, request.notes(), null, null
+                BigDecimal.ZERO, BigDecimal.ZERO, request.notes(), operatorId, null, null
         );
         var savedBatch = batchRepo.save(batch);
 
-        // Step 6: Record kardex — consume raw materials
+        // Step 5a-5e: Create inventory Batch + InventoryStock + cost layers for finished product
+        var systemSupplier = resolveSystemSupplier();
+        var inventoryBatch = batchInventoryRepo.save(new Batch(
+                null,
+                request.formulaProductId(),
+                systemSupplier.id(),
+                request.warehouseId(),
+                LocalDate.now(),
+                request.quantity(),
+                totalCost,
+                Batch.BatchStatus.OPEN,
+                "Producción lote " + savedBatch.id(),
+                request.expirationDate(),
+                operatorId,
+                null, null, null, null, null,
+                null, null, null,
+                null, BatchType.STANDARD, null
+        ));
+
+        stockRepository.save(new InventoryStock(
+                null,
+                request.formulaProductId(),
+                inventoryBatch.id(),
+                request.warehouseId(),
+                request.quantity(),
+                BigDecimal.ZERO,
+                unitCost,
+                null, null
+        ));
+
+        costingService.resolveCostOnEntry(
+                request.formulaProductId(),
+                inventoryBatch.id(),
+                request.warehouseId(),
+                request.quantity(),
+                unitCost,
+                null
+        );
+
+        // Update production batch with the inventory batch ID
+        savedBatch = batchRepo.save(new ProductionBatch(
+                savedBatch.id(),
+                savedBatch.formulaId(),
+                savedBatch.quantityProduced(),
+                savedBatch.expectedQuantity(),
+                savedBatch.directMaterialCost(),
+                savedBatch.directLaborCost(),
+                savedBatch.overheadCost(),
+                savedBatch.totalCost(),
+                savedBatch.unitCost(),
+                savedBatch.shrinkageQuantity(),
+                savedBatch.shrinkageCost(),
+                savedBatch.notes(),
+                savedBatch.createdBy(),
+                savedBatch.createdAt(),
+                inventoryBatch.id()
+        ));
+
+        // Step 6: Record kardex — consume raw materials per FEFO batch + decrement InventoryStock
         var items = new ArrayList<BatchItemResponse>();
         for (var comp : components) {
-            var movement = recordMovementUseCase.record(
-                    comp.component.id(),
-                    null,
-                    request.warehouseId(),
-                    MovementType.PRODUCTION_CONSUMPTION,
-                    comp.requiredQty.negate(),
-                    comp.unitCost,
-                    comp.currentStock,
-                    comp.currentStock.subtract(comp.requiredQty),
-                    "PRODUCTION_BATCH",
-                    savedBatch.id(),
-                    "Consumo para producción del lote " + savedBatch.id()
-            );
+            var allocations = materialAllocations.get(comp.component.id());
+            for (var alloc : allocations) {
+                // Decrement real InventoryStock
+                var stock = stockRepository.findByProductBatchWarehouse(
+                                comp.component.id(), alloc.batchId(), request.warehouseId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Stock", comp.component.id()));
 
-            items.add(new BatchItemResponse(
-                    comp.component.id(),
-                    comp.component.name(),
-                    comp.requiredQty,
-                    comp.requiredQty,
-                    comp.unitCost,
-                    comp.totalCost,
-                    movement.id()
-            ));
+                var previousQty = stock.currentQuantity();
+                var newQty = previousQty.subtract(alloc.quantity());
+
+                stockRepository.save(new InventoryStock(
+                        stock.id(), stock.productId(), stock.batchId(), stock.warehouseId(),
+                        newQty, stock.committedQuantity(), stock.unitCost(),
+                        stock.createdAt(), null));
+
+                // Record kardex movement with real batchId
+                var movement = recordMovementUseCase.record(
+                        comp.component.id(),
+                        alloc.batchId(),
+                        request.warehouseId(),
+                        MovementType.PRODUCTION_CONSUMPTION,
+                        alloc.quantity().negate(),
+                        alloc.unitCost(),
+                        previousQty,
+                        newQty,
+                        "PRODUCTION",
+                        savedBatch.id(),
+                        "Consumo producción #" + savedBatch.id()
+                );
+
+                costingService.resolveCostOnExit(comp.component.id(), alloc.batchId(), request.warehouseId(), alloc.quantity());
+
+                items.add(new BatchItemResponse(
+                        comp.component.id(),
+                        comp.component.name(),
+                        comp.requiredQty,
+                        alloc.quantity(),
+                        alloc.unitCost(),
+                        alloc.quantity().multiply(alloc.unitCost()),
+                        movement.id()
+                ));
+            }
+
+            // Recalculate total stock for material after all batches decremented
+            productRepo.recalculateTotalStock(comp.component.id());
         }
 
-        // Step 7: Record kardex output for finished product
+        // Step 7: Record kardex output for finished product — use real inventory batch ID
         recordMovementUseCase.record(
                 request.formulaProductId(),
-                null,
+                inventoryBatch.id(),
                 request.warehouseId(),
                 MovementType.PRODUCTION_OUTPUT,
                 request.quantity(),
@@ -167,14 +267,12 @@ public class FormulaProductionUseCase {
                 "Producción del lote " + savedBatch.id()
         );
 
-        // Step 8: Recalculate stock
+        // Step 8: Recalculate stock for finished product
         productRepo.recalculateTotalStock(request.formulaProductId());
-        for (var comp : components) {
-            productRepo.recalculateTotalStock(comp.component.id());
-        }
 
         return new ProduceResponse(
                 savedBatch.id(),
+                inventoryBatch.id(),
                 parentProduct.name(),
                 request.quantity(),
                 mpdTotal,
@@ -187,17 +285,23 @@ public class FormulaProductionUseCase {
         );
     }
 
+    private ThirdParty resolveSystemSupplier() {
+        return thirdPartyRepo.findByNumIdentification("000000000-0")
+                .orElseThrow(() -> new IllegalStateException(
+                        "Proveedor sistema PRODUCCIÓN INTERNA faltante. Ejecute migración V95."));
+    }
+
     private static class ComponentCalc {
         final Product component;
         final BigDecimal requiredQty;
-        final BigDecimal currentStock;
+        final java.util.List<BatchAllocation> allocations;
         BigDecimal unitCost = BigDecimal.ZERO;
         BigDecimal totalCost = BigDecimal.ZERO;
 
-        ComponentCalc(Product component, BigDecimal requiredQty, BigDecimal currentStock) {
+        ComponentCalc(Product component, BigDecimal requiredQty, java.util.List<BatchAllocation> allocations) {
             this.component = component;
             this.requiredQty = requiredQty;
-            this.currentStock = currentStock;
+            this.allocations = allocations;
         }
     }
 }

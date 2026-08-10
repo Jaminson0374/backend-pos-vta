@@ -9,6 +9,7 @@ interface PucAccountMapper {
     PucAccount toDomain(PucAccountEntity entity);
 
     @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "level", expression = "java((short) domain.level())")
     @Mapping(target = "accountClass", expression = "java((short) domain.accountClass())")
     PucAccountEntity toEntity(PucAccount domain);
