@@ -19,6 +19,10 @@ public class StockTransferEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @Column(name = "source_warehouse_id", nullable = false)
     private UUID sourceWarehouseId;
 

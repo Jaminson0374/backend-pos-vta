@@ -26,6 +26,10 @@ public class BatchEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @Column(name = "product_id", nullable = false)
     private UUID productId;
 

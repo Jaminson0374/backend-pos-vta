@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
 import co.posinvent.domain.repository.BatchRepository;
@@ -25,7 +26,15 @@ class BatchRepositoryAdapter implements BatchRepository {
     }
 
     @Override public Batch save(Batch batch) {
-        return mapper.toDomain(jpa.save(mapper.toEntity(batch)));
+        BatchEntity entity;
+        if (batch.id() != null) {
+            entity = jpa.findById(batch.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Lote", batch.id()));
+            mapper.updateEntity(entity, batch);
+        } else {
+            entity = mapper.toEntity(batch);
+        }
+        return mapper.toDomain(jpa.save(entity));
     }
 
     @Override public Optional<Batch> findById(UUID id) {

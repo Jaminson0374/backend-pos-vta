@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.repository.StockRepository;
 import org.springframework.stereotype.Repository;
@@ -20,7 +21,15 @@ class StockRepositoryAdapter implements StockRepository {
     }
 
     @Override public InventoryStock save(InventoryStock stock) {
-        return mapper.toDomain(jpa.save(mapper.toEntity(stock)));
+        InventoryStockEntity entity;
+        if (stock.id() != null) {
+            entity = jpa.findById(stock.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Stock", stock.id()));
+            mapper.updateEntity(entity, stock);
+        } else {
+            entity = mapper.toEntity(stock);
+        }
+        return mapper.toDomain(jpa.save(entity));
     }
 
     @Override public Optional<InventoryStock> findByProductBatchWarehouse(

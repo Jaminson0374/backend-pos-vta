@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.StockTransfer;
 import co.posinvent.domain.repository.StockTransferRepository;
 import org.springframework.data.domain.Page;
@@ -22,7 +23,14 @@ public class StockTransferRepositoryAdapter implements StockTransferRepository {
 
     @Override
     public StockTransfer save(StockTransfer transfer) {
-        var entity = mapper.toEntity(transfer);
+        StockTransferEntity entity;
+        if (transfer.id() != null) {
+            entity = jpa.findByIdWithItems(transfer.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Traslado", transfer.id()));
+            mapper.updateEntity(entity, transfer);
+        } else {
+            entity = mapper.toEntity(transfer);
+        }
         if (transfer.items() != null) {
             var itemEntities = new java.util.ArrayList<StockTransferItemEntity>();
             for (var item : transfer.items()) {

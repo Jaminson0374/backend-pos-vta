@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.CostLayer;
 import co.posinvent.domain.repository.CostLayerRepository;
 import org.springframework.stereotype.Repository;
@@ -21,7 +22,15 @@ public class CostLayerRepositoryAdapter implements CostLayerRepository {
 
     @Override
     public CostLayer save(CostLayer layer) {
-        return mapper.toDomain(jpa.save(mapper.toEntity(layer)));
+        CostLayerEntity entity;
+        if (layer.id() != null) {
+            entity = jpa.findById(layer.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Capa de costo", layer.id()));
+            mapper.updateEntity(entity, layer);
+        } else {
+            entity = mapper.toEntity(layer);
+        }
+        return mapper.toDomain(jpa.save(entity));
     }
 
     @Override

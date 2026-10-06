@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.StockAdjustment;
 import co.posinvent.domain.repository.StockAdjustmentRepository;
 import org.springframework.data.domain.Page;
@@ -21,7 +22,15 @@ public class StockAdjustmentRepositoryAdapter implements StockAdjustmentReposito
 
     @Override
     public StockAdjustment save(StockAdjustment adjustment) {
-        return mapper.toDomain(jpa.save(mapper.toEntity(adjustment)));
+        StockAdjustmentEntity entity;
+        if (adjustment.id() != null) {
+            entity = jpa.findById(adjustment.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Ajuste", adjustment.id()));
+            mapper.updateEntity(entity, adjustment);
+        } else {
+            entity = mapper.toEntity(adjustment);
+        }
+        return mapper.toDomain(jpa.save(entity));
     }
 
     @Override

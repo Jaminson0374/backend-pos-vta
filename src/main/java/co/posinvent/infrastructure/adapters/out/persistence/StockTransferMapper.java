@@ -4,6 +4,7 @@ import co.posinvent.domain.model.StockTransfer;
 import co.posinvent.domain.model.StockTransferItem;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.Collections;
 import java.util.List;
@@ -17,7 +18,15 @@ public interface StockTransferMapper {
 
     @Mapping(target = "status", expression = "java(t.status().name())")
     @Mapping(target = "items", ignore = true)
+    @Mapping(target = "version", ignore = true)
     StockTransferEntity toEntity(StockTransfer t);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "status", expression = "java(t.status().name())")
+    @Mapping(target = "items", ignore = true)
+    @Mapping(target = "version", ignore = true)
+    void updateEntity(@MappingTarget StockTransferEntity entity, StockTransfer t);
 
     @Mapping(target = "transfer", ignore = true)
     StockTransferItemEntity toItemEntity(StockTransferItem item);

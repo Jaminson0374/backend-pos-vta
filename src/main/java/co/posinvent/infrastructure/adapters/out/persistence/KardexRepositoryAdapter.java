@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.InventoryMovement;
 import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.repository.KardexRepository;
@@ -29,7 +30,14 @@ public class KardexRepositoryAdapter implements KardexRepository {
 
     @Override
     public InventoryMovement save(InventoryMovement movement) {
-        var entity = mapper.toEntity(movement);
+        InventoryMovementEntity entity;
+        if (movement.id() != null) {
+            entity = jpa.findById(movement.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Movimiento", movement.id()));
+            mapper.updateEntity(entity, movement);
+        } else {
+            entity = mapper.toEntity(movement);
+        }
         return mapper.toDomain(jpa.save(entity));
     }
 

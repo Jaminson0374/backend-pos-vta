@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.StockDisposal;
 import co.posinvent.domain.repository.StockDisposalRepository;
 import org.springframework.data.domain.Page;
@@ -15,7 +16,17 @@ public class StockDisposalRepositoryAdapter implements StockDisposalRepository {
     private final StockDisposalMapper mapper;
     public StockDisposalRepositoryAdapter(StockDisposalJpaRepository jpa, StockDisposalMapper mapper) { this.jpa = jpa; this.mapper = mapper; }
 
-    @Override public StockDisposal save(StockDisposal d) { return mapper.toDomain(jpa.save(mapper.toEntity(d))); }
+    @Override public StockDisposal save(StockDisposal d) {
+        StockDisposalEntity entity;
+        if (d.id() != null) {
+            entity = jpa.findById(d.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Baja de stock", d.id()));
+            mapper.updateEntity(entity, d);
+        } else {
+            entity = mapper.toEntity(d);
+        }
+        return mapper.toDomain(jpa.save(entity));
+    }
     @Override public Page<StockDisposal> findAll(Pageable p) { return jpa.findAll(p).map(mapper::toDomain); }
 
     @Override
