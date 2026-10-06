@@ -15,8 +15,8 @@ import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.WarehouseRepository;
 import co.posinvent.domain.service.ManualDesposteDomainService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,6 +35,12 @@ public class ManualDesposteUseCase {
     private final ManualDesposteDomainService domainService;
     private final RecordMovementUseCase recordMovement;
 
+    // Injected via field (not constructor) so the existing 6-arg constructor
+    // used by unit tests keeps compiling. When null (plain unit tests), the
+    // unit of work runs without the retry wrapper.
+    @Autowired
+    private OptimisticConcurrencyExecutor concurrencyExecutor;
+
     public ManualDesposteUseCase(
             BatchRepository batchRepository,
             ProductRepository productRepository,
@@ -51,8 +57,14 @@ public class ManualDesposteUseCase {
         this.recordMovement = recordMovement;
     }
 
-    @Transactional
     public ManualDesposteResponse processManual(ManualDesposteRequest request) {
+        if (concurrencyExecutor != null) {
+            return concurrencyExecutor.execute(() -> doProcessManual(request));
+        }
+        return doProcessManual(request);
+    }
+
+    private ManualDesposteResponse doProcessManual(ManualDesposteRequest request) {
         var batch = batchRepository.findById(request.sourceBatchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Lote", request.sourceBatchId()));
 

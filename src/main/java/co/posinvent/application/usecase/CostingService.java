@@ -4,6 +4,8 @@ import co.posinvent.domain.model.CostLayer;
 import co.posinvent.domain.repository.CostLayerRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockRepository;
+import co.posinvent.infrastructure.adapters.out.persistence.StockJpaRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,13 @@ public class CostingService {
     private final CostLayerRepository layerRepo;
     private final ProductRepository productRepo;
     private final StockRepository stockRepo;
+
+    // Direct JPA dependency for the targeted PESSIMISTIC_WRITE lock on the
+    // concrete inventory_stock row (delete+re-insert has no row to version-check).
+    // Field-injected so the existing 3-arg constructor used by unit tests stays
+    // intact; when null (plain unit tests) the lock is skipped.
+    @Autowired
+    private StockJpaRepository stockJpaRepository;
 
     public CostingService(CostLayerRepository layerRepo, ProductRepository productRepo, StockRepository stockRepo) {
         this.layerRepo = layerRepo;
@@ -52,6 +61,13 @@ public class CostingService {
         }
 
         if ("PROMEDIO_PONDERADO".equals(method)) {
+            // Serialize concurrent weighted-average recalculations by locking the
+            // concrete stock row. The delete-all + re-insert below has no row to
+            // version-check, so @Version alone can't prevent duplicate/orphan layers.
+            if (stockJpaRepository != null) {
+                stockJpaRepository.lockForUpdate(productId, batchId, warehouseId);
+            }
+
             // Recalculate weighted average
             var layers = layerRepo.findByProductBatchWarehouse(productId, batchId, warehouseId);
             var totalQty = quantity;

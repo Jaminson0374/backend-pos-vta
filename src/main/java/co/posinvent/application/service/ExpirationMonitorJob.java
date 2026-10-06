@@ -1,5 +1,6 @@
 package co.posinvent.application.service;
 
+import co.posinvent.application.usecase.OptimisticConcurrencyExecutor;
 import co.posinvent.application.usecase.RecordMovementUseCase;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
@@ -10,10 +11,10 @@ import co.posinvent.domain.repository.StockDisposalRepository;
 import co.posinvent.domain.repository.StockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -27,6 +28,12 @@ public class ExpirationMonitorJob {
     private final StockRepository stockRepository;
     private final BatchRepository batchRepository;
     private final RecordMovementUseCase recordMovement;
+
+    // Injected via field (not constructor) so the existing 4-arg constructor
+    // used by unit tests keeps compiling. When null (plain unit tests), the
+    // unit of work runs without the retry wrapper.
+    @Autowired
+    private OptimisticConcurrencyExecutor concurrencyExecutor;
 
     @Value("${app.inventory.auto-dispose:false}")
     private boolean autoDispose;
@@ -83,8 +90,18 @@ public class ExpirationMonitorJob {
         }
     }
 
-    @Transactional
     void disposeExpiredBatch(UUID batchId, UUID productId, UUID warehouseId, BigDecimal remainingQty) {
+        if (concurrencyExecutor != null) {
+            concurrencyExecutor.execute(() -> {
+                doDisposeExpiredBatch(batchId, productId, warehouseId, remainingQty);
+                return null;
+            });
+            return;
+        }
+        doDisposeExpiredBatch(batchId, productId, warehouseId, remainingQty);
+    }
+
+    private void doDisposeExpiredBatch(UUID batchId, UUID productId, UUID warehouseId, BigDecimal remainingQty) {
         // Decrement stock to 0
         var stock = stockRepository.findByProductBatchWarehouse(productId, batchId, warehouseId);
         if (stock.isPresent()) {
