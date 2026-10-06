@@ -55,7 +55,7 @@ public class KardexRepositoryAdapter implements KardexRepository {
 
     @Override
     public Optional<BigDecimal> getUnitCost(UUID productId, UUID warehouseId, String costingMethod) {
-        if ("PEPS".equalsIgnoreCase(costingMethod)) {
+        if ("FIFO".equalsIgnoreCase(costingMethod)) {
             return jpa.getFifoCost(productId);
         }
         return jpa.getWeightedAverageCost(productId);

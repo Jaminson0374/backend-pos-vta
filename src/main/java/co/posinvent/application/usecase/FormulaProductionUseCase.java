@@ -103,7 +103,7 @@ public class FormulaProductionUseCase {
         var config = configRepo.findConfig();
         String costingMethod = config.map(CompanyConfig::costingMethod)
                 .filter(m -> m != null && !m.isBlank())
-                .orElse("WEIGHTED_AVERAGE");
+                .orElse("FIFO");
 
         String overheadAllocationBase = config.map(CompanyConfig::overheadAllocationBase)
                 .filter(b -> b != null && !b.isBlank())

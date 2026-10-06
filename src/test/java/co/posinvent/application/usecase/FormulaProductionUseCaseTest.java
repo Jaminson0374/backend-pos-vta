@@ -127,7 +127,7 @@ class FormulaProductionUseCaseTest {
         when(fefoPicker.pick(RAW_MATERIAL_ID, WAREHOUSE_ID, new BigDecimal("10")))
                 .thenReturn(allocations);
 
-        when(kardexRepo.getUnitCost(RAW_MATERIAL_ID, WAREHOUSE_ID, "WEIGHTED_AVERAGE"))
+        when(kardexRepo.getUnitCost(RAW_MATERIAL_ID, WAREHOUSE_ID, "FIFO"))
                 .thenReturn(Optional.of(BigDecimal.TEN));
 
         when(configRepo.findConfig()).thenReturn(Optional.empty());
@@ -240,7 +240,7 @@ class FormulaProductionUseCaseTest {
         var allocBatchId = UUID.randomUUID();
         when(fefoPicker.pick(RAW_MATERIAL_ID, WAREHOUSE_ID, new BigDecimal("10")))
                 .thenReturn(List.of(new BatchAllocation(allocBatchId, new BigDecimal("10"), BigDecimal.TEN)));
-        when(kardexRepo.getUnitCost(RAW_MATERIAL_ID, WAREHOUSE_ID, "WEIGHTED_AVERAGE"))
+        when(kardexRepo.getUnitCost(RAW_MATERIAL_ID, WAREHOUSE_ID, "FIFO"))
                 .thenReturn(Optional.of(BigDecimal.TEN));
         when(configRepo.findConfig()).thenReturn(Optional.empty());
 
