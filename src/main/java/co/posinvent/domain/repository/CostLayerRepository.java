@@ -15,4 +15,6 @@ public interface CostLayerRepository {
     List<CostLayer> findByProductBatchWarehouseFefo(UUID productId, UUID batchId, UUID warehouseId);
 
     void deleteAllByProductBatchWarehouse(UUID productId, UUID batchId, UUID warehouseId);
+
+    void deleteById(UUID id);
 }

@@ -42,7 +42,7 @@ class FormulaProductionUseCaseTest {
     @Mock private BomExploder bomExploder;
     @Mock private FefoPicker fefoPicker;
     @Mock private StockRepository stockRepository;
-    @Mock private CostingService costingService;
+    @Mock private CostingOrchestrator costingService;
     @Mock private ThirdPartyRepository thirdPartyRepo;
     @Mock private BatchRepository batchInventoryRepo;
 
@@ -254,7 +254,7 @@ class FormulaProductionUseCaseTest {
                 LocalDate.now(), new BigDecimal("5"), new BigDecimal("100"),
                 Batch.BatchStatus.OPEN, "Prod lote " + PRODUCTION_BATCH_ID,
                 null, OPERATOR_ID, null, null, null, null,
-                null, null, null);
+                null, null, null, null, null, null, null);
         when(batchInventoryRepo.save(any(Batch.class))).thenReturn(ib);
 
         when(stockRepository.save(any(InventoryStock.class))).thenAnswer(i -> i.getArgument(0));

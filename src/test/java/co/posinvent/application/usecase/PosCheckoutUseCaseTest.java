@@ -32,7 +32,7 @@ class PosCheckoutUseCaseTest {
     @Mock private PriceEngineService priceEngine;
     @Mock private FefoPicker fefoPicker;
     @Mock private RecordMovementUseCase recordMovement;
-    @Mock private CostingService costingService;
+    @Mock private CostingOrchestrator costingService;
     @Mock private ApplicationEventPublisher eventPublisher;
 
     private PosCheckoutUseCase useCase;

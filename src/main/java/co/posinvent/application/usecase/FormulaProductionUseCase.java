@@ -31,7 +31,7 @@ public class FormulaProductionUseCase {
     private final BomExploder bomExploder;
     private final FefoPicker fefoPicker;
     private final StockRepository stockRepository;
-    private final CostingService costingService;
+    private final CostingOrchestrator costingService;
     private final ThirdPartyRepository thirdPartyRepo;
     private final BatchRepository batchInventoryRepo;
 
@@ -45,7 +45,7 @@ public class FormulaProductionUseCase {
             BomExploder bomExploder,
             FefoPicker fefoPicker,
             StockRepository stockRepository,
-            CostingService costingService,
+            CostingOrchestrator costingService,
             ThirdPartyRepository thirdPartyRepo,
             BatchRepository batchInventoryRepo) {
         this.formulaRepo = formulaRepo;

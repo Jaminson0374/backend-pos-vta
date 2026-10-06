@@ -50,4 +50,10 @@ public class CostLayerRepositoryAdapter implements CostLayerRepository {
     public void deleteAllByProductBatchWarehouse(UUID productId, UUID batchId, UUID warehouseId) {
         jpa.deleteAllByProductBatchWarehouse(productId, batchId, warehouseId);
     }
+
+    @Override
+    @Transactional
+    public void deleteById(UUID id) {
+        jpa.deleteById(id);
+    }
 }

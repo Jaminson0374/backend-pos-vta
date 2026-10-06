@@ -33,7 +33,7 @@ public class PosCheckoutUseCase {
     private final PriceEngineService priceEngine;
     private final FefoPicker fefoPicker;
     private final RecordMovementUseCase recordMovement;
-    private final CostingService costingService;
+    private final CostingOrchestrator costingService;
     private final ApplicationEventPublisher eventPublisher;
 
     public PosCheckoutUseCase(
@@ -44,7 +44,7 @@ public class PosCheckoutUseCase {
             PriceEngineService priceEngine,
             FefoPicker fefoPicker,
             RecordMovementUseCase recordMovement,
-            CostingService costingService,
+            CostingOrchestrator costingService,
             ApplicationEventPublisher eventPublisher
     ) {
         this.documentRepo = documentRepo;
