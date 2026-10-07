@@ -341,10 +341,16 @@ class InterestCalculationServiceTest {
     private CompanyConfig config(BigDecimal moratoryRate, int graceDays, String compoundFrequency) {
         return new CompanyConfig(
                 1L, "TestCo", "123", null, null, null, null, null, null,
-                null, null,
+                false,
+                List.of(), List.of(), List.of(),
+                null,
+                null,
+                null,
+                null,
                 moratoryRate,
                 graceDays,
                 compoundFrequency,
+                null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 false,
                 java.math.BigDecimal.ZERO,

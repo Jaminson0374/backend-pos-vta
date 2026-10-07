@@ -26,6 +26,8 @@ public interface ThirdPartyRepository {
 
     Page<ThirdParty> findByTypeAndActive(ThirdParty.ThirdPartyType type, boolean active, Pageable pageable);
 
+    Page<ThirdParty> findByPersonTypeAndActive(ThirdParty.PersonType personType, boolean active, Pageable pageable);
+
     List<ThirdParty> findEmployeesWithoutUser();
 
     Optional<ThirdParty> findByNumIdentification(String numIdentification);

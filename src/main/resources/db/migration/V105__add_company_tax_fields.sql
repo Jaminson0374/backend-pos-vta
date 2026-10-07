@@ -1,0 +1,9 @@
+ALTER TABLE company_config
+    ADD COLUMN IF NOT EXISTS person_type VARCHAR(10),
+    ADD COLUMN IF NOT EXISTS common_name VARCHAR(200),
+    ADD COLUMN IF NOT EXISTS maneja_aiu BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS tax_responsibility_codes JSONB NOT NULL DEFAULT '[]',
+    ADD COLUMN IF NOT EXISTS fiscal_responsibility_codes JSONB NOT NULL DEFAULT '[]',
+    ADD COLUMN IF NOT EXISTS tax_codes JSONB NOT NULL DEFAULT '[]';
+
+ALTER TABLE company_config DROP COLUMN IF EXISTS tax_regime;

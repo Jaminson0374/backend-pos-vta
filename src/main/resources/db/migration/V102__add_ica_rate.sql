@@ -1,0 +1,1 @@
+ALTER TABLE company_config ADD COLUMN IF NOT EXISTS ica_rate NUMERIC(5,2);

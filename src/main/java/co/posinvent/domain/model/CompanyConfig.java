@@ -1,6 +1,7 @@
 package co.posinvent.domain.model;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public record CompanyConfig(
@@ -11,7 +12,13 @@ public record CompanyConfig(
     String phone,
     String email,
     String economicActivity,
-    String taxRegime,
+    String personType,
+    String commonName,
+    boolean manejaAiu,
+    List<String> taxResponsibilityCodes,
+    List<String> fiscalResponsibilityCodes,
+    List<String> taxCodes,
+    java.math.BigDecimal icaRate,
     String currency,
     UUID mainWarehouseId,
     String logoUrl,
@@ -24,6 +31,12 @@ public record CompanyConfig(
     java.util.UUID dianResolutionId,
     String softwarePin,
     java.util.UUID certificateId,
+    java.util.UUID legalRepresentativeIdentificationTypeId,
+    String legalRepresentativeDocumentNumber,
+    String legalRepresentativeName,
+    String legalRepresentativePosition,
+    String legalRepresentativeAddress,
+    String legalRepresentativeEmail,
     boolean autoGenerateJournalEntries,
     java.math.BigDecimal purchaseRetefuenteRate,
     OffsetDateTime createdAt,
