@@ -53,7 +53,7 @@ public class PosController {
     }
 
     @PostMapping("/devolutions")
-    @PreAuthorize("hasAnyRole('ADMIN','VENDEDOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
     public ResponseEntity<DevolutionResponse> processDevolution(
             @Valid @RequestBody DevolutionRequest request,
             @AuthenticationPrincipal PosUserDetails principal
@@ -63,7 +63,7 @@ public class PosController {
     }
 
     @GetMapping("/devolutions")
-    @PreAuthorize("hasAnyRole('ADMIN','VENDEDOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
     public ResponseEntity<List<SalesDocument>> getDevolutions(@RequestParam UUID invoiceId) {
         return ResponseEntity.ok(salesDocumentRepo.findBySourceDocumentId(invoiceId));
     }
