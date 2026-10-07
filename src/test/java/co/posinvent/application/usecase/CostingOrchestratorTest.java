@@ -169,13 +169,10 @@ class CostingOrchestratorTest {
     private CompanyConfig companyConfig(String costingMethod) {
         return new CompanyConfig(
                 1L, "Empresa", "NIT", "Dir", "Tel", "mail@example.com",
-                "Actividad", "Persona", "Comun", false,
-                List.of(), List.of(), List.of(),
-                BigDecimal.ZERO, "COP", null, null,
-                BigDecimal.ZERO, 0, null,
+                "Actividad", "Régimen", "COP", null,
+                null, BigDecimal.ZERO, 0, null,
                 costingMethod, null, BigDecimal.ZERO,
                 null, null, null,
-                null, null, "Rep", "Pos", "Dir", "mail@example.com",
                 false, BigDecimal.ZERO, null, null
         );
     }
