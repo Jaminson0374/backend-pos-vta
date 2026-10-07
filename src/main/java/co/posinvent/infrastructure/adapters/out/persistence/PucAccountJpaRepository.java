@@ -13,4 +13,6 @@ interface PucAccountJpaRepository extends JpaRepository<PucAccountEntity, UUID> 
         String code, String name);
     Optional<PucAccountEntity> findByCode(String code);
     boolean existsByCode(String code);
+    List<PucAccountEntity> findByParentCode(String parentCode);
+    long countByParentCode(String parentCode);
 }
