@@ -95,7 +95,7 @@ class ExpirationMonitorJobTest {
                 OffsetDateTime.now().minusDays(60),
                 OffsetDateTime.now().minusDays(1),
                 null, null,
-                null, null, null
+                null, null, null, null, null, null, null
         );
         when(batchRepository.findById(BATCH_ID)).thenReturn(Optional.of(batch));
         doAnswer(inv -> inv.getArgument(0)).when(batchRepository).save(any(Batch.class));

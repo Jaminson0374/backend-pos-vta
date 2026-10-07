@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.ManualDesposteRequest;
 import co.posinvent.domain.model.Batch;
+import co.posinvent.domain.model.BatchType;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.Product;
 import co.posinvent.domain.model.Warehouse;
@@ -64,6 +65,8 @@ class ManualDesposteUseCaseTest {
     @Test
     void processManual_createsAndUpdatesStockThenClosesSourceBatch() {
         var sourceBatchId = UUID.randomUUID();
+        var parentProductId = UUID.randomUUID();
+        var parentWarehouseId = UUID.randomUUID();
         var productA = UUID.randomUUID();
         var productB = UUID.randomUUID();
         var warehouseA = UUID.randomUUID();
@@ -71,9 +74,9 @@ class ManualDesposteUseCaseTest {
 
         var batch = new Batch(
                 sourceBatchId,
+                parentProductId,
                 UUID.randomUUID(),
-                UUID.randomUUID(),
-                UUID.randomUUID(),
+                parentWarehouseId,
                 LocalDate.of(2026, 5, 13),
                 new BigDecimal("100"),
                 new BigDecimal("1000"),
@@ -85,7 +88,7 @@ class ManualDesposteUseCaseTest {
                 OffsetDateTime.now().minusHours(1),
                 null,
                 null,
-                null, null, null
+                null, null, null, null, null, null, null
         );
 
         when(batchRepository.findById(sourceBatchId)).thenReturn(Optional.of(batch));
@@ -93,22 +96,33 @@ class ManualDesposteUseCaseTest {
         when(productRepository.findById(productB)).thenReturn(Optional.of(product(productB)));
         when(warehouseRepository.findById(warehouseA)).thenReturn(Optional.of(warehouse(warehouseA)));
         when(warehouseRepository.findById(warehouseB)).thenReturn(Optional.of(warehouse(warehouseB)));
-        when(stockRepository.findByProductBatchWarehouse(productA, sourceBatchId, warehouseA))
-                .thenReturn(Optional.of(new InventoryStock(
-                        UUID.randomUUID(),
-                        productA,
-                        sourceBatchId,
-                        warehouseA,
-                        new BigDecimal("10"),
-                        BigDecimal.ZERO,
-                        new BigDecimal("5.000000"),
-                        OffsetDateTime.now().minusDays(1),
-                        OffsetDateTime.now().minusHours(2)
-                )));
-        when(stockRepository.findByProductBatchWarehouse(productB, sourceBatchId, warehouseB))
+
+        // Stock de lotes hijos: sin stock previo.
+        when(stockRepository.findByProductBatchWarehouse(any(), any(), any()))
                 .thenReturn(Optional.empty());
+
+        // Stock del lote padre: 100 unidades (suficiente para consumir). La primera
+        // consulta (decremento) ve 100; la segunda (post-decremento) ve 0 → CLOSED.
+        when(stockRepository.findByProductBatchWarehouse(parentProductId, sourceBatchId, parentWarehouseId))
+                .thenReturn(
+                        Optional.of(stock(parentProductId, sourceBatchId, parentWarehouseId, "100")),
+                        Optional.of(stock(parentProductId, sourceBatchId, parentWarehouseId, "0"))
+                );
+
+        // Asigna ids generados a los lotes hijos (id == null al crearse).
+        doAnswer(invocation -> {
+            Batch b = invocation.getArgument(0);
+            if (b.id() != null) {
+                return b;
+            }
+            return new Batch(
+                    UUID.randomUUID(), b.productId(), b.supplierId(), b.warehouseId(),
+                    b.entryDate(), b.initialWeight(), b.purchaseCost(), b.status(), b.notes(),
+                    b.expirationDate(), b.createdBy(), b.createdAt(), b.updatedAt(), b.updatedBy(),
+                    b.sourceReceiptId(), b.ocId(), b.productName(), b.supplierName(), b.warehouseName(),
+                    b.parentBatchId(), b.batchType(), b.unitOfMeasureId());
+        }).when(batchRepository).save(any(Batch.class));
         doAnswer(invocation -> invocation.getArgument(0)).when(stockRepository).save(any(InventoryStock.class));
-        doAnswer(invocation -> invocation.getArgument(0)).when(batchRepository).save(any(Batch.class));
 
         var response = useCase.processManual(new ManualDesposteRequest(
                 sourceBatchId,
@@ -122,34 +136,38 @@ class ManualDesposteUseCaseTest {
                                 productA,
                                 warehouseA,
                                 new BigDecimal("60"),
-                                new BigDecimal("20")
+                                new BigDecimal("20"),
+                                null
                         ),
                         new ManualDesposteRequest.ManualDesposteCutRequest(
                                 productB,
                                 warehouseB,
                                 new BigDecimal("35"),
-                                new BigDecimal("10")
+                                new BigDecimal("10"),
+                                null
                         )
                 )
         ));
 
-        var stockCaptor = ArgumentCaptor.forClass(InventoryStock.class);
-        verify(stockRepository, org.mockito.Mockito.times(2)).save(stockCaptor.capture());
-
-        var savedStocks = stockCaptor.getAllValues();
-        assertThat(savedStocks.get(0).currentQuantity()).isEqualByComparingTo("70");
-        assertThat(savedStocks.get(0).unitCost()).isEqualByComparingTo("11.774194");
-        assertThat(savedStocks.get(1).id()).isNull();
-        assertThat(savedStocks.get(1).currentQuantity()).isEqualByComparingTo("35.000000");
-        assertThat(savedStocks.get(1).unitCost()).isEqualByComparingTo("6.451613");
-
-        var batchCaptor = ArgumentCaptor.forClass(Batch.class);
-        verify(batchRepository).save(batchCaptor.capture());
-        assertThat(batchCaptor.getValue().status()).isEqualTo(Batch.BatchStatus.CLOSED);
-
         assertThat(response.sourceBatchId()).isEqualTo(sourceBatchId);
         assertThat(response.massBalance().withinTolerance()).isTrue();
         assertThat(response.totalAllocatedCost()).isEqualByComparingTo("1000.000000");
+        assertThat(response.childBatchIds()).hasSize(2);
+
+        var batchCaptor = ArgumentCaptor.forClass(Batch.class);
+        verify(batchRepository, org.mockito.Mockito.times(3)).save(batchCaptor.capture());
+
+        var children = batchCaptor.getAllValues().stream()
+                .filter(b -> b.batchType() == BatchType.CHILD)
+                .toList();
+        assertThat(children).hasSize(2);
+        assertThat(children).allMatch(b -> sourceBatchId.equals(b.parentBatchId()));
+
+        var transition = batchCaptor.getAllValues().stream()
+                .filter(b -> sourceBatchId.equals(b.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(transition.status()).isEqualTo(Batch.BatchStatus.CLOSED);
     }
 
     private Product product(UUID id) {
@@ -211,6 +229,20 @@ class ManualDesposteUseCaseTest {
                 Warehouse.WarehouseType.CORTES,
                 true,
                 OffsetDateTime.now().minusDays(3)
+        );
+    }
+
+    private InventoryStock stock(UUID productId, UUID batchId, UUID warehouseId, String quantity) {
+        return new InventoryStock(
+                UUID.randomUUID(),
+                productId,
+                batchId,
+                warehouseId,
+                new BigDecimal(quantity),
+                BigDecimal.ZERO,
+                new BigDecimal("10.000000"),
+                OffsetDateTime.now().minusDays(1),
+                OffsetDateTime.now().minusHours(2)
         );
     }
 }

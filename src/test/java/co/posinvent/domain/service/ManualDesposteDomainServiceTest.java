@@ -75,7 +75,7 @@ class ManualDesposteDomainServiceTest {
                 OffsetDateTime.now().minusHours(1),
                 null,
                 null,
-                null, null, null
+                null, null, null, null, null, null, null
         );
 
         var plan = service.planForExistingBatch(batch, new ManualDespostePlan.Command(
@@ -90,13 +90,15 @@ class ManualDesposteDomainServiceTest {
                                 UUID.randomUUID(),
                                 UUID.randomUUID(),
                                 new BigDecimal("60"),
-                                new BigDecimal("20")
+                                new BigDecimal("20"),
+                                null
                         ),
                         new ManualDespostePlan.ManualDesposteCutCommand(
                                 UUID.randomUUID(),
                                 UUID.randomUUID(),
                                 new BigDecimal("35"),
-                                new BigDecimal("10")
+                                new BigDecimal("10"),
+                                null
                         )
                 )
         ));
@@ -125,7 +127,8 @@ class ManualDesposteDomainServiceTest {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 new BigDecimal(weight),
-                new BigDecimal(suggestedSalePrice)
+                new BigDecimal(suggestedSalePrice),
+                null
         );
     }
 }
