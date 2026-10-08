@@ -3,9 +3,9 @@ package co.posinvent.infrastructure.adapters.in.rest;
 import co.posinvent.application.dto.DisposalRequest;
 import co.posinvent.application.dto.DisposalResponse;
 import co.posinvent.application.usecase.CreateDisposalUseCase;
-import co.posinvent.domain.repository.StockDisposalRepository;
+import co.posinvent.application.usecase.ListDisposalsUseCase;
+import co.posinvent.application.usecase.ListExpiringBatchesUseCase;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,10 +21,15 @@ import java.util.UUID;
 public class DisposalController {
 
     private final CreateDisposalUseCase createDisposal;
-    private final StockDisposalRepository disposalRepo;
+    private final ListDisposalsUseCase listDisposals;
+    private final ListExpiringBatchesUseCase listExpiringBatches;
 
-    public DisposalController(CreateDisposalUseCase createDisposal, StockDisposalRepository disposalRepo) {
-        this.createDisposal = createDisposal; this.disposalRepo = disposalRepo;
+    public DisposalController(CreateDisposalUseCase createDisposal,
+                              ListDisposalsUseCase listDisposals,
+                              ListExpiringBatchesUseCase listExpiringBatches) {
+        this.createDisposal = createDisposal;
+        this.listDisposals = listDisposals;
+        this.listExpiringBatches = listExpiringBatches;
     }
 
     @PostMapping
@@ -42,8 +47,7 @@ public class DisposalController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
     ) {
-        var pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(disposalRepo.findAll(pageable).map(DisposalResponse::from));
+        return ResponseEntity.ok(listDisposals.execute(page, size));
     }
 
     @GetMapping("/expiring-soon")
@@ -51,6 +55,6 @@ public class DisposalController {
     public ResponseEntity<List<Map<String, Object>>> expiringSoon(
             @RequestParam(defaultValue = "30") int days
     ) {
-        return ResponseEntity.ok(disposalRepo.findExpiringBatches(days));
+        return ResponseEntity.ok(listExpiringBatches.execute(days));
     }
 }

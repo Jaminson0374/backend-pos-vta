@@ -5,10 +5,9 @@ import co.posinvent.application.dto.TransferResponse;
 import co.posinvent.application.usecase.CancelTransferUseCase;
 import co.posinvent.application.usecase.ConfirmTransferUseCase;
 import co.posinvent.application.usecase.CreateTransferUseCase;
-import co.posinvent.domain.exception.ResourceNotFoundException;
-import co.posinvent.domain.repository.StockTransferRepository;
+import co.posinvent.application.usecase.GetTransferUseCase;
+import co.posinvent.application.usecase.ListTransfersUseCase;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -22,16 +21,19 @@ public class TransferController {
     private final CreateTransferUseCase createTransfer;
     private final ConfirmTransferUseCase confirmTransfer;
     private final CancelTransferUseCase cancelTransfer;
-    private final StockTransferRepository transferRepo;
+    private final ListTransfersUseCase listTransfers;
+    private final GetTransferUseCase getTransfer;
 
     public TransferController(
             CreateTransferUseCase createTransfer, ConfirmTransferUseCase confirmTransfer,
-            CancelTransferUseCase cancelTransfer, StockTransferRepository transferRepo
+            CancelTransferUseCase cancelTransfer, ListTransfersUseCase listTransfers,
+            GetTransferUseCase getTransfer
     ) {
         this.createTransfer = createTransfer;
         this.confirmTransfer = confirmTransfer;
         this.cancelTransfer = cancelTransfer;
-        this.transferRepo = transferRepo;
+        this.listTransfers = listTransfers;
+        this.getTransfer = getTransfer;
     }
 
     @PostMapping
@@ -58,15 +60,12 @@ public class TransferController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return ResponseEntity.ok(transferRepo.findAll(PageRequest.of(page, size)).map(TransferResponse::from));
+        return ResponseEntity.ok(listTransfers.execute(page, size));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','ALMACENISTA','CAJERO')")
     public ResponseEntity<TransferResponse> getById(@PathVariable UUID id) {
-        return transferRepo.findById(id)
-                .map(TransferResponse::from)
-                .map(ResponseEntity::ok)
-                .orElseThrow(() -> new ResourceNotFoundException("Traslado", id));
+        return ResponseEntity.ok(getTransfer.execute(id));
     }
 }
