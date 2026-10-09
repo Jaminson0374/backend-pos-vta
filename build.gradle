@@ -40,9 +40,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     runtimeOnly    'org.flywaydb:flyway-database-postgresql'
 
-    // ── Persistencia documental (auditoría y telemetría) ─────────────
-    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
-
     // ── Validación ───────────────────────────────────────────────────
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
@@ -70,7 +67,6 @@ dependencies {
     testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:mongodb'
     testCompileOnly    'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
