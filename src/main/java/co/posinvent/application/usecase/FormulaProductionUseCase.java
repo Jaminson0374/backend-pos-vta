@@ -72,8 +72,8 @@ public class FormulaProductionUseCase {
             throw new IllegalArgumentException("El producto no está configurado como fabricado internamente");
         }
 
-        // Step 1: Explode BOM recursively to get all leaf raw materials
-        var explodedComponents = bomExploder.explode(request.formulaProductId(), request.quantity());
+        // Step 1: Explode BOM — stocked intermediates are consumed as leaves, otherwise recurse to raw materials
+        var explodedComponents = bomExploder.explode(request.formulaProductId(), request.warehouseId(), request.quantity());
         if (explodedComponents.isEmpty()) {
             throw new IllegalArgumentException("El producto no tiene fórmula definida");
         }

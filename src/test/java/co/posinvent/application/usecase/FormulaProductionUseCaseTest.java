@@ -71,7 +71,7 @@ class FormulaProductionUseCaseTest {
         when(productRepo.findById(FORMULA_PRODUCT_ID)).thenReturn(Optional.of(parentProduct));
 
         var exploded = new BomExploder.ExplodedComponent(RAW_MATERIAL_ID, new BigDecimal("10"), 0);
-        when(bomExploder.explode(FORMULA_PRODUCT_ID, new BigDecimal("5")))
+        when(bomExploder.explode(FORMULA_PRODUCT_ID, WAREHOUSE_ID, new BigDecimal("5")))
                 .thenReturn(List.of(exploded));
 
         var rawMaterial = simpleProduct(RAW_MATERIAL_ID, "Materia Prima", false);
@@ -107,7 +107,7 @@ class FormulaProductionUseCaseTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("fabricado internamente");
 
-        verify(bomExploder, never()).explode(any(), any());
+        verify(bomExploder, never()).explode(any(), any(), any());
     }
 
     @Test
@@ -116,7 +116,7 @@ class FormulaProductionUseCaseTest {
         when(productRepo.findById(FORMULA_PRODUCT_ID)).thenReturn(Optional.of(parentProduct));
 
         var exploded = new BomExploder.ExplodedComponent(RAW_MATERIAL_ID, new BigDecimal("10"), 0);
-        when(bomExploder.explode(FORMULA_PRODUCT_ID, new BigDecimal("5")))
+        when(bomExploder.explode(FORMULA_PRODUCT_ID, WAREHOUSE_ID, new BigDecimal("5")))
                 .thenReturn(List.of(exploded));
 
         var rawMaterial = simpleProduct(RAW_MATERIAL_ID, "Materia Prima", false);
@@ -231,7 +231,7 @@ class FormulaProductionUseCaseTest {
         var parentProduct = simpleProduct(FORMULA_PRODUCT_ID, "Prod Final", true);
         when(productRepo.findById(FORMULA_PRODUCT_ID)).thenReturn(Optional.of(parentProduct));
 
-        when(bomExploder.explode(FORMULA_PRODUCT_ID, new BigDecimal("5")))
+        when(bomExploder.explode(FORMULA_PRODUCT_ID, WAREHOUSE_ID, new BigDecimal("5")))
                 .thenReturn(List.of(new BomExploder.ExplodedComponent(RAW_MATERIAL_ID, new BigDecimal("10"), 0)));
 
         var rawMaterial = simpleProduct(RAW_MATERIAL_ID, "MP", false);
