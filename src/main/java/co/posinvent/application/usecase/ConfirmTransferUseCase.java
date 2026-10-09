@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.TransferResponse;
+import co.posinvent.application.port.in.ConfirmTransferPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
@@ -13,7 +14,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Service
-public class ConfirmTransferUseCase {
+public class ConfirmTransferUseCase implements ConfirmTransferPort {
 
     private final StockTransferRepository transferRepo;
     private final StockRepository stockRepo;

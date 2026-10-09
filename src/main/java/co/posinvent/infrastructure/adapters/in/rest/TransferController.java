@@ -2,11 +2,11 @@ package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.TransferRequest;
 import co.posinvent.application.dto.TransferResponse;
-import co.posinvent.application.usecase.CancelTransferUseCase;
-import co.posinvent.application.usecase.ConfirmTransferUseCase;
-import co.posinvent.application.usecase.CreateTransferUseCase;
-import co.posinvent.application.usecase.GetTransferUseCase;
-import co.posinvent.application.usecase.ListTransfersUseCase;
+import co.posinvent.application.port.in.CancelTransferPort;
+import co.posinvent.application.port.in.ConfirmTransferPort;
+import co.posinvent.application.port.in.CreateTransferPort;
+import co.posinvent.application.port.in.GetTransferPort;
+import co.posinvent.application.port.in.ListTransfersPort;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,16 +18,16 @@ import java.util.UUID;
 @RequestMapping("/api/v1/transfers")
 public class TransferController {
 
-    private final CreateTransferUseCase createTransfer;
-    private final ConfirmTransferUseCase confirmTransfer;
-    private final CancelTransferUseCase cancelTransfer;
-    private final ListTransfersUseCase listTransfers;
-    private final GetTransferUseCase getTransfer;
+    private final CreateTransferPort createTransfer;
+    private final ConfirmTransferPort confirmTransfer;
+    private final CancelTransferPort cancelTransfer;
+    private final ListTransfersPort listTransfers;
+    private final GetTransferPort getTransfer;
 
     public TransferController(
-            CreateTransferUseCase createTransfer, ConfirmTransferUseCase confirmTransfer,
-            CancelTransferUseCase cancelTransfer, ListTransfersUseCase listTransfers,
-            GetTransferUseCase getTransfer
+            CreateTransferPort createTransfer, ConfirmTransferPort confirmTransfer,
+            CancelTransferPort cancelTransfer, ListTransfersPort listTransfers,
+            GetTransferPort getTransfer
     ) {
         this.createTransfer = createTransfer;
         this.confirmTransfer = confirmTransfer;

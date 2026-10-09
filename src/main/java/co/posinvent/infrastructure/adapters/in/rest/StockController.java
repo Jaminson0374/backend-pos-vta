@@ -3,9 +3,9 @@ package co.posinvent.infrastructure.adapters.in.rest;
 import co.posinvent.application.dto.ManualStockEntryRequest;
 import co.posinvent.application.dto.ManualStockExitRequest;
 import co.posinvent.application.dto.StockResponse;
-import co.posinvent.application.usecase.ManualStockEntryUseCase;
-import co.posinvent.application.usecase.ManualStockExitUseCase;
-import co.posinvent.application.usecase.StockQueryUseCase;
+import co.posinvent.application.port.in.ManualStockEntryPort;
+import co.posinvent.application.port.in.ManualStockExitPort;
+import co.posinvent.application.port.in.StockQueryPort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -17,14 +17,14 @@ import java.util.UUID;
 @RequestMapping("/api/v1/stock")
 public class StockController {
 
-    private final StockQueryUseCase stockQueryUseCase;
-    private final ManualStockEntryUseCase manualEntry;
-    private final ManualStockExitUseCase manualExit;
+    private final StockQueryPort stockQueryUseCase;
+    private final ManualStockEntryPort manualEntry;
+    private final ManualStockExitPort manualExit;
 
     public StockController(
-            StockQueryUseCase stockQueryUseCase,
-            ManualStockEntryUseCase manualEntry,
-            ManualStockExitUseCase manualExit
+            StockQueryPort stockQueryUseCase,
+            ManualStockEntryPort manualEntry,
+            ManualStockExitPort manualExit
     ) {
         this.stockQueryUseCase = stockQueryUseCase;
         this.manualEntry = manualEntry;

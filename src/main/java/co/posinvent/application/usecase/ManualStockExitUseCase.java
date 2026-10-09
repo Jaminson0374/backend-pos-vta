@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.ManualStockExitRequest;
+import co.posinvent.application.port.in.ManualStockExitPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.InventoryStock;
@@ -13,7 +14,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
-public class ManualStockExitUseCase {
+public class ManualStockExitUseCase implements ManualStockExitPort {
 
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;

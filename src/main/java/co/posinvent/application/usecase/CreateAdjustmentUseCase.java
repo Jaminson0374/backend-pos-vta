@@ -3,6 +3,7 @@ package co.posinvent.application.usecase;
 import co.posinvent.application.annotation.Auditable;
 import co.posinvent.application.dto.AdjustmentRequest;
 import co.posinvent.application.dto.AdjustmentResponse;
+import co.posinvent.application.port.in.CreateAdjustmentPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
@@ -15,7 +16,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
-public class CreateAdjustmentUseCase {
+public class CreateAdjustmentUseCase implements CreateAdjustmentPort {
 
     private final StockAdjustmentRepository adjustmentRepo;
     private final StockRepository stockRepo;

@@ -1,5 +1,6 @@
 package co.posinvent.application.usecase;
 
+import co.posinvent.application.port.in.ProductFormulaPort;
 import co.posinvent.domain.model.ProductFormula;
 import co.posinvent.domain.repository.ProductFormulaRepository;
 import co.posinvent.domain.repository.ProductRepository;
@@ -11,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class ProductFormulaUseCase {
+public class ProductFormulaUseCase implements ProductFormulaPort {
 
     private final ProductFormulaRepository formulaRepo;
     private final ProductRepository productRepo;

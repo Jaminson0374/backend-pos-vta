@@ -3,8 +3,8 @@ package co.posinvent.infrastructure.adapters.in.rest;
 import co.posinvent.application.dto.BatchRequest;
 import co.posinvent.application.dto.BatchResponse;
 import co.posinvent.application.dto.PageResponse;
-import co.posinvent.application.usecase.BatchUseCase;
-import co.posinvent.application.usecase.RecordMovementUseCase;
+import co.posinvent.application.port.in.BatchPort;
+import co.posinvent.application.port.in.RecordMovementPort;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
@@ -31,16 +31,16 @@ import java.util.UUID;
 @RequestMapping("/api/v1/batches")
 public class BatchController {
 
-    private final BatchUseCase batchUseCase;
+    private final BatchPort batchUseCase;
     private final BatchRepository batchRepository;
     private final StockRepository stockRepository;
-    private final RecordMovementUseCase recordMovement;
+    private final RecordMovementPort recordMovement;
 
     public BatchController(
-            BatchUseCase batchUseCase,
+            BatchPort batchUseCase,
             BatchRepository batchRepository,
             StockRepository stockRepository,
-            RecordMovementUseCase recordMovement
+            RecordMovementPort recordMovement
     ) {
         this.batchUseCase = batchUseCase;
         this.batchRepository = batchRepository;

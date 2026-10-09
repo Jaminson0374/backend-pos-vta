@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.WarehouseResponse;
+import co.posinvent.application.port.in.WarehousePort;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.repository.WarehouseRepository;
 import org.springframework.stereotype.Service;
@@ -10,7 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class WarehouseUseCase {
+public class WarehouseUseCase implements WarehousePort {
 
     private final WarehouseRepository warehouseRepository;
 

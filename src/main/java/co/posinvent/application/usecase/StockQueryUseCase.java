@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.StockResponse;
+import co.posinvent.application.port.in.StockQueryPort;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.repository.BatchRepository;
 import co.posinvent.domain.repository.ProductRepository;
@@ -12,7 +13,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-public class StockQueryUseCase {
+public class StockQueryUseCase implements StockQueryPort {
 
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;

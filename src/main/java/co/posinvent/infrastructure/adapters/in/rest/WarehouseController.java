@@ -1,7 +1,7 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.WarehouseResponse;
-import co.posinvent.application.usecase.WarehouseUseCase;
+import co.posinvent.application.port.in.WarehousePort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,9 +12,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/warehouses")
 public class WarehouseController {
 
-    private final WarehouseUseCase warehouseUseCase;
+    private final WarehousePort warehouseUseCase;
 
-    public WarehouseController(WarehouseUseCase warehouseUseCase) {
+    public WarehouseController(WarehousePort warehouseUseCase) {
         this.warehouseUseCase = warehouseUseCase;
     }
 

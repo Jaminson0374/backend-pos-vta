@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.DisposalRequest;
 import co.posinvent.application.dto.DisposalResponse;
+import co.posinvent.application.port.in.CreateDisposalPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
@@ -12,7 +13,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
-public class CreateDisposalUseCase {
+public class CreateDisposalUseCase implements CreateDisposalPort {
 
     private final StockDisposalRepository disposalRepo;
     private final StockRepository stockRepo;

@@ -1,5 +1,6 @@
 package co.posinvent.application.usecase;
 
+import co.posinvent.application.port.in.RecordMovementPort;
 import co.posinvent.domain.model.InventoryMovement;
 import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.repository.KardexRepository;
@@ -10,7 +11,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
-public class RecordMovementUseCase {
+public class RecordMovementUseCase implements RecordMovementPort {
 
     private final KardexRepository kardexRepo;
 

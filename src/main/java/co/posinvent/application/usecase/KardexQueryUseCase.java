@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.InventoryMovementResponse;
+import co.posinvent.application.port.in.KardexQueryPort;
 import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.repository.KardexRepository;
 import org.springframework.data.domain.Page;
@@ -12,7 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
-public class KardexQueryUseCase {
+public class KardexQueryUseCase implements KardexQueryPort {
 
     private final KardexRepository kardexRepo;
 

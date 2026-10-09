@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.ManualStockEntryRequest;
+import co.posinvent.application.port.in.ManualStockEntryPort;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.MovementType;
@@ -12,7 +13,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
-public class ManualStockEntryUseCase {
+public class ManualStockEntryUseCase implements ManualStockEntryPort {
 
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;

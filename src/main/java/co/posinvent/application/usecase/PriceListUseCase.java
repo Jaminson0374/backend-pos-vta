@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.PriceListRequest;
 import co.posinvent.application.dto.PriceListResponse;
+import co.posinvent.application.port.in.PriceListPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.PriceList;
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class PriceListUseCase {
+public class PriceListUseCase implements PriceListPort {
 
     private final PriceListRepository repository;
 

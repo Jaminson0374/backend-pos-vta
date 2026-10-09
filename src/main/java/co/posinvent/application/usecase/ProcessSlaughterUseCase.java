@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.SlaughterRequest;
 import co.posinvent.application.dto.SlaughterResponse;
+import co.posinvent.application.port.in.ProcessSlaughterPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Animal;
@@ -29,7 +30,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Service
-public class ProcessSlaughterUseCase {
+public class ProcessSlaughterUseCase implements ProcessSlaughterPort {
 
     private final AnimalRepository animalRepository;
     private final SlaughterRepository slaughterRepository;

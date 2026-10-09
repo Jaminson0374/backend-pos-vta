@@ -2,8 +2,8 @@ package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.AdjustmentRequest;
 import co.posinvent.application.dto.AdjustmentResponse;
-import co.posinvent.application.usecase.CreateAdjustmentUseCase;
-import co.posinvent.application.usecase.ListAdjustmentsUseCase;
+import co.posinvent.application.port.in.CreateAdjustmentPort;
+import co.posinvent.application.port.in.ListAdjustmentsPort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -18,10 +18,10 @@ import java.util.UUID;
 @RequestMapping("/api/v1/adjustments")
 public class AdjustmentController {
 
-    private final CreateAdjustmentUseCase createAdjustment;
-    private final ListAdjustmentsUseCase listAdjustments;
+    private final CreateAdjustmentPort createAdjustment;
+    private final ListAdjustmentsPort listAdjustments;
 
-    public AdjustmentController(CreateAdjustmentUseCase createAdjustment, ListAdjustmentsUseCase listAdjustments) {
+    public AdjustmentController(CreateAdjustmentPort createAdjustment, ListAdjustmentsPort listAdjustments) {
         this.createAdjustment = createAdjustment;
         this.listAdjustments = listAdjustments;
     }
