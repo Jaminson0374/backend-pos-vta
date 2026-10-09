@@ -63,7 +63,7 @@ class StockConcurrencyIntegrationTest extends AbstractIntegrationTest {
 
             var systemSupplier = thirdPartyRepo.findByNumIdentification("000000000-0").orElseThrow();
             batchId = TestDataFactory.createBatch(
-                    em, systemSupplier.id(), warehouseId, new BigDecimal("100"), Batch.BatchStatus.OPEN);
+                    em, productId, systemSupplier.id(), warehouseId, new BigDecimal("100"), Batch.BatchStatus.OPEN);
             TestDataFactory.createStock(
                     em, productId, batchId, warehouseId, new BigDecimal("100"), BigDecimal.ZERO);
             em.flush();

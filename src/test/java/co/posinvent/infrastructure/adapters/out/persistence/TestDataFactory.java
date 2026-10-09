@@ -42,9 +42,10 @@ public final class TestDataFactory {
         return p.getId();
     }
 
-    public static UUID createBatch(EntityManager em, UUID supplierId, UUID warehouseId,
+    public static UUID createBatch(EntityManager em, UUID productId, UUID supplierId, UUID warehouseId,
                                     BigDecimal weight, Batch.BatchStatus status) {
         var b = new BatchEntity();
+        b.setProductId(productId);
         b.setSupplierId(supplierId);
         b.setWarehouseId(warehouseId);
         b.setEntryDate(LocalDate.now());

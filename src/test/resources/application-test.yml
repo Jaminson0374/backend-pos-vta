@@ -29,3 +29,5 @@ app:
   inventory:
     auto-dispose: false
     expiration-warning-days: 30
+    concurrency:
+      max-attempts: 300

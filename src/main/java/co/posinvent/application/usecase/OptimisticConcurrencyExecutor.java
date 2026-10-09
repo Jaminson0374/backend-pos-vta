@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.domain.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -24,13 +25,20 @@ public class OptimisticConcurrencyExecutor {
 
     private final TransactionTemplate transactionTemplate;
 
+    /**
+     * Retry budget on optimistic-lock conflicts. Configurable so stress tests can raise it; the
+     * production default stays bounded. Manual instantiation (unit tests) keeps {@link #DEFAULT_MAX_ATTEMPTS}.
+     */
+    @Value("${app.inventory.concurrency.max-attempts:5}")
+    private int maxAttempts = DEFAULT_MAX_ATTEMPTS;
+
     public OptimisticConcurrencyExecutor(PlatformTransactionManager transactionManager) {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     public <T> T execute(Supplier<T> unitOfWork) {
-        return execute(DEFAULT_MAX_ATTEMPTS, unitOfWork);
+        return execute(maxAttempts, unitOfWork);
     }
 
     public <T> T execute(int maxAttempts, Supplier<T> unitOfWork) {
