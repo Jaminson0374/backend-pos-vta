@@ -48,6 +48,13 @@ public class ThirdPartyUseCase {
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<ThirdPartyResponse> listByPersonTypeAndActive(ThirdParty.PersonType personType, boolean active, Pageable pageable) {
+        return PageResponse.from(
+                thirdPartyRepository.findByPersonTypeAndActive(personType, active, pageable),
+                ThirdPartyResponse::from);
+    }
+
+    @Transactional(readOnly = true)
     public List<ThirdPartySupplierOptionResponse> listSupplierOptions() {
         return thirdPartyRepository.findSuppliers().stream()
                 .map(ThirdPartySupplierOptionResponse::from)

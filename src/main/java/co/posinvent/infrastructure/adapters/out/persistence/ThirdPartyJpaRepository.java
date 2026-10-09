@@ -1,6 +1,7 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
 import co.posinvent.domain.model.ThirdParty.ThirdPartyType;
+import co.posinvent.domain.model.ThirdParty.PersonType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -38,6 +39,8 @@ public interface ThirdPartyJpaRepository extends JpaRepository<ThirdPartyEntity,
     );
 
     Page<ThirdPartyEntity> findByTypeAndActive(ThirdPartyType type, boolean active, Pageable pageable);
+
+    Page<ThirdPartyEntity> findByPersonTypeAndActive(PersonType personType, boolean active, Pageable pageable);
 
     @Query("""
             SELECT t FROM ThirdPartyEntity t

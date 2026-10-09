@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -35,6 +36,13 @@ public class PucAccountController {
     @PreAuthorize("isAuthenticated()")
     public List<PucAccountResponse> tree(@RequestParam(required = false) String search) {
         return useCase.tree(search);
+    }
+
+    @GetMapping("/check-code")
+    @PreAuthorize("isAuthenticated()")
+    public Map<String, Object> checkCode(@RequestParam String code) {
+        boolean exists = useCase.existsByCode(code);
+        return Map.of("code", code, "available", !exists);
     }
 
     @PostMapping

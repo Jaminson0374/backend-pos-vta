@@ -131,6 +131,11 @@ class ThirdPartyRepositoryAdapter implements ThirdPartyRepository {
     }
 
     @Override
+    public Page<ThirdParty> findByPersonTypeAndActive(ThirdParty.PersonType personType, boolean active, Pageable pageable) {
+        return jpa.findByPersonTypeAndActive(personType, active, pageable).map(mapper::toDomain);
+    }
+
+    @Override
     public List<ThirdParty> findEmployeesWithoutUser() {
         return jpa.findEmployeesWithoutUser().stream()
                 .map(mapper::toDomain)

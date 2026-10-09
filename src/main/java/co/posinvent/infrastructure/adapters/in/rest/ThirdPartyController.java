@@ -7,6 +7,7 @@ import co.posinvent.application.dto.ThirdPartySummaryResponse;
 import co.posinvent.application.dto.ThirdPartySupplierOptionResponse;
 import co.posinvent.application.usecase.ThirdPartyUseCase;
 import co.posinvent.domain.model.ThirdParty.ThirdPartyType;
+import co.posinvent.domain.model.ThirdParty.PersonType;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -35,12 +36,15 @@ public class ThirdPartyController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) ThirdPartyType type,
+            @RequestParam(required = false) PersonType personType,
             @RequestParam(defaultValue = "true") boolean active
     ) {
         var pageable = PageRequest.of(page, size, Sort.by("name"));
         PageResponse<ThirdPartyResponse> result;
 
-        if (type != null) {
+        if (personType != null) {
+            result = thirdPartyUseCase.listByPersonTypeAndActive(personType, active, pageable);
+        } else if (type != null) {
             result = thirdPartyUseCase.listByTypeAndActive(type, active, pageable);
         } else if (q != null && !q.isBlank()) {
             result = thirdPartyUseCase.search(q, pageable);

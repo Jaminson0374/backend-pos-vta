@@ -15,4 +15,7 @@ public interface PucAccountRepository {
     PucAccount save(PucAccount entity);
     boolean existsByCode(String code);
     long countProductsReferencing(UUID pucAccountId);
+    List<PucAccount> findChildrenByCode(String code);
+    long countChildrenByCode(String code);
+    List<PucAccount> findAncestorsByCode(String code);
 }

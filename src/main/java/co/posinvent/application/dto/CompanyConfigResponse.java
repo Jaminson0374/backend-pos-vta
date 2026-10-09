@@ -3,6 +3,7 @@ package co.posinvent.application.dto;
 import co.posinvent.domain.model.CompanyConfig;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public record CompanyConfigResponse(
@@ -13,7 +14,13 @@ public record CompanyConfigResponse(
     String phone,
     String email,
     String economicActivity,
-    String taxRegime,
+    String personType,
+    String commonName,
+    boolean manejaAiu,
+    List<String> taxResponsibilityCodes,
+    List<String> fiscalResponsibilityCodes,
+    List<String> taxCodes,
+    java.math.BigDecimal icaRate,
     String currency,
     UUID mainWarehouseId,
     String logoUrl,
@@ -26,6 +33,12 @@ public record CompanyConfigResponse(
     java.util.UUID dianResolutionId,
     String softwarePin,
     java.util.UUID certificateId,
+    java.util.UUID legalRepresentativeIdentificationTypeId,
+    String legalRepresentativeDocumentNumber,
+    String legalRepresentativeName,
+    String legalRepresentativePosition,
+    String legalRepresentativeAddress,
+    String legalRepresentativeEmail,
     boolean autoGenerateJournalEntries,
     java.math.BigDecimal purchaseRetefuenteRate,
     OffsetDateTime createdAt,
@@ -40,7 +53,13 @@ public record CompanyConfigResponse(
             c.phone(),
             c.email(),
             c.economicActivity(),
-            c.taxRegime(),
+            c.personType(),
+            c.commonName(),
+            c.manejaAiu(),
+            c.taxResponsibilityCodes(),
+            c.fiscalResponsibilityCodes(),
+            c.taxCodes(),
+            c.icaRate(),
             c.currency(),
             c.mainWarehouseId(),
             c.logoUrl(),
@@ -53,6 +72,12 @@ public record CompanyConfigResponse(
             c.dianResolutionId(),
             c.softwarePin(),
             c.certificateId(),
+            c.legalRepresentativeIdentificationTypeId(),
+            c.legalRepresentativeDocumentNumber(),
+            c.legalRepresentativeName(),
+            c.legalRepresentativePosition(),
+            c.legalRepresentativeAddress(),
+            c.legalRepresentativeEmail(),
             c.autoGenerateJournalEntries(),
             c.purchaseRetefuenteRate(),
             c.createdAt(),

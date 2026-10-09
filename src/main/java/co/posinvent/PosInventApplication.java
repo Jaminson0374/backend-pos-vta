@@ -19,6 +19,5 @@ public class PosInventApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(PosInventApplication.class, args);
-	}
-
+}
 }

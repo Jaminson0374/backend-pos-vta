@@ -13,5 +13,6 @@ public record PucAccountRequest(
     @Size(max = 20) String parentCode,
     @Min(1) @Max(9) int accountClass,
     @NotBlank @Pattern(regexp = "DEBITO|CREDITO") String accountNature,
-    boolean allowsTransactions
+    boolean allowsTransactions,
+    boolean active
 ) {}

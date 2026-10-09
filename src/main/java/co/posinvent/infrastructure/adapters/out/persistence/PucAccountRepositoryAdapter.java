@@ -65,4 +65,35 @@ class PucAccountRepositoryAdapter implements PucAccountRepository {
     public long countProductsReferencing(UUID pucAccountId) {
         return productJpa.countByPucAccountId(pucAccountId);
     }
+
+    @Override
+    public List<PucAccount> findChildrenByCode(String code) {
+        return jpa.findByParentCode(code).stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public long countChildrenByCode(String code) {
+        return jpa.countByParentCode(code);
+    }
+
+    @Override
+    public List<PucAccount> findAncestorsByCode(String code) {
+        // Recursively walk up the parent chain to build the ancestor list
+        java.util.List<PucAccount> ancestors = new java.util.ArrayList<>();
+        String currentCode = code;
+        int safety = 0;
+        while (currentCode != null && !currentCode.isBlank() && safety < 10) {
+            final String lookup = currentCode;
+            var parent = jpa.findByCode(lookup);
+            if (parent.isPresent()) {
+                var domain = mapper.toDomain(parent.get());
+                ancestors.add(0, domain); // prepend to maintain root-first order
+                currentCode = domain.parentCode();
+            } else {
+                break;
+            }
+            safety++;
+        }
+        return ancestors;
+    }
 }
