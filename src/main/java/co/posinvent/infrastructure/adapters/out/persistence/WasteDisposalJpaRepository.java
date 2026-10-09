@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-public interface StockDisposalJpaRepository extends JpaRepository<StockDisposalEntity, UUID> {
+public interface WasteDisposalJpaRepository extends JpaRepository<WasteDisposalEntity, UUID> {
 
     @Query(value = """
         SELECT

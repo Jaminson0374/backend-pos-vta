@@ -14,13 +14,13 @@ import java.util.UUID;
 @Service
 public class CreateDisposalUseCase {
 
-    private final StockDisposalRepository disposalRepo;
+    private final WasteDisposalRepository disposalRepo;
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;
     private final RecordMovementUseCase recordMovement;
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
 
-    public CreateDisposalUseCase(StockDisposalRepository disposalRepo, StockRepository stockRepo,
+    public CreateDisposalUseCase(WasteDisposalRepository disposalRepo, StockRepository stockRepo,
                                   ProductRepository productRepo, RecordMovementUseCase recordMovement,
                                   OptimisticConcurrencyExecutor concurrencyExecutor) {
         this.disposalRepo = disposalRepo; this.stockRepo = stockRepo;
@@ -28,7 +28,7 @@ public class CreateDisposalUseCase {
         this.concurrencyExecutor = concurrencyExecutor;
     }
 
-    public DisposalResponse execute(DisposalRequest request) {
+    public DisposalResponse execute(DisposalRequest request, UUID operatorId) {
         return concurrencyExecutor.execute(() -> {
             var type = DisposalType.valueOf(request.disposalType().toUpperCase());
             productRepo.findById(request.productId())
@@ -47,8 +47,9 @@ public class CreateDisposalUseCase {
             stockRepo.save(new InventoryStock(stock.id(), stock.productId(), stock.batchId(), stock.warehouseId(),
                     newQty, stock.committedQuantity(), stock.unitCost(), stock.createdAt(), stock.updatedAt()));
 
-            var disposal = disposalRepo.save(new StockDisposal(null, request.productId(), request.batchId(),
-                    request.warehouseId(), type, request.quantity(), stock.unitCost(), request.reason(), "SYSTEM", null));
+            var disposal = disposalRepo.save(new WasteDisposal(null, request.productId(), request.batchId(),
+                    request.warehouseId(), type, request.quantity(), stock.unitCost(), request.reason(),
+                    request.officialDocument(), request.disposalDate(), null, operatorId, null));
 
             recordMovement.record(request.productId(), request.batchId(), request.warehouseId(),
                     MovementType.DISPOSAL, request.quantity(), stock.unitCost(),

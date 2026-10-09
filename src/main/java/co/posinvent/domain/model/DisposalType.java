@@ -1,7 +1,7 @@
 package co.posinvent.domain.model;
 
 public enum DisposalType {
-    SANITARIO,
+    DECOMISO_SANITARIO,
     RESIDUO_VENDIBLE,
     MERMA_PROCESO
 }
