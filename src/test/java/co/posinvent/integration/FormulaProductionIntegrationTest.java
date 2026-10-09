@@ -45,7 +45,7 @@ class FormulaProductionIntegrationTest extends AbstractIntegrationTest {
         var systemSupplier = thirdPartyRepo.findByNumIdentification("000000000-0");
         assertThat(systemSupplier).isPresent();
 
-        rawBatchId = TestDataFactory.createBatch(em, systemSupplier.get().id(),
+        rawBatchId = TestDataFactory.createBatch(em, rawMaterialId, systemSupplier.get().id(),
                 warehouseId, new BigDecimal("50"), Batch.BatchStatus.OPEN);
         TestDataFactory.createStock(em, rawMaterialId, rawBatchId, warehouseId,
                 new BigDecimal("50"), new BigDecimal("10"));
@@ -117,6 +117,9 @@ class FormulaProductionIntegrationTest extends AbstractIntegrationTest {
         assertThat(responseB.inventoryBatchId()).isNotNull();
         assertThat(stockRepo.findByProduct(productBId)).hasSize(1);
 
+        // The use cases commit in their own REQUIRES_NEW transactions; clear the test's
+        // first-level cache so the re-read reflects their committed decrement.
+        em.clear();
         var stockAAfter = stockRepo.findByProductBatchWarehouse(
                 productAId, responseA.inventoryBatchId(), warehouseId);
         assertThat(stockAAfter).isPresent();

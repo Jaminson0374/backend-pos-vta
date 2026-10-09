@@ -1,15 +1,18 @@
 package co.posinvent;
 
+import co.posinvent.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
-@SpringBootTest(properties = "spring.main.allow-bean-definition-overriding=true")
-class PosInventApplicationTests {
+/**
+ * Context smoke test. Runs against an isolated Testcontainers database (via
+ * {@link AbstractIntegrationTest}) instead of the local dev database, so it no longer depends on
+ * the developer's Flyway schema state.
+ */
+class PosInventApplicationTests extends AbstractIntegrationTest {
 
 	@TestConfiguration
 	static class TestConfig {
@@ -21,8 +24,6 @@ class PosInventApplicationTests {
 	}
 
 	@Test
-	@Disabled("Spring Boot 4.0 auto-configuration issue: ElectronicInvoiceJob requires ObjectMapper bean not auto-configured in test context. Needs investigation.")
 	void contextLoads() {
 	}
-
 }
