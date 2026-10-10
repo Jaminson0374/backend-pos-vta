@@ -16,4 +16,6 @@ public interface WarehouseRepository {
     Optional<Warehouse> findFirstActiveByType(WarehouseType type);
 
     List<Warehouse> findByNameContaining(String query);
+
+    Warehouse save(Warehouse warehouse);
 }

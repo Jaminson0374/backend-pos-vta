@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Warehouse;
 import co.posinvent.domain.model.Warehouse.WarehouseType;
 import co.posinvent.domain.repository.WarehouseRepository;
@@ -43,5 +44,18 @@ class WarehouseRepositoryAdapter implements WarehouseRepository {
         return jpa.findByNameContainingIgnoreCaseOrderByName(query).stream()
                 .map(mapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public Warehouse save(Warehouse warehouse) {
+        WarehouseEntity entity;
+        if (warehouse.id() != null) {
+            entity = jpa.findById(warehouse.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Bodega", warehouse.id()));
+            mapper.updateEntity(entity, warehouse);
+        } else {
+            entity = mapper.toEntity(warehouse);
+        }
+        return mapper.toDomain(jpa.save(entity));
     }
 }

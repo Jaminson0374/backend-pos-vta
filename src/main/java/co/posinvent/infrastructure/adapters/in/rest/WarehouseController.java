@@ -1,8 +1,12 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
+import co.posinvent.application.dto.WarehouseRequest;
 import co.posinvent.application.dto.WarehouseResponse;
 import co.posinvent.application.port.in.WarehousePort;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -31,5 +35,20 @@ public class WarehouseController {
     @GetMapping("/search")
     public ResponseEntity<List<WarehouseResponse>> search(@RequestParam String query) {
         return ResponseEntity.ok(warehouseUseCase.searchByName(query));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<WarehouseResponse> create(@Valid @RequestBody WarehouseRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(warehouseUseCase.create(request));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<WarehouseResponse> update(
+            @PathVariable UUID id,
+            @Valid @RequestBody WarehouseRequest request
+    ) {
+        return ResponseEntity.ok(warehouseUseCase.update(id, request));
     }
 }
