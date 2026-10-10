@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.TransferRequest;
 import co.posinvent.application.dto.TransferResponse;
+import co.posinvent.application.port.in.CreateTransferPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.StockTransfer;
 import co.posinvent.domain.model.StockTransferItem;
@@ -15,7 +16,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 
 @Service
-public class CreateTransferUseCase {
+public class CreateTransferUseCase implements CreateTransferPort {
 
     private final StockTransferRepository transferRepo;
     private final StockRepository stockRepo;

@@ -1,7 +1,7 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.InventoryMovementResponse;
-import co.posinvent.application.usecase.KardexQueryUseCase;
+import co.posinvent.application.port.in.KardexQueryPort;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +15,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/kardex")
 public class KardexController {
 
-    private final KardexQueryUseCase kardexQuery;
+    private final KardexQueryPort kardexQuery;
 
-    public KardexController(KardexQueryUseCase kardexQuery) {
+    public KardexController(KardexQueryPort kardexQuery) {
         this.kardexQuery = kardexQuery;
     }
 

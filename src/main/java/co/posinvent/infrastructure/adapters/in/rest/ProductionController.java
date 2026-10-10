@@ -3,8 +3,8 @@ package co.posinvent.infrastructure.adapters.in.rest;
 import co.posinvent.application.dto.FormulaComponentResponse;
 import co.posinvent.application.dto.ProduceRequest;
 import co.posinvent.application.dto.ProduceResponse;
-import co.posinvent.application.usecase.FormulaProductionUseCase;
-import co.posinvent.application.usecase.ProductFormulaUseCase;
+import co.posinvent.application.port.in.FormulaProductionPort;
+import co.posinvent.application.port.in.ProductFormulaPort;
 import co.posinvent.domain.model.ProductFormula;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import jakarta.validation.Valid;
@@ -21,10 +21,10 @@ import java.util.UUID;
 @RequestMapping("/api/v1")
 public class ProductionController {
 
-    private final FormulaProductionUseCase productionUseCase;
-    private final ProductFormulaUseCase formulaUseCase;
+    private final FormulaProductionPort productionUseCase;
+    private final ProductFormulaPort formulaUseCase;
 
-    public ProductionController(FormulaProductionUseCase productionUseCase, ProductFormulaUseCase formulaUseCase) {
+    public ProductionController(FormulaProductionPort productionUseCase, ProductFormulaPort formulaUseCase) {
         this.productionUseCase = productionUseCase;
         this.formulaUseCase = formulaUseCase;
     }

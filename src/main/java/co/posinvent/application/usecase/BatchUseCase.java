@@ -3,6 +3,7 @@ package co.posinvent.application.usecase;
 import co.posinvent.application.dto.BatchRequest;
 import co.posinvent.application.dto.BatchResponse;
 import co.posinvent.application.dto.PageResponse;
+import co.posinvent.application.port.in.BatchPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Batch;
@@ -22,7 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class BatchUseCase {
+public class BatchUseCase implements BatchPort {
 
     private final BatchRepository          batchRepository;
     private final ThirdPartyRepository     thirdPartyRepository;

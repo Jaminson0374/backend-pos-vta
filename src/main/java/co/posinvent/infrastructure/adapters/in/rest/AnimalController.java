@@ -3,7 +3,7 @@ package co.posinvent.infrastructure.adapters.in.rest;
 import co.posinvent.application.dto.AnimalRequest;
 import co.posinvent.application.dto.AnimalResponse;
 import co.posinvent.application.dto.PageResponse;
-import co.posinvent.application.usecase.AnimalUseCase;
+import co.posinvent.application.port.in.AnimalPort;
 import co.posinvent.domain.model.Animal.AnimalStatus;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import jakarta.validation.Valid;
@@ -21,9 +21,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/animals")
 public class AnimalController {
 
-    private final AnimalUseCase animalUseCase;
+    private final AnimalPort animalUseCase;
 
-    public AnimalController(AnimalUseCase animalUseCase) {
+    public AnimalController(AnimalPort animalUseCase) {
         this.animalUseCase = animalUseCase;
     }
 

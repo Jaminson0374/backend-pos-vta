@@ -2,7 +2,7 @@ package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.PriceListRequest;
 import co.posinvent.application.dto.PriceListResponse;
-import co.posinvent.application.usecase.PriceListUseCase;
+import co.posinvent.application.port.in.PriceListPort;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,9 +16,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/price-lists")
 public class PriceListController {
 
-    private final PriceListUseCase useCase;
+    private final PriceListPort useCase;
 
-    public PriceListController(PriceListUseCase useCase) {
+    public PriceListController(PriceListPort useCase) {
         this.useCase = useCase;
     }
 

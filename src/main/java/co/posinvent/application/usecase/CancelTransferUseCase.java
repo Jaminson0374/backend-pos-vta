@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.TransferResponse;
+import co.posinvent.application.port.in.CancelTransferPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.StockTransfer;
@@ -12,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 @Service
-public class CancelTransferUseCase {
+public class CancelTransferUseCase implements CancelTransferPort {
 
     private final StockTransferRepository transferRepo;
 

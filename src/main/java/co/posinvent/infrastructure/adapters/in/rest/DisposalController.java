@@ -2,9 +2,9 @@ package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.DisposalRequest;
 import co.posinvent.application.dto.DisposalResponse;
-import co.posinvent.application.usecase.CreateDisposalUseCase;
-import co.posinvent.application.usecase.ListDisposalsUseCase;
-import co.posinvent.application.usecase.ListExpiringBatchesUseCase;
+import co.posinvent.application.port.in.CreateDisposalPort;
+import co.posinvent.application.port.in.ListDisposalsPort;
+import co.posinvent.application.port.in.ListExpiringBatchesPort;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -22,13 +22,13 @@ import java.util.UUID;
 @RequestMapping("/api/v1/disposals")
 public class DisposalController {
 
-    private final CreateDisposalUseCase createDisposal;
-    private final ListDisposalsUseCase listDisposals;
-    private final ListExpiringBatchesUseCase listExpiringBatches;
+    private final CreateDisposalPort createDisposal;
+    private final ListDisposalsPort listDisposals;
+    private final ListExpiringBatchesPort listExpiringBatches;
 
-    public DisposalController(CreateDisposalUseCase createDisposal,
-                              ListDisposalsUseCase listDisposals,
-                              ListExpiringBatchesUseCase listExpiringBatches) {
+    public DisposalController(CreateDisposalPort createDisposal,
+                              ListDisposalsPort listDisposals,
+                              ListExpiringBatchesPort listExpiringBatches) {
         this.createDisposal = createDisposal;
         this.listDisposals = listDisposals;
         this.listExpiringBatches = listExpiringBatches;

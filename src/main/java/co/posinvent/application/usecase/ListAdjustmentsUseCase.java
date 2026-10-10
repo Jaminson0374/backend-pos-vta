@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.AdjustmentResponse;
+import co.posinvent.application.port.in.ListAdjustmentsPort;
 import co.posinvent.domain.model.AdjustmentType;
 import co.posinvent.domain.repository.StockAdjustmentRepository;
 import org.springframework.data.domain.Page;
@@ -12,7 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
-public class ListAdjustmentsUseCase {
+public class ListAdjustmentsUseCase implements ListAdjustmentsPort {
 
     private final StockAdjustmentRepository adjustmentRepo;
 

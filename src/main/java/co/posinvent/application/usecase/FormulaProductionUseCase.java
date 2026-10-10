@@ -3,6 +3,7 @@ package co.posinvent.application.usecase;
 import co.posinvent.application.dto.BatchItemResponse;
 import co.posinvent.application.dto.ProduceRequest;
 import co.posinvent.application.dto.ProduceResponse;
+import co.posinvent.application.port.in.FormulaProductionPort;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
@@ -20,7 +21,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class FormulaProductionUseCase {
+public class FormulaProductionUseCase implements FormulaProductionPort {
 
     private final ProductFormulaRepository formulaRepo;
     private final KardexRepository kardexRepo;

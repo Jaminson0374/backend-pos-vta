@@ -3,6 +3,7 @@ package co.posinvent.application.usecase;
 import co.posinvent.application.dto.AnimalRequest;
 import co.posinvent.application.dto.AnimalResponse;
 import co.posinvent.application.dto.PageResponse;
+import co.posinvent.application.port.in.AnimalPort;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Animal;
@@ -16,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 @Service
-public class AnimalUseCase {
+public class AnimalUseCase implements AnimalPort {
 
     private final AnimalRepository animalRepository;
     private final ThirdPartyRepository thirdPartyRepository;

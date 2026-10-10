@@ -1,5 +1,6 @@
 package co.posinvent.application.usecase;
 
+import co.posinvent.application.port.in.ListExpiringBatchesPort;
 import co.posinvent.domain.repository.WasteDisposalRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class ListExpiringBatchesUseCase {
+public class ListExpiringBatchesUseCase implements ListExpiringBatchesPort {
 
     private final WasteDisposalRepository disposalRepo;
 

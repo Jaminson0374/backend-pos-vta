@@ -2,7 +2,7 @@ package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.SlaughterRequest;
 import co.posinvent.application.dto.SlaughterResponse;
-import co.posinvent.application.usecase.ProcessSlaughterUseCase;
+import co.posinvent.application.port.in.ProcessSlaughterPort;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/slaughters")
 public class SlaughterController {
 
-    private final ProcessSlaughterUseCase processSlaughterUseCase;
+    private final ProcessSlaughterPort processSlaughterUseCase;
 
-    public SlaughterController(ProcessSlaughterUseCase processSlaughterUseCase) {
+    public SlaughterController(ProcessSlaughterPort processSlaughterUseCase) {
         this.processSlaughterUseCase = processSlaughterUseCase;
     }
 
