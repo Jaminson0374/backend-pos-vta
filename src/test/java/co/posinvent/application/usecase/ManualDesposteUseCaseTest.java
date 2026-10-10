@@ -3,10 +3,12 @@ package co.posinvent.application.usecase;
 import co.posinvent.application.dto.ManualDesposteRequest;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.BatchType;
+import co.posinvent.domain.model.Desposte;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.Product;
 import co.posinvent.domain.model.Warehouse;
 import co.posinvent.domain.repository.BatchRepository;
+import co.posinvent.domain.repository.DesposteRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.WarehouseRepository;
@@ -47,6 +49,8 @@ class ManualDesposteUseCaseTest {
     private StockRepository stockRepository;
     @Mock
     private RecordMovementUseCase recordMovement;
+    @Mock
+    private DesposteRepository desposteRepository;
 
     private ManualDesposteUseCase useCase;
 
@@ -58,7 +62,8 @@ class ManualDesposteUseCaseTest {
                 warehouseRepository,
                 stockRepository,
                 new ManualDesposteDomainService(),
-                recordMovement
+                recordMovement,
+                desposteRepository
         );
     }
 
@@ -168,6 +173,37 @@ class ManualDesposteUseCaseTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(transition.status()).isEqualTo(Batch.BatchStatus.CLOSED);
+
+        // --- Persisted desposte snapshot (MVM) ---
+        var desposteCaptor = ArgumentCaptor.forClass(Desposte.class);
+        verify(desposteRepository).save(desposteCaptor.capture());
+        var saved = desposteCaptor.getValue();
+
+        assertThat(saved.id()).isNull();
+        assertThat(saved.sourceBatchId()).isEqualTo(sourceBatchId);
+        assertThat(saved.productId()).isEqualTo(parentProductId);
+        assertThat(saved.warehouseId()).isEqualTo(parentWarehouseId);
+        assertThat(saved.inputWeight()).isEqualByComparingTo("100");
+        assertThat(saved.totalCutsWeight()).isEqualByComparingTo("95");
+        assertThat(saved.wasteWeight()).isEqualByComparingTo("4");
+        assertThat(saved.shrinkWeight()).isEqualByComparingTo("0.5");
+        assertThat(saved.withinTolerance()).isTrue();
+        assertThat(saved.yieldPercentage()).isEqualByComparingTo("95.0000");
+        assertThat(saved.totalCommercialValue()).isEqualByComparingTo("1550");
+        assertThat(saved.totalAllocatedCost()).isEqualByComparingTo("1000");
+        assertThat(saved.notes()).isEqualTo("Primer slice");
+        assertThat(saved.createdBy()).isEqualTo(batch.createdBy().toString());
+        assertThat(saved.createdAt()).isNull();
+
+        assertThat(saved.cuts()).hasSize(2);
+        assertThat(saved.cuts().get(0).productId()).isEqualTo(productA);
+        assertThat(saved.cuts().get(0).warehouseId()).isEqualTo(warehouseA);
+        assertThat(saved.cuts().get(0).weight()).isEqualByComparingTo("60");
+        assertThat(saved.cuts().get(0).childBatchId()).isNotNull();
+        assertThat(saved.cuts().get(1).productId()).isEqualTo(productB);
+        assertThat(saved.cuts().get(1).warehouseId()).isEqualTo(warehouseB);
+        assertThat(saved.cuts().get(1).weight()).isEqualByComparingTo("35");
+        assertThat(saved.cuts().get(1).childBatchId()).isNotNull();
     }
 
     private Product product(UUID id) {
