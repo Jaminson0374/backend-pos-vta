@@ -7,10 +7,12 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
 import co.posinvent.domain.model.BatchType;
+import co.posinvent.domain.model.Desposte;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.ManualDespostePlan;
 import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.repository.BatchRepository;
+import co.posinvent.domain.repository.DesposteRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.WarehouseRepository;
@@ -34,6 +36,7 @@ public class ManualDesposteUseCase {
     private final StockRepository stockRepository;
     private final ManualDesposteDomainService domainService;
     private final RecordMovementUseCase recordMovement;
+    private final DesposteRepository desposteRepository;
 
     // Injected via field (not constructor) so the existing 6-arg constructor
     // used by unit tests keeps compiling. When null (plain unit tests), the
@@ -47,7 +50,8 @@ public class ManualDesposteUseCase {
             WarehouseRepository warehouseRepository,
             StockRepository stockRepository,
             ManualDesposteDomainService domainService,
-            RecordMovementUseCase recordMovement
+            RecordMovementUseCase recordMovement,
+            DesposteRepository desposteRepository
     ) {
         this.batchRepository = batchRepository;
         this.productRepository = productRepository;
@@ -55,6 +59,7 @@ public class ManualDesposteUseCase {
         this.stockRepository = stockRepository;
         this.domainService = domainService;
         this.recordMovement = recordMovement;
+        this.desposteRepository = desposteRepository;
     }
 
     public ManualDesposteResponse processManual(ManualDesposteRequest request) {
@@ -133,7 +138,75 @@ public class ManualDesposteUseCase {
                     batch.unitOfMeasureId()));
         }
 
+        // --- Step 5: Persist the desposte header + cuts for the MVM screen ---
+        desposteRepository.save(buildDesposte(batch, plan, childBatchIds, request));
+
         return ManualDesposteResponse.withChildBatches(plan, childBatchIds);
+    }
+
+    /**
+     * Assembles the persisted desposte snapshot from the executed plan.
+     * Cuts keep the exact order of {@code plan.cuts()} so each cut can be
+     * linked to the child batch minted at the same position.
+     */
+    private Desposte buildDesposte(
+            Batch batch,
+            ManualDespostePlan plan,
+            List<UUID> childBatchIds,
+            ManualDesposteRequest request
+    ) {
+        var balance = plan.massBalance();
+        var yieldPercentage = resolveYieldPercentage(balance.inputWeight(), balance.totalCutsWeight());
+
+        var cuts = new ArrayList<Desposte.DesposteCut>(plan.cuts().size());
+        for (int index = 0; index < plan.cuts().size(); index++) {
+            var cut = plan.cuts().get(index);
+            var childBatchId = index < childBatchIds.size() ? childBatchIds.get(index) : null;
+            cuts.add(new Desposte.DesposteCut(
+                    null,
+                    cut.productId(),
+                    cut.warehouseId(),
+                    childBatchId,
+                    cut.weight(),
+                    cut.suggestedSalePrice(),
+                    cut.commercialValue(),
+                    cut.allocatedCost(),
+                    cut.unitCost(),
+                    cut.expirationDate()));
+        }
+
+        return new Desposte(
+                null,
+                batch.id(),
+                batch.productId(),
+                batch.warehouseId(),
+                balance.inputWeight(),
+                balance.totalCutsWeight(),
+                balance.wasteWeight(),
+                balance.shrinkWeight(),
+                balance.deviation(),
+                balance.tolerance(),
+                balance.withinTolerance(),
+                yieldPercentage,
+                plan.totalCommercialValue(),
+                plan.totalAllocatedCost(),
+                request.notes(),
+                batch.createdBy() != null ? batch.createdBy().toString() : null,
+                null,
+                cuts);
+    }
+
+    /**
+     * Yield = total cuts weight / input weight * 100, guarded against a zero input.
+     */
+    private BigDecimal resolveYieldPercentage(BigDecimal inputWeight, BigDecimal totalCutsWeight) {
+        if (inputWeight == null || inputWeight.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+        return totalCutsWeight
+                .divide(inputWeight, 6, RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("100"))
+                .setScale(4, RoundingMode.HALF_UP);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
