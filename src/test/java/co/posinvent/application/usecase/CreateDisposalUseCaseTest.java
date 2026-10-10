@@ -7,10 +7,10 @@ import co.posinvent.domain.model.DisposalType;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.model.Product;
-import co.posinvent.domain.model.StockDisposal;
+import co.posinvent.domain.model.WasteDisposal;
 import co.posinvent.domain.repository.ProductRepository;
-import co.posinvent.domain.repository.StockDisposalRepository;
 import co.posinvent.domain.repository.StockRepository;
+import co.posinvent.domain.repository.WasteDisposalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -38,7 +39,7 @@ import static org.mockito.Mockito.when;
 class CreateDisposalUseCaseTest {
 
     @Mock
-    private StockDisposalRepository disposalRepo;
+    private WasteDisposalRepository disposalRepo;
 
     @Mock
     private StockRepository stockRepo;
@@ -57,6 +58,7 @@ class CreateDisposalUseCaseTest {
     private static final UUID PRODUCT_ID = UUID.randomUUID();
     private static final UUID BATCH_ID = UUID.randomUUID();
     private static final UUID WAREHOUSE_ID = UUID.randomUUID();
+    private static final UUID OPERATOR_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -72,14 +74,25 @@ class CreateDisposalUseCaseTest {
         when(stockRepo.findByProductBatchWarehouse(PRODUCT_ID, BATCH_ID, WAREHOUSE_ID))
                 .thenReturn(Optional.of(stock("10", "5")));
         doAnswer(inv -> inv.getArgument(0)).when(stockRepo).save(any(InventoryStock.class));
-        doAnswer(inv -> withId(inv.getArgument(0))).when(disposalRepo).save(any(StockDisposal.class));
+        doAnswer(inv -> withId(inv.getArgument(0))).when(disposalRepo).save(any(WasteDisposal.class));
 
+        var disposalDate = LocalDate.now();
         var response = useCase.execute(new DisposalRequest(
-                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "SANITARIO", new BigDecimal("4"), "Decomiso sanitario"));
+                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "DECOMISO_SANITARIO", new BigDecimal("4"),
+                "Decomiso sanitario", "ACTA-001", disposalDate), OPERATOR_ID);
 
         var stockCaptor = ArgumentCaptor.forClass(InventoryStock.class);
         verify(stockRepo).save(stockCaptor.capture());
         assertThat(stockCaptor.getValue().currentQuantity()).isEqualByComparingTo("6");
+
+        var disposalCaptor = ArgumentCaptor.forClass(WasteDisposal.class);
+        verify(disposalRepo).save(disposalCaptor.capture());
+        var persisted = disposalCaptor.getValue();
+        assertThat(persisted.dispositionType()).isEqualTo(DisposalType.DECOMISO_SANITARIO);
+        assertThat(persisted.registeredBy()).isEqualTo(OPERATOR_ID);
+        assertThat(persisted.officialDocument()).isEqualTo("ACTA-001");
+        assertThat(persisted.disposalDate()).isEqualTo(disposalDate);
+        assertThat(persisted.journalEntryId()).isNull();
 
         verify(recordMovement).record(
                 eq(PRODUCT_ID), eq(BATCH_ID), eq(WAREHOUSE_ID), eq(MovementType.DISPOSAL),
@@ -87,8 +100,11 @@ class CreateDisposalUseCaseTest {
                 eq(new BigDecimal("10")), eq(new BigDecimal("6")),
                 eq("DISPOSAL"), any(), eq("Decomiso sanitario"));
 
-        assertThat(response.disposalType()).isEqualTo(DisposalType.SANITARIO.name());
+        assertThat(response.disposalType()).isEqualTo(DisposalType.DECOMISO_SANITARIO.name());
         assertThat(response.quantity()).isEqualByComparingTo("4");
+        assertThat(response.officialDocument()).isEqualTo("ACTA-001");
+        assertThat(response.disposalDate()).isEqualTo(disposalDate);
+        assertThat(response.registeredBy()).isEqualTo(OPERATOR_ID);
         assertThat(response.id()).isNotNull();
 
         verify(productRepo).recalculateTotalStock(PRODUCT_ID);
@@ -101,7 +117,8 @@ class CreateDisposalUseCaseTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(new DisposalRequest(
-                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "SANITARIO", BigDecimal.ONE, null)))
+                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "DECOMISO_SANITARIO", BigDecimal.ONE,
+                null, null, null), OPERATOR_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", "NO_STOCK");
 
@@ -116,7 +133,8 @@ class CreateDisposalUseCaseTest {
                 .thenReturn(Optional.of(stock("3", "5")));
 
         assertThatThrownBy(() -> useCase.execute(new DisposalRequest(
-                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "MERMA_PROCESO", new BigDecimal("4"), null)))
+                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "MERMA_PROCESO", new BigDecimal("4"),
+                null, null, null), OPERATOR_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", "INSUFFICIENT_STOCK");
 
@@ -128,7 +146,8 @@ class CreateDisposalUseCaseTest {
         when(productRepo.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(new DisposalRequest(
-                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "SANITARIO", BigDecimal.ONE, null)))
+                PRODUCT_ID, BATCH_ID, WAREHOUSE_ID, "DECOMISO_SANITARIO", BigDecimal.ONE,
+                null, null, null), OPERATOR_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -136,10 +155,12 @@ class CreateDisposalUseCaseTest {
         when(productRepo.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
     }
 
-    private StockDisposal withId(StockDisposal d) {
-        return new StockDisposal(
+    private WasteDisposal withId(WasteDisposal d) {
+        return new WasteDisposal(
                 UUID.randomUUID(), d.productId(), d.batchId(), d.warehouseId(),
-                d.disposalType(), d.quantity(), d.unitCost(), d.reason(), d.createdBy(), OffsetDateTime.now());
+                d.dispositionType(), d.quantity(), d.unitCost(), d.reason(),
+                d.officialDocument(), d.disposalDate(), d.journalEntryId(),
+                d.registeredBy(), OffsetDateTime.now());
     }
 
     private InventoryStock stock(String quantity, String unitCost) {

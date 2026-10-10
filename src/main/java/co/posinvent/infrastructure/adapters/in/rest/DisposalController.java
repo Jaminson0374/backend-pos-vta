@@ -5,10 +5,12 @@ import co.posinvent.application.dto.DisposalResponse;
 import co.posinvent.application.port.in.CreateDisposalPort;
 import co.posinvent.application.port.in.ListDisposalsPort;
 import co.posinvent.application.port.in.ListExpiringBatchesPort;
+import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
@@ -34,8 +36,9 @@ public class DisposalController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','ALMACENISTA')")
-    public ResponseEntity<DisposalResponse> create(@RequestBody DisposalRequest r) {
-        return ResponseEntity.ok(createDisposal.execute(r));
+    public ResponseEntity<DisposalResponse> create(@RequestBody DisposalRequest r,
+                                                   @AuthenticationPrincipal PosUserDetails principal) {
+        return ResponseEntity.ok(createDisposal.execute(r, principal.userId()));
     }
 
     @GetMapping

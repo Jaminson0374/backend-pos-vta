@@ -2,7 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.DisposalResponse;
 import co.posinvent.application.port.in.ListDisposalsPort;
-import co.posinvent.domain.repository.StockDisposalRepository;
+import co.posinvent.domain.repository.WasteDisposalRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -11,9 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ListDisposalsUseCase implements ListDisposalsPort {
 
-    private final StockDisposalRepository disposalRepo;
+    private final WasteDisposalRepository disposalRepo;
 
-    public ListDisposalsUseCase(StockDisposalRepository disposalRepo) {
+    public ListDisposalsUseCase(WasteDisposalRepository disposalRepo) {
         this.disposalRepo = disposalRepo;
     }
 
