@@ -1,7 +1,7 @@
 package co.posinvent.application.service;
 
 import co.posinvent.application.usecase.DisposeExpiredBatchUseCase;
-import co.posinvent.domain.repository.StockDisposalRepository;
+import co.posinvent.domain.repository.WasteDisposalRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,7 +21,7 @@ public class ExpirationMonitorJob {
 
     private static final Logger log = LoggerFactory.getLogger(ExpirationMonitorJob.class);
 
-    private final StockDisposalRepository disposalRepo;
+    private final WasteDisposalRepository disposalRepo;
     private final DisposeExpiredBatchUseCase disposeExpiredBatch;
 
     @Value("${app.inventory.auto-dispose:false}")
@@ -31,7 +31,7 @@ public class ExpirationMonitorJob {
     private int warningDays;
 
     public ExpirationMonitorJob(
-            StockDisposalRepository disposalRepo,
+            WasteDisposalRepository disposalRepo,
             DisposeExpiredBatchUseCase disposeExpiredBatch
     ) {
         this.disposalRepo = disposalRepo;

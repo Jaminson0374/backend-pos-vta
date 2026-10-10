@@ -1,8 +1,8 @@
 package co.posinvent.infrastructure.adapters.out.persistence;
 
 import co.posinvent.domain.exception.ResourceNotFoundException;
-import co.posinvent.domain.model.StockDisposal;
-import co.posinvent.domain.repository.StockDisposalRepository;
+import co.posinvent.domain.model.WasteDisposal;
+import co.posinvent.domain.repository.WasteDisposalRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
@@ -11,13 +11,13 @@ import java.util.List;
 import java.util.Map;
 
 @Repository
-public class StockDisposalRepositoryAdapter implements StockDisposalRepository {
-    private final StockDisposalJpaRepository jpa;
-    private final StockDisposalMapper mapper;
-    public StockDisposalRepositoryAdapter(StockDisposalJpaRepository jpa, StockDisposalMapper mapper) { this.jpa = jpa; this.mapper = mapper; }
+public class WasteDisposalRepositoryAdapter implements WasteDisposalRepository {
+    private final WasteDisposalJpaRepository jpa;
+    private final WasteDisposalMapper mapper;
+    public WasteDisposalRepositoryAdapter(WasteDisposalJpaRepository jpa, WasteDisposalMapper mapper) { this.jpa = jpa; this.mapper = mapper; }
 
-    @Override public StockDisposal save(StockDisposal d) {
-        StockDisposalEntity entity;
+    @Override public WasteDisposal save(WasteDisposal d) {
+        WasteDisposalEntity entity;
         if (d.id() != null) {
             entity = jpa.findById(d.id())
                     .orElseThrow(() -> new ResourceNotFoundException("Baja de stock", d.id()));
@@ -27,7 +27,7 @@ public class StockDisposalRepositoryAdapter implements StockDisposalRepository {
         }
         return mapper.toDomain(jpa.save(entity));
     }
-    @Override public Page<StockDisposal> findAll(Pageable p) { return jpa.findAll(p).map(mapper::toDomain); }
+    @Override public Page<WasteDisposal> findAll(Pageable p) { return jpa.findAll(p).map(mapper::toDomain); }
 
     @Override
     public List<Map<String, Object>> findExpiringBatches(int days) {

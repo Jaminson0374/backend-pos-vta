@@ -1,7 +1,7 @@
 package co.posinvent.application.service;
 
 import co.posinvent.application.usecase.DisposeExpiredBatchUseCase;
-import co.posinvent.domain.repository.StockDisposalRepository;
+import co.posinvent.domain.repository.WasteDisposalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
 class ExpirationMonitorJobTest {
 
     @Mock
-    private StockDisposalRepository disposalRepo;
+    private WasteDisposalRepository disposalRepo;
 
     @Mock
     private DisposeExpiredBatchUseCase disposeExpiredBatch;
