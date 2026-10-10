@@ -1,5 +1,6 @@
 package co.posinvent.application.port.in;
 
+import co.posinvent.application.dto.WarehouseRequest;
 import co.posinvent.application.dto.WarehouseResponse;
 
 import java.util.List;
@@ -12,4 +13,8 @@ public interface WarehousePort {
     WarehouseResponse getById(UUID id);
 
     List<WarehouseResponse> searchByName(String query);
+
+    WarehouseResponse create(WarehouseRequest request);
+
+    WarehouseResponse update(UUID id, WarehouseRequest request);
 }
