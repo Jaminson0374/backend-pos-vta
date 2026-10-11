@@ -46,6 +46,11 @@ public class DianResolutionController {
         return useCase.activate(id);
     }
 
+    @PostMapping("/{id}/deactivate")
+    public DianResolutionResponse deactivate(@PathVariable UUID id) {
+        return useCase.deactivate(id);
+    }
+
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
         useCase.delete(id);
