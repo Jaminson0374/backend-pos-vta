@@ -17,6 +17,13 @@ app:
   inventory:
     auto-dispose: false
     expiration-warning-days: 30
+  dian:
+    provider: ${DIAN_PROVIDER:mock}
+    siigo:
+      username: ${SIIGO_USERNAME:}
+      access-key: ${SIIGO_ACCESS_KEY:}
+      partner-id: ${SIIGO_PARTNER_ID:}
+      base-url: ${SIIGO_BASE_URL:https://api.siigo.com}
 
 ---
 spring:
@@ -88,3 +95,8 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: 86400000
+  dian:
+    siigo:
+      username: ${SIIGO_USERNAME}
+      access-key: ${SIIGO_ACCESS_KEY}
+      partner-id: ${SIIGO_PARTNER_ID}
