@@ -4,6 +4,8 @@ import co.posinvent.domain.model.ElectronicInvoiceStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -32,7 +34,8 @@ public class ElectronicInvoiceEntity {
     @Column(name = "qr_code", columnDefinition = "TEXT")
     private String qrCode;
 
-    @Column(name = "provider_response", columnDefinition = "JSONB")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "provider_response", columnDefinition = "jsonb")
     private String providerResponse;
 
     @Enumerated(EnumType.STRING)
