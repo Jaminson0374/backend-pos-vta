@@ -10,7 +10,6 @@ import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.service.FefoPicker;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,6 +34,7 @@ public class PosCheckoutUseCase {
     private final RecordMovementUseCase recordMovement;
     private final CostingOrchestrator costingService;
     private final ApplicationEventPublisher eventPublisher;
+    private final OptimisticConcurrencyExecutor concurrencyExecutor;
 
     public PosCheckoutUseCase(
             SalesDocumentRepository documentRepo,
@@ -45,7 +45,8 @@ public class PosCheckoutUseCase {
             FefoPicker fefoPicker,
             RecordMovementUseCase recordMovement,
             CostingOrchestrator costingService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            OptimisticConcurrencyExecutor concurrencyExecutor
     ) {
         this.documentRepo = documentRepo;
         this.itemRepo = itemRepo;
@@ -56,10 +57,24 @@ public class PosCheckoutUseCase {
         this.recordMovement = recordMovement;
         this.costingService = costingService;
         this.eventPublisher = eventPublisher;
+        this.concurrencyExecutor = concurrencyExecutor;
     }
 
-    @Transactional
+    /**
+     * Entry point for POS checkout. The entire unit of work runs inside
+     * {@link OptimisticConcurrencyExecutor} so an optimistic-lock conflict on the
+     * shared stock row re-runs stock + invoice + order in one fresh transaction.
+     *
+     * <p>No {@code @Transactional} here on purpose: the executor owns the
+     * {@code REQUIRES_NEW} transaction, so each retry is atomic (stock and invoice
+     * commit or roll back together). Wrapping only the stock loop would nest a
+     * {@code REQUIRES_NEW} transaction and break that atomicity.</p>
+     */
     public CheckoutResponse checkout(CheckoutRequest request, UUID userId) {
+        return concurrencyExecutor.execute(() -> doCheckout(request, userId));
+    }
+
+    private CheckoutResponse doCheckout(CheckoutRequest request, UUID userId) {
         // 1. Load ORDER, verify status=CONFIRMED
         var order = documentRepo.findById(request.orderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", request.orderId()));

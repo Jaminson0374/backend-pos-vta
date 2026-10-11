@@ -17,6 +17,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,6 +35,7 @@ class PosCheckoutUseCaseTest {
     @Mock private RecordMovementUseCase recordMovement;
     @Mock private CostingOrchestrator costingService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private OptimisticConcurrencyExecutor concurrencyExecutor;
 
     private PosCheckoutUseCase useCase;
 
@@ -50,10 +52,15 @@ class PosCheckoutUseCaseTest {
 
     @BeforeEach
     void setUp() {
+        // The executor owns the transaction boundary; in this unit test it just
+        // runs the supplier inline so the existing assertions remain meaningful.
+        when(concurrencyExecutor.execute(any())).thenAnswer(inv ->
+                ((Supplier<?>) inv.getArgument(0)).get());
+
         useCase = new PosCheckoutUseCase(
                 documentRepo, itemRepo, stockRepo, productRepo,
                 priceEngine, fefoPicker, recordMovement, costingService,
-                eventPublisher
+                eventPublisher, concurrencyExecutor
         );
     }
 
