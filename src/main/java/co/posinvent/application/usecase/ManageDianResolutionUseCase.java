@@ -9,6 +9,7 @@ import co.posinvent.domain.repository.DianResolutionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,7 +38,7 @@ public class ManageDianResolutionUseCase {
 
     @Transactional
     public DianResolutionResponse create(DianResolutionRequest request) {
-        validateNoOverlap(request.validFrom(), request.validTo(), null);
+        validate(request, null);
 
         var resolution = new DianResolution(
                 null,
@@ -48,6 +49,7 @@ public class ManageDianResolutionUseCase {
                 request.prefix() != null ? request.prefix() : "",
                 request.rangeFrom(),
                 request.rangeTo(),
+                null,
                 request.softwarePin(),
                 request.active() != null ? request.active() : false,
                 null
@@ -62,7 +64,7 @@ public class ManageDianResolutionUseCase {
         var existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resolución DIAN", id));
 
-        validateNoOverlap(request.validFrom(), request.validTo(), id);
+        validate(request, id);
 
         var updated = new DianResolution(
                 id,
@@ -73,6 +75,7 @@ public class ManageDianResolutionUseCase {
                 request.prefix() != null ? request.prefix() : "",
                 request.rangeFrom(),
                 request.rangeTo(),
+                existing.currentNumber(),
                 request.softwarePin(),
                 request.active() != null ? request.active() : existing.active(),
                 null
@@ -98,12 +101,37 @@ public class ManageDianResolutionUseCase {
                 resolution.prefix(),
                 resolution.rangeFrom(),
                 resolution.rangeTo(),
+                resolution.currentNumber(),
                 resolution.softwarePin(),
                 true,
                 null
         );
 
         var saved = repository.save(activated);
+        return DianResolutionResponse.from(saved);
+    }
+
+    @Transactional
+    public DianResolutionResponse deactivate(UUID id) {
+        var resolution = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Resolución DIAN", id));
+
+        var deactivated = new DianResolution(
+                id,
+                resolution.resolutionNumber(),
+                resolution.resolutionDate(),
+                resolution.validFrom(),
+                resolution.validTo(),
+                resolution.prefix(),
+                resolution.rangeFrom(),
+                resolution.rangeTo(),
+                resolution.currentNumber(),
+                resolution.softwarePin(),
+                false,
+                resolution.createdAt()
+        );
+
+        var saved = repository.save(deactivated);
         return DianResolutionResponse.from(saved);
     }
 
@@ -115,10 +143,49 @@ public class ManageDianResolutionUseCase {
         repository.deleteById(id);
     }
 
-    private void validateNoOverlap(java.time.LocalDate from, java.time.LocalDate to, UUID excludeId) {
-        if (from != null && to != null && from.isAfter(to)) {
+    private void validate(DianResolutionRequest request, UUID excludeId) {
+        if (request.rangeFrom() != null && request.rangeTo() != null
+                && request.rangeFrom() > request.rangeTo()) {
+            throw new BusinessException("DIAN_RANGE_INVALID",
+                    "El rango 'desde' no puede ser mayor que el 'hasta'");
+        }
+
+        if (request.validFrom() != null && request.validTo() != null
+                && request.validFrom().isAfter(request.validTo())) {
             throw new BusinessException("DIAN_DATE_RANGE",
                     "La fecha 'desde' no puede ser posterior a la fecha 'hasta'");
         }
+
+        var prefix = normalizePrefix(request.prefix());
+        for (var other : repository.findAll()) {
+            if (excludeId != null && excludeId.equals(other.id())) {
+                continue;
+            }
+            if (overlaps(prefix, request.validFrom(), request.validTo(),
+                    request.rangeFrom(), request.rangeTo(), other)) {
+                throw new BusinessException("DIAN_RESOLUTION_OVERLAP",
+                        "Ya existe una resolución con el mismo prefijo y rangos de vigencia/numeración solapados");
+            }
+        }
+    }
+
+    private boolean overlaps(String prefix, LocalDate validFrom, LocalDate validTo,
+                             Long rangeFrom, Long rangeTo, DianResolution other) {
+        if (!normalizePrefix(other.prefix()).equals(prefix)) {
+            return false;
+        }
+        var datesIntersect = validFrom != null && validTo != null
+                && other.validFrom() != null && other.validTo() != null
+                && !validFrom.isAfter(other.validTo())
+                && !validTo.isBefore(other.validFrom());
+        var rangesIntersect = rangeFrom != null && rangeTo != null
+                && other.rangeFrom() != null && other.rangeTo() != null
+                && !(rangeFrom > other.rangeTo())
+                && !(rangeTo < other.rangeFrom());
+        return datesIntersect && rangesIntersect;
+    }
+
+    private static String normalizePrefix(String prefix) {
+        return prefix != null ? prefix : "";
     }
 }

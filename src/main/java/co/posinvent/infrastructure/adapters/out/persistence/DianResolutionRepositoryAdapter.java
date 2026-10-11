@@ -32,6 +32,7 @@ class DianResolutionRepositoryAdapter implements DianResolutionRepository {
         entity.setPrefix(domain.prefix());
         entity.setRangeFrom(domain.rangeFrom());
         entity.setRangeTo(domain.rangeTo());
+        entity.setCurrentNumber(domain.currentNumber());
         entity.setSoftwarePin(domain.softwarePin());
         entity.setActive(domain.active());
         var saved = jpa.save(entity);
@@ -55,7 +56,12 @@ class DianResolutionRepositoryAdapter implements DianResolutionRepository {
 
     @Override
     public Optional<DianResolution> findActive() {
-        return jpa.findByActiveTrue().map(mapper::toDomain);
+        return jpa.findFirstByActiveTrueOrderByCreatedAtDesc().map(mapper::toDomain);
+    }
+
+    @Override
+    public Optional<DianResolution> findActiveForUpdate() {
+        return jpa.lockActive().stream().findFirst().map(mapper::toDomain);
     }
 
     @Override

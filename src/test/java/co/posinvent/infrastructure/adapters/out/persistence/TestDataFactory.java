@@ -160,4 +160,32 @@ public final class TestDataFactory {
         em.persist(doc);
         return doc.getId();
     }
+
+    /**
+     * Persists an ACTIVE DIAN resolution covering {@code [validFrom, validTo]} and the
+     * numeric range {@code [rangeFrom, rangeTo]}, so POS checkout can issue fiscal
+     * numbers. Without an active resolution the checkout now fails with
+     * {@code DIAN_NO_ACTIVE_RESOLUTION}.
+     */
+    public static UUID createActiveDianResolution(EntityManager em, String prefix,
+                                                  long rangeFrom, long rangeTo,
+                                                  LocalDate validFrom, LocalDate validTo) {
+        // Integration tests share one PostgreSQL container, so a previous test
+        // class may have left an active resolution behind. Deactivate all so the
+        // seeded resolution is deterministically the only active one.
+        em.createQuery("UPDATE DianResolutionEntity r SET r.active = false").executeUpdate();
+
+        var r = new DianResolutionEntity();
+        r.setResolutionNumber("RES-" + UUID.randomUUID().toString().substring(0, 8));
+        r.setResolutionDate(LocalDate.now());
+        r.setValidFrom(validFrom);
+        r.setValidTo(validTo);
+        r.setPrefix(prefix);
+        r.setRangeFrom(rangeFrom);
+        r.setRangeTo(rangeTo);
+        r.setSoftwarePin("PIN");
+        r.setActive(true);
+        em.persist(r);
+        return r.getId();
+    }
 }

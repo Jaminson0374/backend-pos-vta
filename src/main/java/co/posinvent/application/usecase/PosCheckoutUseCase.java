@@ -14,8 +14,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -23,8 +21,6 @@ import java.util.UUID;
 
 @Service
 public class PosCheckoutUseCase {
-
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final SalesDocumentRepository documentRepo;
     private final SaleItemRepository itemRepo;
@@ -37,6 +33,7 @@ public class PosCheckoutUseCase {
     private final CostingOrchestrator costingService;
     private final ApplicationEventPublisher eventPublisher;
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
+    private final DianNumberingService numberingService;
 
     public PosCheckoutUseCase(
             SalesDocumentRepository documentRepo,
@@ -49,7 +46,8 @@ public class PosCheckoutUseCase {
             RecordMovementUseCase recordMovement,
             CostingOrchestrator costingService,
             ApplicationEventPublisher eventPublisher,
-            OptimisticConcurrencyExecutor concurrencyExecutor
+            OptimisticConcurrencyExecutor concurrencyExecutor,
+            DianNumberingService numberingService
     ) {
         this.documentRepo = documentRepo;
         this.itemRepo = itemRepo;
@@ -62,6 +60,7 @@ public class PosCheckoutUseCase {
         this.costingService = costingService;
         this.eventPublisher = eventPublisher;
         this.concurrencyExecutor = concurrencyExecutor;
+        this.numberingService = numberingService;
     }
 
     /**
@@ -159,8 +158,8 @@ public class PosCheckoutUseCase {
             productRepo.recalculateTotalStock(productId);
         }
 
-        // 5. Create INVOICE document
-        var docNumber = generateInvoiceNumber();
+        // 5. Create INVOICE document with the next fiscal number from the active DIAN resolution
+        var docNumber = numberingService.nextInvoiceNumber();
         var totals = calculateTotals(pricedItems);
 
         var totalPaid = request.payments().stream()
@@ -240,11 +239,6 @@ public class PosCheckoutUseCase {
         // 9. Return INVOICE
         return CheckoutResponse.from(documentRepo.findById(savedInvoice.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Factura", savedInvoice.id())), change);
-    }
-
-    private String generateInvoiceNumber() {
-        var today = LocalDate.now().format(DATE_FMT);
-        return "INVOICE-" + today + "-" + System.currentTimeMillis() % 100000;
     }
 
     private record Totals(

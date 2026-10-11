@@ -84,6 +84,11 @@ class CheckoutConcurrencyIntegrationTest extends AbstractIntegrationTest {
             TestDataFactory.createStock(
                     em, productId, batchId, warehouseId, STOCK_QUANTITY, BigDecimal.ZERO);
 
+            // Checkout now requires an ACTIVE, valid DIAN resolution to number invoices.
+            TestDataFactory.createActiveDianResolution(
+                    em, "CHK", 1L, 100000L, java.time.LocalDate.now().minusDays(1),
+                    java.time.LocalDate.now().plusDays(1));
+
             for (int i = 0; i < ORDERS; i++) {
                 orderIds.add(TestDataFactory.createConfirmedOrder(
                         em,

@@ -15,6 +15,7 @@ public record DianResolutionResponse(
     String prefix,
     Long rangeFrom,
     Long rangeTo,
+    Long currentNumber,
     String softwarePin,
     Boolean active,
     OffsetDateTime createdAt
@@ -23,7 +24,7 @@ public record DianResolutionResponse(
         return new DianResolutionResponse(
             r.id(), r.resolutionNumber(), r.resolutionDate(),
             r.validFrom(), r.validTo(), r.prefix(),
-            r.rangeFrom(), r.rangeTo(), r.softwarePin(),
+            r.rangeFrom(), r.rangeTo(), r.currentNumber(), r.softwarePin(),
             r.active(), r.createdAt()
         );
     }

@@ -37,6 +37,7 @@ class PosCheckoutUseCaseTest {
     @Mock private CostingOrchestrator costingService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private OptimisticConcurrencyExecutor concurrencyExecutor;
+    @Mock private DianNumberingService numberingService;
 
     private PosCheckoutUseCase useCase;
 
@@ -62,8 +63,12 @@ class PosCheckoutUseCaseTest {
         useCase = new PosCheckoutUseCase(
                 documentRepo, itemRepo, salePaymentRepo, stockRepo, productRepo,
                 priceEngine, fefoPicker, recordMovement, costingService,
-                eventPublisher, concurrencyExecutor
+                eventPublisher, concurrencyExecutor, numberingService
         );
+
+        // Numbering is delegated to the active DIAN resolution service; its own
+        // behavior is covered by DianNumberingServiceTest.
+        when(numberingService.nextInvoiceNumber()).thenReturn("FE0001");
     }
 
     @Test

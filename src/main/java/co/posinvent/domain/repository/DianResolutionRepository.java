@@ -11,5 +11,9 @@ public interface DianResolutionRepository {
     List<DianResolution> findAll();
     void deleteById(UUID id);
     Optional<DianResolution> findActive();
+
+    /** Loads the active resolution with a pessimistic write lock, for concurrency-safe numbering. */
+    Optional<DianResolution> findActiveForUpdate();
+
     void deactivateAll();
 }

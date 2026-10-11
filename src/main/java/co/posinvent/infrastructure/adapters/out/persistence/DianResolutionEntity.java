@@ -39,6 +39,9 @@ public class DianResolutionEntity {
     @Column(name = "range_to", nullable = false)
     private Long rangeTo;
 
+    @Column(name = "current_number")
+    private Long currentNumber;
+
     @Column(name = "software_pin", length = 100)
     private String softwarePin;
 
