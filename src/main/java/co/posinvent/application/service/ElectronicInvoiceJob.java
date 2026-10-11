@@ -21,13 +21,16 @@ public class ElectronicInvoiceJob {
 
     private final ElectronicInvoiceRepository repository;
     private final ElectronicInvoiceProvider provider;
+    private final ElectronicInvoicePayloadService payloadService;
 
     public ElectronicInvoiceJob(
             ElectronicInvoiceRepository repository,
-            ElectronicInvoiceProvider provider
+            ElectronicInvoiceProvider provider,
+            ElectronicInvoicePayloadService payloadService
     ) {
         this.repository = repository;
         this.provider = provider;
+        this.payloadService = payloadService;
     }
 
     @Async
@@ -68,18 +71,9 @@ public class ElectronicInvoiceJob {
 
             // Attempt to send immediately
             try {
-                // TODO: Build real ElectronicInvoiceRequest from sales document data
-                // For now, use a minimal placeholder
-                var request = new ElectronicInvoiceRequest(
-                        documentNumber,
-                        java.time.LocalDate.now().toString(),
-                        "MOCK-NIT",
-                        "Mock Client",
-                        java.util.List.of(),
-                        Map.of(),
-                        java.math.BigDecimal.ZERO,
-                        null
-                );
+                // Build the real payload from persisted sales data. The read-only transaction lives
+                // inside the payload service, so the provider call below stays outside any transaction.
+                var request = payloadService.build(salesDocumentId, documentNumber);
 
                 var response = provider.sendInvoice(request);
 
@@ -165,13 +159,8 @@ public class ElectronicInvoiceJob {
                             SyncStatus.COMPLETED, item.createdAt()
                     ));
                 } else {
-                    // Re-send
-                    var request = new ElectronicInvoiceRequest(
-                            "UNKNOWN", java.time.LocalDate.now().toString(),
-                            "MOCK-NIT", "Mock Client",
-                            java.util.List.of(), Map.of(),
-                            java.math.BigDecimal.ZERO, null
-                    );
+                    // Re-send with the real payload, rebuilt from the persisted document.
+                    var request = payloadService.build(invoice.get().salesDocumentId(), null);
                     var response = provider.sendInvoice(request);
 
                     repository.save(new ElectronicInvoice(
