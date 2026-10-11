@@ -4,13 +4,13 @@ import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.SaleItemRepository;
+import co.posinvent.domain.repository.SalePaymentRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.service.FefoPicker;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -28,6 +28,7 @@ public class PosCheckoutUseCase {
 
     private final SalesDocumentRepository documentRepo;
     private final SaleItemRepository itemRepo;
+    private final SalePaymentRepository salePaymentRepo;
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;
     private final PriceEngineService priceEngine;
@@ -35,20 +36,24 @@ public class PosCheckoutUseCase {
     private final RecordMovementUseCase recordMovement;
     private final CostingOrchestrator costingService;
     private final ApplicationEventPublisher eventPublisher;
+    private final OptimisticConcurrencyExecutor concurrencyExecutor;
 
     public PosCheckoutUseCase(
             SalesDocumentRepository documentRepo,
             SaleItemRepository itemRepo,
+            SalePaymentRepository salePaymentRepo,
             StockRepository stockRepo,
             ProductRepository productRepo,
             PriceEngineService priceEngine,
             FefoPicker fefoPicker,
             RecordMovementUseCase recordMovement,
             CostingOrchestrator costingService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            OptimisticConcurrencyExecutor concurrencyExecutor
     ) {
         this.documentRepo = documentRepo;
         this.itemRepo = itemRepo;
+        this.salePaymentRepo = salePaymentRepo;
         this.stockRepo = stockRepo;
         this.productRepo = productRepo;
         this.priceEngine = priceEngine;
@@ -56,10 +61,24 @@ public class PosCheckoutUseCase {
         this.recordMovement = recordMovement;
         this.costingService = costingService;
         this.eventPublisher = eventPublisher;
+        this.concurrencyExecutor = concurrencyExecutor;
     }
 
-    @Transactional
+    /**
+     * Entry point for POS checkout. The entire unit of work runs inside
+     * {@link OptimisticConcurrencyExecutor} so an optimistic-lock conflict on the
+     * shared stock row re-runs stock + invoice + order in one fresh transaction.
+     *
+     * <p>No {@code @Transactional} here on purpose: the executor owns the
+     * {@code REQUIRES_NEW} transaction, so each retry is atomic (stock and invoice
+     * commit or roll back together). Wrapping only the stock loop would nest a
+     * {@code REQUIRES_NEW} transaction and break that atomicity.</p>
+     */
     public CheckoutResponse checkout(CheckoutRequest request, UUID userId) {
+        return concurrencyExecutor.execute(() -> doCheckout(request, userId));
+    }
+
+    private CheckoutResponse doCheckout(CheckoutRequest request, UUID userId) {
         // 1. Load ORDER, verify status=CONFIRMED
         var order = documentRepo.findById(request.orderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", request.orderId()));
@@ -186,6 +205,15 @@ public class PosCheckoutUseCase {
                     item.quantity(), item.unitPrice(),
                     item.taxType(), item.taxRate(), item.taxAmount(), item.subtotal(),
                     item.lineNumber(), item.batchId()
+            ));
+        }
+
+        // Persist one tender line per requested payment, linked to the invoice.
+        // This is the historical payment trace the cash-drawer reconciliation needs.
+        for (var line : request.payments()) {
+            salePaymentRepo.save(new SalePayment(
+                    null, savedInvoice.id(), line.method(), line.amount(),
+                    userId, null, null
             ));
         }
 

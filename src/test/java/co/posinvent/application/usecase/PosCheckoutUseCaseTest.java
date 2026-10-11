@@ -17,6 +17,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +28,7 @@ class PosCheckoutUseCaseTest {
 
     @Mock private SalesDocumentRepository documentRepo;
     @Mock private SaleItemRepository itemRepo;
+    @Mock private SalePaymentRepository salePaymentRepo;
     @Mock private StockRepository stockRepo;
     @Mock private ProductRepository productRepo;
     @Mock private PriceEngineService priceEngine;
@@ -34,6 +36,7 @@ class PosCheckoutUseCaseTest {
     @Mock private RecordMovementUseCase recordMovement;
     @Mock private CostingOrchestrator costingService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private OptimisticConcurrencyExecutor concurrencyExecutor;
 
     private PosCheckoutUseCase useCase;
 
@@ -47,13 +50,19 @@ class PosCheckoutUseCaseTest {
     private static final UUID STOCK2_ID = UUID.randomUUID();
     private static final UUID USER_ID = UUID.randomUUID();
     private static final UUID CASH_REGISTER_ID = UUID.randomUUID();
+    private static final UUID INVOICE_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
+        // The executor owns the transaction boundary; in this unit test it just
+        // runs the supplier inline so the existing assertions remain meaningful.
+        when(concurrencyExecutor.execute(any())).thenAnswer(inv ->
+                ((Supplier<?>) inv.getArgument(0)).get());
+
         useCase = new PosCheckoutUseCase(
-                documentRepo, itemRepo, stockRepo, productRepo,
+                documentRepo, itemRepo, salePaymentRepo, stockRepo, productRepo,
                 priceEngine, fefoPicker, recordMovement, costingService,
-                eventPublisher
+                eventPublisher, concurrencyExecutor
         );
     }
 
@@ -132,11 +141,14 @@ class PosCheckoutUseCaseTest {
         // productRepo.recalculateTotalStock
         doNothing().when(productRepo).recalculateTotalStock(PRODUCT_ID);
 
-        // Invoice + order saves
+        // Invoice + order saves. The invoice gets a deterministic id so the
+        // sale-payment assertions can verify the FK link.
         doAnswer(inv -> {
             SalesDocument doc = inv.getArgument(0);
+            var assignedId = doc.type() == SalesDocumentType.INVOICE
+                    ? INVOICE_ID : UUID.randomUUID();
             return new SalesDocument(
-                    UUID.randomUUID(), doc.type(), doc.status(), doc.documentNumber(),
+                    assignedId, doc.type(), doc.status(), doc.documentNumber(),
                     doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
                     doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax8(), doc.totalTax19(),
                     doc.totalAmount(), doc.createdBy(), doc.createdAt(), doc.updatedAt(),
@@ -150,7 +162,9 @@ class PosCheckoutUseCaseTest {
 
         // ── Act ─────────────────────────────────────────────────────────
         var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID,
-                List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("400000"))));
+                List.of(
+                        new CheckoutRequest.PaymentLine("CASH", new BigDecimal("250000")),
+                        new CheckoutRequest.PaymentLine("CARD", new BigDecimal("150000"))));
         useCase.checkout(request, USER_ID);
 
         // ── Assert ──────────────────────────────────────────────────────
@@ -172,5 +186,18 @@ class PosCheckoutUseCaseTest {
                 eq(MovementType.EXIT), any(), any(), any(), any(),
                 eq("SALE"), eq(ORDER_ID), any()
         );
+
+        // One sale_payments row per payment line, linked to the saved invoice.
+        var paymentCaptor = ArgumentCaptor.forClass(SalePayment.class);
+        verify(salePaymentRepo, times(2)).save(paymentCaptor.capture());
+        var savedPayments = paymentCaptor.getAllValues();
+        assertThat(savedPayments.get(0).salesDocumentId()).isEqualTo(INVOICE_ID);
+        assertThat(savedPayments.get(0).method()).isEqualTo("CASH");
+        assertThat(savedPayments.get(0).amount()).isEqualByComparingTo("250000");
+        assertThat(savedPayments.get(0).createdBy()).isEqualTo(USER_ID);
+        assertThat(savedPayments.get(1).salesDocumentId()).isEqualTo(INVOICE_ID);
+        assertThat(savedPayments.get(1).method()).isEqualTo("CARD");
+        assertThat(savedPayments.get(1).amount()).isEqualByComparingTo("150000");
+        assertThat(savedPayments.get(1).createdBy()).isEqualTo(USER_ID);
     }
 }
