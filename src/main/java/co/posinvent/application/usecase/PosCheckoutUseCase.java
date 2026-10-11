@@ -4,6 +4,7 @@ import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.SaleItemRepository;
+import co.posinvent.domain.repository.SalePaymentRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ProductRepository;
@@ -27,6 +28,7 @@ public class PosCheckoutUseCase {
 
     private final SalesDocumentRepository documentRepo;
     private final SaleItemRepository itemRepo;
+    private final SalePaymentRepository salePaymentRepo;
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;
     private final PriceEngineService priceEngine;
@@ -39,6 +41,7 @@ public class PosCheckoutUseCase {
     public PosCheckoutUseCase(
             SalesDocumentRepository documentRepo,
             SaleItemRepository itemRepo,
+            SalePaymentRepository salePaymentRepo,
             StockRepository stockRepo,
             ProductRepository productRepo,
             PriceEngineService priceEngine,
@@ -50,6 +53,7 @@ public class PosCheckoutUseCase {
     ) {
         this.documentRepo = documentRepo;
         this.itemRepo = itemRepo;
+        this.salePaymentRepo = salePaymentRepo;
         this.stockRepo = stockRepo;
         this.productRepo = productRepo;
         this.priceEngine = priceEngine;
@@ -201,6 +205,15 @@ public class PosCheckoutUseCase {
                     item.quantity(), item.unitPrice(),
                     item.taxType(), item.taxRate(), item.taxAmount(), item.subtotal(),
                     item.lineNumber(), item.batchId()
+            ));
+        }
+
+        // Persist one tender line per requested payment, linked to the invoice.
+        // This is the historical payment trace the cash-drawer reconciliation needs.
+        for (var line : request.payments()) {
+            salePaymentRepo.save(new SalePayment(
+                    null, savedInvoice.id(), line.method(), line.amount(),
+                    userId, null, null
             ));
         }
 
