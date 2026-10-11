@@ -49,6 +49,7 @@ public class ManageDianResolutionUseCase {
                 request.prefix() != null ? request.prefix() : "",
                 request.rangeFrom(),
                 request.rangeTo(),
+                null,
                 request.softwarePin(),
                 request.active() != null ? request.active() : false,
                 null
@@ -74,6 +75,7 @@ public class ManageDianResolutionUseCase {
                 request.prefix() != null ? request.prefix() : "",
                 request.rangeFrom(),
                 request.rangeTo(),
+                existing.currentNumber(),
                 request.softwarePin(),
                 request.active() != null ? request.active() : existing.active(),
                 null
@@ -99,6 +101,7 @@ public class ManageDianResolutionUseCase {
                 resolution.prefix(),
                 resolution.rangeFrom(),
                 resolution.rangeTo(),
+                resolution.currentNumber(),
                 resolution.softwarePin(),
                 true,
                 null
@@ -122,6 +125,7 @@ public class ManageDianResolutionUseCase {
                 resolution.prefix(),
                 resolution.rangeFrom(),
                 resolution.rangeTo(),
+                resolution.currentNumber(),
                 resolution.softwarePin(),
                 false,
                 resolution.createdAt()

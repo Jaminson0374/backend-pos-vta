@@ -13,6 +13,7 @@ public record DianResolution(
     String prefix,
     Long rangeFrom,
     Long rangeTo,
+    Long currentNumber,
     String softwarePin,
     Boolean active,
     OffsetDateTime createdAt

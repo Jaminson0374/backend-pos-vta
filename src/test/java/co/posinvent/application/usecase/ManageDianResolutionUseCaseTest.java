@@ -62,7 +62,7 @@ class ManageDianResolutionUseCaseTest {
     private static DianResolution existing(UUID id, String prefix, LocalDate validFrom, LocalDate validTo,
                                            long rangeFrom, long rangeTo, boolean active) {
         return new DianResolution(id, "RES-EXIST", d(2026, 1, 1), validFrom, validTo,
-                prefix, rangeFrom, rangeTo, "PIN", active, null);
+                prefix, rangeFrom, rangeTo, 7L, "PIN", active, null);
     }
 
     private void echoSave() {
@@ -106,6 +106,7 @@ class ManageDianResolutionUseCaseTest {
         assertThat(result.validTo()).isEqualTo(d(2026, 12, 31));
         assertThat(result.rangeFrom()).isEqualTo(1L);
         assertThat(result.rangeTo()).isEqualTo(100L);
+        assertThat(result.currentNumber()).isNull();
         assertThat(result.active()).isFalse();
         verify(repository).save(any(DianResolution.class));
     }
@@ -171,6 +172,7 @@ class ManageDianResolutionUseCaseTest {
         var result = useCase.update(id, request("F", d(2026, 1, 1), d(2026, 12, 31), 1, 100));
 
         assertThat(result.id()).isEqualTo(id);
+        assertThat(result.currentNumber()).isEqualTo(7L);
         verify(repository).save(any(DianResolution.class));
     }
 
@@ -202,7 +204,9 @@ class ManageDianResolutionUseCaseTest {
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().id()).isEqualTo(id);
         assertThat(captor.getValue().active()).isTrue();
+        assertThat(captor.getValue().currentNumber()).isEqualTo(7L);
         assertThat(result.active()).isTrue();
+        assertThat(result.currentNumber()).isEqualTo(7L);
     }
 
     @Test
@@ -218,7 +222,9 @@ class ManageDianResolutionUseCaseTest {
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().id()).isEqualTo(id);
         assertThat(captor.getValue().active()).isFalse();
+        assertThat(captor.getValue().currentNumber()).isEqualTo(7L);
         assertThat(result.active()).isFalse();
+        assertThat(result.currentNumber()).isEqualTo(7L);
         verify(repository, never()).deactivateAll();
     }
 

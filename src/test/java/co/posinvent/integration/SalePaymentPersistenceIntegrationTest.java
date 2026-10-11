@@ -68,6 +68,11 @@ class SalePaymentPersistenceIntegrationTest extends AbstractIntegrationTest {
             TestDataFactory.createStock(
                     em, productId, batchId, warehouseId, STOCK_QUANTITY, BigDecimal.ZERO);
 
+            // Checkout now requires an ACTIVE, valid DIAN resolution to number invoices.
+            TestDataFactory.createActiveDianResolution(
+                    em, "SP", 1L, 100000L, java.time.LocalDate.now().minusDays(1),
+                    java.time.LocalDate.now().plusDays(1));
+
             orderId = TestDataFactory.createConfirmedOrder(
                     em, "ORD-SP-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, BigDecimal.ONE);
