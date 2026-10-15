@@ -1,9 +1,12 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
+import co.posinvent.application.dto.CashCountResponse;
 import co.posinvent.application.dto.PageResponse;
+import co.posinvent.application.dto.RegisterCashCountRequest;
 import co.posinvent.application.usecase.CashCountRequest;
 import co.posinvent.application.usecase.CloseShiftUseCase;
 import co.posinvent.application.usecase.CreateShiftUseCase;
+import co.posinvent.application.usecase.RegisterCashCountUseCase;
 import co.posinvent.application.usecase.ShiftRequest;
 import co.posinvent.application.usecase.ShiftResponse;
 import co.posinvent.domain.exception.ResourceNotFoundException;
@@ -20,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -28,15 +32,18 @@ public class ShiftController {
 
     private final CreateShiftUseCase createShiftUseCase;
     private final CloseShiftUseCase closeShiftUseCase;
+    private final RegisterCashCountUseCase registerCashCountUseCase;
     private final ShiftRepository shiftRepository;
 
     public ShiftController(
             CreateShiftUseCase createShiftUseCase,
             CloseShiftUseCase closeShiftUseCase,
+            RegisterCashCountUseCase registerCashCountUseCase,
             ShiftRepository shiftRepository
     ) {
         this.createShiftUseCase = createShiftUseCase;
         this.closeShiftUseCase = closeShiftUseCase;
+        this.registerCashCountUseCase = registerCashCountUseCase;
         this.shiftRepository = shiftRepository;
     }
 
@@ -58,6 +65,23 @@ public class ShiftController {
             @AuthenticationPrincipal PosUserDetails principal
     ) {
         return ResponseEntity.ok(closeShiftUseCase.execute(id, cashCount));
+    }
+
+    @PostMapping("/{id}/cash-counts")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
+    public ResponseEntity<CashCountResponse> registerCashCount(
+            @PathVariable UUID id,
+            @Valid @RequestBody RegisterCashCountRequest request,
+            @AuthenticationPrincipal PosUserDetails principal
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(registerCashCountUseCase.execute(id, request, principal.userId()));
+    }
+
+    @GetMapping("/{id}/cash-counts")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
+    public ResponseEntity<List<CashCountResponse>> listCashCounts(@PathVariable UUID id) {
+        return ResponseEntity.ok(registerCashCountUseCase.history(id));
     }
 
     @GetMapping("/active")

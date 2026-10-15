@@ -42,14 +42,29 @@ public class CloseShiftUseCase {
             throw new IllegalStateException("El turno ya está CERRADO.");
         }
 
-        // Query invoices for this shift
+        // Query invoices and POS devoluciones (credit notes) for this shift
         List<SalesDocument> invoices = documentRepo.findByShiftIdAndType(
                 shiftId, SalesDocumentType.INVOICE
         );
+        List<SalesDocument> creditNotes = documentRepo.findByShiftIdAndType(
+                shiftId, SalesDocumentType.CREDIT_NOTE
+        );
 
-        BigDecimal expectedTotal = invoices.stream()
+        BigDecimal invoicedTotal = invoices.stream()
                 .map(SalesDocument::totalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Credit notes store a NEGATIVE totalAmount: PosDevolutionUseCase negates every
+        // returned item's quantity/subtotal/tax. Adding their sum therefore yields
+        // invoiced MINUS returned, so a full devolución of the shift nets to ~0.
+        BigDecimal creditNoteTotal = creditNotes.stream()
+                .map(SalesDocument::totalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal expectedTotal = invoicedTotal.add(creditNoteTotal);
+
+        // Positive magnitude of what was returned, for display in the Z-Report.
+        BigDecimal returnedTotal = creditNoteTotal.negate();
 
         BigDecimal actualTotal = cashCount.totalCash()
                 .add(cashCount.totalCard())
@@ -60,7 +75,7 @@ public class CloseShiftUseCase {
 
         // Generate Z-Report
         String zReport = buildZReport(existing, expectedTotal, actualTotal, difference,
-                invoices.size(), cashCount, OffsetDateTime.now());
+                invoices.size(), creditNotes.size(), returnedTotal, cashCount, OffsetDateTime.now());
 
         var closed = shiftRepository.save(new Shift(
                 existing.id(),
@@ -84,6 +99,8 @@ public class CloseShiftUseCase {
             BigDecimal actualTotal,
             BigDecimal difference,
             int invoiceCount,
+            int creditNoteCount,
+            BigDecimal returnedAmount,
             CashCountRequest cashCount,
             OffsetDateTime closeTime
     ) {
@@ -106,6 +123,8 @@ public class CloseShiftUseCase {
         sb.append("RESUMEN DE VENTAS\n");
         sb.append("-------------------------------------------\n");
         sb.append("Facturas:   ").append(invoiceCount).append("\n");
+        sb.append("Devoluciones: ").append(creditNoteCount).append("\n");
+        sb.append("Devuelto:   ").append(String.format(currencyFormat, returnedAmount)).append("\n");
         sb.append("Total esp.: ").append(String.format(currencyFormat, expectedTotal)).append("\n\n");
 
         sb.append("DESGLOSE DE PAGOS\n");
