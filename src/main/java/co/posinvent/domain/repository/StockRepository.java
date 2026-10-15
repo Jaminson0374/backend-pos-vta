@@ -19,4 +19,12 @@ public interface StockRepository {
     List<InventoryStock> findByBatch(UUID batchId);
 
     List<InventoryStock> findAvailableByProductWarehouse(UUID productId, UUID warehouseId);
+
+    /**
+     * Returns the stock rows that can still be reserved for a product in a warehouse:
+     * only rows whose available quantity ({@code current - committed}) is strictly
+     * positive, ordered in FEFO order (expiration date ascending, rows without an
+     * expiration date last).
+     */
+    List<InventoryStock> findReservableByProductWarehouse(UUID productId, UUID warehouseId);
 }

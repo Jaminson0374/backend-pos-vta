@@ -1,5 +1,6 @@
 package co.posinvent.application.port.in;
 
+import co.posinvent.application.dto.AvailableBatchResponse;
 import co.posinvent.application.dto.StockResponse;
 
 import java.util.List;
@@ -12,4 +13,6 @@ public interface StockQueryPort {
     List<StockResponse> getByProduct(UUID productId);
 
     List<StockResponse> getByBatch(UUID batchId);
+
+    List<AvailableBatchResponse> getAvailableBatches(UUID productId, UUID warehouseId);
 }
