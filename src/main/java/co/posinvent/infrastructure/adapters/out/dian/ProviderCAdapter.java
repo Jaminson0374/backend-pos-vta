@@ -3,6 +3,7 @@ package co.posinvent.infrastructure.adapters.out.dian;
 import co.posinvent.domain.model.ElectronicInvoiceRequest;
 import co.posinvent.domain.model.ElectronicInvoiceResponse;
 import co.posinvent.domain.repository.ElectronicInvoiceProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -22,6 +23,7 @@ import java.util.Base64;
  *       - Implement real status checking endpoint
  */
 @Service
+@ConditionalOnProperty(name = "app.dian.provider", havingValue = "mock", matchIfMissing = true)
 class ProviderCAdapter implements ElectronicInvoiceProvider {
 
     @Override
