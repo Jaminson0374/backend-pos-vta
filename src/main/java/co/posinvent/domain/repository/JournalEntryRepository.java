@@ -9,6 +9,7 @@ import java.util.UUID;
 public interface JournalEntryRepository {
     JournalEntry save(JournalEntry entry);
     Optional<JournalEntry> findById(UUID id);
+    long nextEntrySequence();
     List<JournalEntry> findAllFiltered(String sourceType, LocalDate from, LocalDate to, int page, int size);
     List<JournalEntryLineDto> getLedger(UUID accountId, LocalDate from, LocalDate to);
     List<TrialBalanceRow> getTrialBalance(LocalDate from, LocalDate to);

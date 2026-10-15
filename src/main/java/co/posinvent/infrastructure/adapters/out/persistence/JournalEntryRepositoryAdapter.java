@@ -32,6 +32,11 @@ class JournalEntryRepositoryAdapter implements JournalEntryRepository {
     }
 
     @Override
+    public long nextEntrySequence() {
+        return jpa.nextEntrySequence();
+    }
+
+    @Override
     public List<JournalEntry> findAllFiltered(String sourceType, LocalDate from, LocalDate to, int page, int size) {
         return jpa.findFiltered(sourceType, from, to).stream()
                 .map(mapper::toDomain).toList();
