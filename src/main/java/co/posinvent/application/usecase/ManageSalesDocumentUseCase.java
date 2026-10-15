@@ -7,6 +7,8 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.FefoPicker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -23,6 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class ManageSalesDocumentUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(ManageSalesDocumentUseCase.class);
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -261,9 +265,22 @@ public class ManageSalesDocumentUseCase {
 
     private void reserveStock(SalesDocument doc) {
         for (var item : doc.items()) {
-            var fallbackBatchId = item.batchId() != null ? item.batchId() : item.productId();
-            stockRepo.findByProductBatchWarehouse(item.productId(), fallbackBatchId, doc.warehouseId())
+            // A reservation is only meaningful for a concrete batch. An item without
+            // a batchId cannot be matched to an inventory_stock row, so skip it instead
+            // of falling back to the product id (which never matched and made the
+            // reservation a silent no-op — audit A1).
+            if (item.batchId() == null) {
+                log.debug("Skipping stock reservation for item {} (product {}): no batchId",
+                        item.id(), item.productId());
+                continue;
+            }
+
+            stockRepo.findByProductBatchWarehouse(item.productId(), item.batchId(), doc.warehouseId())
                     .ifPresent(stock -> {
+                        if (stock.availableQuantity().compareTo(item.quantity()) < 0) {
+                            throw new BusinessException("INSUFFICIENT_AVAILABLE_STOCK",
+                                    "Stock disponible insuficiente para confirmar el pedido");
+                        }
                         var updated = new InventoryStock(
                                 stock.id(), stock.productId(), stock.batchId(), stock.warehouseId(),
                                 stock.currentQuantity(),
@@ -280,11 +297,17 @@ public class ManageSalesDocumentUseCase {
         if (doc.status() != SalesDocumentStatus.CONFIRMED) return;
 
         for (var item : doc.items()) {
-            var fallbackBatchId = item.batchId() != null ? item.batchId() : item.productId();
-            stockRepo.findByProductBatchWarehouse(item.productId(), fallbackBatchId, doc.warehouseId())
+            // Mirror reserveStock: release only the batch that was actually reserved.
+            if (item.batchId() == null) {
+                log.debug("Skipping stock release for item {} (product {}): no batchId",
+                        item.id(), item.productId());
+                continue;
+            }
+
+            stockRepo.findByProductBatchWarehouse(item.productId(), item.batchId(), doc.warehouseId())
                     .ifPresent(stock -> {
-                        var newCommitted = stock.committedQuantity().subtract(item.quantity());
-                        if (newCommitted.compareTo(BigDecimal.ZERO) < 0) newCommitted = BigDecimal.ZERO;
+                        var newCommitted = stock.committedQuantity().subtract(item.quantity())
+                                .max(BigDecimal.ZERO);
                         var updated = new InventoryStock(
                                 stock.id(), stock.productId(), stock.batchId(), stock.warehouseId(),
                                 stock.currentQuantity(), newCommitted,
@@ -361,7 +384,7 @@ public class ManageSalesDocumentUseCase {
                 null, documentId, request.productId(),
                 request.quantity(), request.unitPrice(),
                 request.taxType(), taxRate, taxAmount, subtotal,
-                nextLine, null
+                nextLine, request.batchId()
         );
 
         itemRepo.save(item);
@@ -393,7 +416,7 @@ public class ManageSalesDocumentUseCase {
                 item.id(), item.documentId(), item.productId(),
                 request.quantity(), request.unitPrice(),
                 request.taxType(), taxRate, taxAmount, subtotal,
-                item.lineNumber(), item.batchId()
+                item.lineNumber(), request.batchId()
         );
 
         itemRepo.save(updated);

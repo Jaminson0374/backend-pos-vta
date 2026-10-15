@@ -10,5 +10,6 @@ public record SaleItemRequest(
         @NotNull UUID productId,
         @NotNull @DecimalMin("0.001") BigDecimal quantity,
         @NotNull @DecimalMin("0") BigDecimal unitPrice,
-        @NotNull String taxType
+        @NotNull String taxType,
+        UUID batchId
 ) {}
