@@ -45,7 +45,7 @@ public class ShiftEntity {
     @Column(nullable = false, length = 20)
     private ShiftStatus status;
 
-    @Column(name = "z_report_url", length = 500)
+    @Column(name = "z_report_url", columnDefinition = "TEXT")
     private String zReportUrl;
 
     @Column(name = "created_at", nullable = false, updatable = false)
