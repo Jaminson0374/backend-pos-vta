@@ -127,6 +127,10 @@ public class PosCheckoutUseCase {
 
                 var previousQty = stock.currentQuantity();
                 var newQty = previousQty.subtract(alloc.quantity());
+                // Consume the reservation booked on CONFIRMED. Clamp at zero so an
+                // order that was never reserved does not drive committed below zero.
+                var newCommitted = stock.committedQuantity().subtract(alloc.quantity())
+                        .max(BigDecimal.ZERO);
 
                 stockRepo.save(new InventoryStock(
                         stock.id(),
@@ -134,7 +138,7 @@ public class PosCheckoutUseCase {
                         stock.batchId(),
                         stock.warehouseId(),
                         newQty,
-                        stock.committedQuantity(),
+                        newCommitted,
                         stock.unitCost(),
                         stock.createdAt(),
                         null

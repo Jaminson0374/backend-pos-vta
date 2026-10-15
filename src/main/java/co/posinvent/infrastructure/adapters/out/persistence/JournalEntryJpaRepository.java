@@ -30,6 +30,9 @@ interface JournalEntryJpaRepository extends JpaRepository<JournalEntryEntity, UU
                                   @Param("from") LocalDate from,
                                   @Param("to") LocalDate to);
 
+    @Query(value = "SELECT nextval('journal_entry_number_seq')", nativeQuery = true)
+    Long nextEntrySequence();
+
     @Query(value = """
         SELECT a.code AS accountCode, a.name AS accountName,
                COALESCE(SUM(l.debit), 0) AS totalDebit,

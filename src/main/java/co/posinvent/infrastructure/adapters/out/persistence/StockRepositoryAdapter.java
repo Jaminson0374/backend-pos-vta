@@ -55,4 +55,10 @@ class StockRepositoryAdapter implements StockRepository {
         return jpa.findAvailableByProductWarehouse(productId, warehouseId)
                   .stream().map(mapper::toDomain).toList();
     }
+
+    @Override public List<InventoryStock> findReservableByProductWarehouse(
+            UUID productId, UUID warehouseId) {
+        return jpa.findReservableByProductWarehouse(productId, warehouseId)
+                  .stream().map(mapper::toDomain).toList();
+    }
 }

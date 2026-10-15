@@ -47,7 +47,7 @@ public class CreateJournalEntryUseCase {
     private JournalEntry buildEntry(LocalDate date, String description, String sourceType, UUID sourceId,
                                       List<JournalEntryLine> lines) {
         String datePart = date.format(DateTimeFormatter.BASIC_ISO_DATE);
-        int seq = (int) (System.currentTimeMillis() % 10000);
-        return new JournalEntry(null, "JE-" + datePart + "-" + String.format("%04d", seq), date, description, sourceType, sourceId, null, lines);
+        long seq = repo.nextEntrySequence();
+        return new JournalEntry(null, "JE-" + datePart + "-" + String.format("%06d", seq), date, description, sourceType, sourceId, null, lines);
     }
 }

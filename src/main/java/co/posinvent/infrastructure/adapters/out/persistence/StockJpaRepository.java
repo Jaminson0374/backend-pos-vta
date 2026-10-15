@@ -46,4 +46,24 @@ public interface StockJpaRepository extends JpaRepository<InventoryStockEntity, 
     List<InventoryStockEntity> findAvailableByProductWarehouse(
             @Param("productId") UUID productId,
             @Param("warehouseId") UUID warehouseId);
+
+    /**
+     * Rows that can still be reserved for a product in a warehouse, i.e. whose
+     * available quantity ({@code current_quantity - committed_quantity}) is strictly
+     * positive. Ordered in FEFO order: expiration date ascending, rows without an
+     * expiration date last. Rows whose batch is CLOSED (or with no batch) are excluded
+     * because they cannot be reserved.
+     */
+    @Query(value = """
+        SELECT is2.* FROM inventory_stock is2
+        JOIN batches b ON b.id = is2.batch_id
+        WHERE is2.product_id = :productId
+          AND is2.warehouse_id = :warehouseId
+          AND (is2.current_quantity - is2.committed_quantity) > 0
+          AND b.status <> 'CLOSED'
+        ORDER BY b.expiration_date ASC NULLS LAST, b.entry_date ASC
+        """, nativeQuery = true)
+    List<InventoryStockEntity> findReservableByProductWarehouse(
+            @Param("productId") UUID productId,
+            @Param("warehouseId") UUID warehouseId);
 }

@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
+import co.posinvent.application.dto.AvailableBatchResponse;
 import co.posinvent.application.dto.ManualStockEntryRequest;
 import co.posinvent.application.dto.ManualStockExitRequest;
 import co.posinvent.application.dto.StockResponse;
@@ -44,6 +45,13 @@ public class StockController {
     @GetMapping("/batch/{batchId}")
     public ResponseEntity<List<StockResponse>> byBatch(@PathVariable UUID batchId) {
         return ResponseEntity.ok(stockQueryUseCase.getByBatch(batchId));
+    }
+
+    @GetMapping("/available")
+    public ResponseEntity<List<AvailableBatchResponse>> available(
+            @RequestParam UUID productId,
+            @RequestParam UUID warehouseId) {
+        return ResponseEntity.ok(stockQueryUseCase.getAvailableBatches(productId, warehouseId));
     }
 
     @PostMapping("/entry")
