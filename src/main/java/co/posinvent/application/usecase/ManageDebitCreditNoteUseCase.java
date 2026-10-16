@@ -8,14 +8,17 @@ import co.posinvent.application.service.SupplierBalanceService;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.DebitCreditNote;
+import co.posinvent.domain.model.SupplierNoteAccountedEvent;
 import co.posinvent.domain.repository.DebitCreditNoteRepository;
 import co.posinvent.domain.repository.SupplierInvoiceRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -30,19 +33,22 @@ public class ManageDebitCreditNoteUseCase {
     private final SupplierInvoiceRepository supplierInvoiceRepository;
     private final SupplierBalanceService supplierBalanceService;
     private final AccountsPayableUseCase accountsPayableUseCase;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ManageDebitCreditNoteUseCase(
             DebitCreditNoteRepository repository,
             ThirdPartyRepository thirdPartyRepository,
             SupplierInvoiceRepository supplierInvoiceRepository,
             SupplierBalanceService supplierBalanceService,
-            AccountsPayableUseCase accountsPayableUseCase
+            AccountsPayableUseCase accountsPayableUseCase,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.repository = repository;
         this.thirdPartyRepository = thirdPartyRepository;
         this.supplierInvoiceRepository = supplierInvoiceRepository;
         this.supplierBalanceService = supplierBalanceService;
         this.accountsPayableUseCase = accountsPayableUseCase;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -94,6 +100,16 @@ public class ManageDebitCreditNoteUseCase {
         );
 
         var saved = repository.save(note);
+
+        // C5: publish the accounting event so the note adjusts payable/cuenta puente.
+        eventPublisher.publishEvent(new SupplierNoteAccountedEvent(
+                this,
+                saved.id(),
+                saved.documentNumber(),
+                saved.amount(),
+                saved.isDebitNote(),
+                saved.createdAt() != null ? saved.createdAt().toLocalDate() : LocalDate.now()
+        ));
 
         // Update AccountsPayable for the linked invoice
         if (saved.supplierInvoiceId() != null) {
