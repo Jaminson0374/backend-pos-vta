@@ -43,6 +43,7 @@ class ManageSalesDocumentUseCaseTest {
     @Mock private AccountsReceivableUseCase accountsReceivableUseCase;
     @Mock private FefoPicker fefoPicker;
     @Mock private RecordMovementUseCase recordMovement;
+    @Mock private CompanyConfigRepository companyConfigRepo;
 
     private ManageSalesDocumentUseCase useCase;
 
@@ -58,7 +59,8 @@ class ManageSalesDocumentUseCaseTest {
     void setUp() {
         useCase = new ManageSalesDocumentUseCase(
                 documentRepo, itemRepo, thirdPartyRepo, stockRepo, warehouseRepo,
-                productRepo, accountsReceivableUseCase, fefoPicker, recordMovement);
+                productRepo, accountsReceivableUseCase, fefoPicker, recordMovement,
+                new DiscountEngineService(productRepo, companyConfigRepo));
     }
 
     @Test

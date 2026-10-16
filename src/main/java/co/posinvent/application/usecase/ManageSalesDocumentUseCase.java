@@ -39,6 +39,7 @@ public class ManageSalesDocumentUseCase {
     private final AccountsReceivableUseCase accountsReceivableUseCase;
     private final FefoPicker fefoPicker;
     private final RecordMovementUseCase recordMovement;
+    private final DiscountEngineService discountEngine;
 
     public ManageSalesDocumentUseCase(
             SalesDocumentRepository documentRepo,
@@ -49,7 +50,8 @@ public class ManageSalesDocumentUseCase {
             ProductRepository productRepo,
             AccountsReceivableUseCase accountsReceivableUseCase,
             FefoPicker fefoPicker,
-            RecordMovementUseCase recordMovement
+            RecordMovementUseCase recordMovement,
+            DiscountEngineService discountEngine
     ) {
         this.documentRepo = documentRepo;
         this.itemRepo = itemRepo;
@@ -60,6 +62,7 @@ public class ManageSalesDocumentUseCase {
         this.accountsReceivableUseCase = accountsReceivableUseCase;
         this.fefoPicker = fefoPicker;
         this.recordMovement = recordMovement;
+        this.discountEngine = discountEngine;
     }
 
     // ── Create ────────────────────────────────────────────────────────────
@@ -376,14 +379,22 @@ public class ManageSalesDocumentUseCase {
                 .orElse(0) + 1;
 
         var taxRate = resolveTaxRate(request.taxType());
+        var promo = discountEngine.activePromotion(request.productId(), LocalDate.now()).orElse(null);
+        var promoPct = promo == null ? BigDecimal.ZERO : promo.discountPct();
         var subtotal = request.quantity().multiply(request.unitPrice());
-        var taxAmount = subtotal.multiply(taxRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        var lineDiscount = discountEngine.calculateLineDiscount(
+                subtotal, promoPct, request.discountType(), request.discountValue());
+        var taxableBase = subtotal.subtract(lineDiscount).max(BigDecimal.ZERO);
+        var taxAmount = taxableBase.multiply(taxRate)
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
         var item = new SaleItem(
                 null, documentId, request.productId(),
                 request.quantity(), request.unitPrice(),
                 request.taxType(), taxRate, taxAmount, subtotal,
-                nextLine, request.batchId()
+                nextLine, request.batchId(),
+                request.discountType(), request.discountValue(), lineDiscount,
+                promo == null ? null : promo.id()
         );
 
         itemRepo.save(item);
@@ -408,14 +419,22 @@ public class ManageSalesDocumentUseCase {
         }
 
         var taxRate = resolveTaxRate(request.taxType());
+        var promo = discountEngine.activePromotion(request.productId(), LocalDate.now()).orElse(null);
+        var promoPct = promo == null ? BigDecimal.ZERO : promo.discountPct();
         var subtotal = request.quantity().multiply(request.unitPrice());
-        var taxAmount = subtotal.multiply(taxRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        var lineDiscount = discountEngine.calculateLineDiscount(
+                subtotal, promoPct, request.discountType(), request.discountValue());
+        var taxableBase = subtotal.subtract(lineDiscount).max(BigDecimal.ZERO);
+        var taxAmount = taxableBase.multiply(taxRate)
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
         var updated = new SaleItem(
                 item.id(), item.documentId(), item.productId(),
                 request.quantity(), request.unitPrice(),
                 request.taxType(), taxRate, taxAmount, subtotal,
-                item.lineNumber(), request.batchId()
+                item.lineNumber(), request.batchId(),
+                request.discountType(), request.discountValue(), lineDiscount,
+                promo == null ? null : promo.id()
         );
 
         itemRepo.save(updated);
@@ -515,9 +534,11 @@ public class ManageSalesDocumentUseCase {
         var tax0 = BigDecimal.ZERO.setScale(2);
         var tax5 = BigDecimal.ZERO.setScale(2);
         var tax19 = BigDecimal.ZERO.setScale(2);
+        var lineDiscountTotal = BigDecimal.ZERO.setScale(2);
 
         for (var item : items) {
-            net = net.add(item.subtotal());
+            net = net.add(item.subtotal().subtract(item.discountAmount()));
+            lineDiscountTotal = lineDiscountTotal.add(item.discountAmount());
             var rate = item.taxRate();
             var amount = item.taxAmount();
             if (rate.compareTo(BigDecimal.ZERO) == 0) {
@@ -534,13 +555,18 @@ public class ManageSalesDocumentUseCase {
         var doc = documentRepo.findById(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Documento de venta", documentId));
 
+        var documentDiscount = doc.documentDiscount() == null ? BigDecimal.ZERO : doc.documentDiscount();
+        var discountTotal = lineDiscountTotal.add(documentDiscount);
+
         var updated = new SalesDocument(
                 doc.id(), doc.type(), doc.status(),
                 doc.documentNumber(), doc.clientId(), doc.warehouseId(),
                 doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
                 net, tax0, tax5, tax19, total,
                 doc.createdBy(), doc.createdAt(), doc.updatedAt(),
-                doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
+                doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason(),
+                discountTotal, documentDiscount, doc.documentDiscountType(),
+                doc.documentDiscountValue(), doc.discountAuthorizedBy(), doc.discountReason()
         );
 
         documentRepo.save(updated);

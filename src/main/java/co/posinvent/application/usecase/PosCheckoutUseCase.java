@@ -3,17 +3,18 @@ package co.posinvent.application.usecase;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
-import co.posinvent.domain.repository.SaleItemRepository;
 import co.posinvent.domain.repository.SalePaymentRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.UserRepository;
 import co.posinvent.domain.service.FefoPicker;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -23,7 +24,6 @@ import java.util.UUID;
 public class PosCheckoutUseCase {
 
     private final SalesDocumentRepository documentRepo;
-    private final SaleItemRepository itemRepo;
     private final SalePaymentRepository salePaymentRepo;
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;
@@ -34,10 +34,11 @@ public class PosCheckoutUseCase {
     private final ApplicationEventPublisher eventPublisher;
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
     private final DianNumberingService numberingService;
+    private final DiscountEngineService discountEngine;
+    private final UserRepository userRepo;
 
     public PosCheckoutUseCase(
             SalesDocumentRepository documentRepo,
-            SaleItemRepository itemRepo,
             SalePaymentRepository salePaymentRepo,
             StockRepository stockRepo,
             ProductRepository productRepo,
@@ -47,10 +48,11 @@ public class PosCheckoutUseCase {
             CostingOrchestrator costingService,
             ApplicationEventPublisher eventPublisher,
             OptimisticConcurrencyExecutor concurrencyExecutor,
-            DianNumberingService numberingService
+            DianNumberingService numberingService,
+            DiscountEngineService discountEngine,
+            UserRepository userRepo
     ) {
         this.documentRepo = documentRepo;
-        this.itemRepo = itemRepo;
         this.salePaymentRepo = salePaymentRepo;
         this.stockRepo = stockRepo;
         this.productRepo = productRepo;
@@ -61,6 +63,8 @@ public class PosCheckoutUseCase {
         this.eventPublisher = eventPublisher;
         this.concurrencyExecutor = concurrencyExecutor;
         this.numberingService = numberingService;
+        this.discountEngine = discountEngine;
+        this.userRepo = userRepo;
     }
 
     /**
@@ -95,25 +99,48 @@ public class PosCheckoutUseCase {
                     "El pedido no tiene ítems para facturar.");
         }
 
-        // 2. Load items and resolve prices via PriceEngineService
-        var pricedItems = new ArrayList<SaleItem>();
+        // 2. Load items and resolve prices, then apply discounts BEFORE IVA:
+        //    active promotion (automatic) + the manual discount carried by the order line.
+        var today = LocalDate.now();
+        var lineInputs = new ArrayList<DiscountEngineService.LineInput>();
+        var orderLines = new ArrayList<SaleItem>();
         for (var item : order.items()) {
             var price = priceEngine.resolvePrice(item.productId(), order.clientId());
-            var subtotal = item.quantity().multiply(price.unitPrice());
-            var taxAmount = subtotal.multiply(price.taxRate())
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            var gross = item.quantity().multiply(price.unitPrice())
+                    .setScale(2, RoundingMode.HALF_UP);
+            var promo = discountEngine.activePromotion(item.productId(), today).orElse(null);
+            var promoPct = promo == null ? BigDecimal.ZERO : promo.discountPct();
 
-            pricedItems.add(new SaleItem(
+            lineInputs.add(new DiscountEngineService.LineInput(
+                    promo == null ? null : promo.id(), gross, price.taxRate(), promoPct,
+                    item.discountType(), item.discountValue()));
+
+            orderLines.add(new SaleItem(
                     null, null, item.productId(),
                     item.quantity(), price.unitPrice(),
-                    price.taxType(), price.taxRate(), taxAmount, subtotal,
-                    item.lineNumber(), item.batchId()
+                    price.taxType(), price.taxRate(), BigDecimal.ZERO, gross,
+                    item.lineNumber(), item.batchId(),
+                    item.discountType(), item.discountValue(), BigDecimal.ZERO,
+                    promo == null ? null : promo.id()
             ));
+        }
+
+        // 2b. Compute line discounts, prorated document discount and taxes (0/5/19).
+        var computed = discountEngine.calculate(
+                lineInputs, request.documentDiscountType(), request.documentDiscountValue());
+
+        // 2c. Discount policy: a manual discount above the cashier ceiling or a total
+        //     discount above the global ceiling requires an administrator authorization.
+        if (computed.discountTotal().signum() > 0) {
+            discountEngine.validateAuthorization(
+                    resolveRole(userId),
+                    discountEngine.manualDiscountPct(lineInputs),
+                    discountEngine.totalDiscountPct(lineInputs, computed.discountTotal()));
         }
 
         // 3 & 4. Decrement stock using FEFO: pick batches by expiration date
         var touchedProductIds = new HashSet<UUID>();
-        for (var item : pricedItems) {
+        for (var item : orderLines) {
             touchedProductIds.add(item.productId());
 
             // FEFO: pick batches by expiration date
@@ -164,14 +191,28 @@ public class PosCheckoutUseCase {
 
         // 5. Create INVOICE document with the next fiscal number from the active DIAN resolution
         var docNumber = numberingService.nextInvoiceNumber();
-        var totals = calculateTotals(pricedItems);
+
+        // Materialize the persisted lines: gross subtotal, line discount and the final
+        // tax computed on the (prorated) discounted base.
+        var persistedItems = new ArrayList<SaleItem>();
+        for (int i = 0; i < orderLines.size(); i++) {
+            var base = orderLines.get(i);
+            var line = computed.lines().get(i);
+            persistedItems.add(new SaleItem(
+                    null, null, base.productId(),
+                    base.quantity(), base.unitPrice(),
+                    base.taxType(), base.taxRate(), line.taxAmount(), base.subtotal(),
+                    base.lineNumber(), base.batchId(),
+                    base.discountType(), base.discountValue(), line.lineDiscount(), line.promotionId()
+            ));
+        }
 
         var totalPaid = request.payments().stream()
                 .map(CheckoutRequest.PaymentLine::amount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (totalPaid.compareTo(totals.total()) < 0) {
+        if (totalPaid.compareTo(computed.total()) < 0) {
             throw new BusinessException("POS_UNDERPAID",
-                    "El monto pagado (" + totalPaid + ") es menor al total (" + totals.total() + ")");
+                    "El monto pagado (" + totalPaid + ") es menor al total (" + computed.total() + ")");
         }
 
         var invoice = new SalesDocument(
@@ -184,31 +225,31 @@ public class PosCheckoutUseCase {
                 order.shiftId(),
                 request.cashRegisterId(),
                 request.orderId(),
-                totals.net(),
-                totals.tax0(),
-                totals.tax5(),
-                totals.tax19(),
-                totals.total(),
+                computed.net(),
+                computed.tax0(),
+                computed.tax5(),
+                computed.tax19(),
+                computed.total(),
                 userId,
                 null,
                 null,
-                pricedItems,
+                persistedItems,
                 null,   // dueDate — POS invoices have no credit
                 false,  // isCreditSale — POS invoices are always cash
-                null    // reason
+                null,   // reason
+                computed.discountTotal(),
+                computed.documentDiscount(),
+                request.documentDiscountType(),
+                request.documentDiscountValue(),
+                null,   // discountAuthorizedBy — token validation lands in WU-27
+                request.discountReason()
         );
 
-        // Save invoice first, then assign documentId to each item
+        // The invoice lines are persisted exactly once, by the document cascade:
+        // SalesDocumentMapper.toEntity maps items() and SalesDocumentRepositoryAdapter
+        // links each one to the saved document. No separate per-item save here, otherwise
+        // every line would be inserted twice.
         var savedInvoice = documentRepo.save(invoice);
-
-        for (var item : pricedItems) {
-            itemRepo.save(new SaleItem(
-                    null, savedInvoice.id(), item.productId(),
-                    item.quantity(), item.unitPrice(),
-                    item.taxType(), item.taxRate(), item.taxAmount(), item.subtotal(),
-                    item.lineNumber(), item.batchId()
-            ));
-        }
 
         // Persist one tender line per requested payment, linked to the invoice.
         // This is the historical payment trace the cash-drawer reconciliation needs.
@@ -226,49 +267,32 @@ public class PosCheckoutUseCase {
                 order.shiftId(), order.cashRegisterId(), order.sourceDocumentId(),
                 order.totalNet(), order.totalTax0(), order.totalTax5(), order.totalTax19(),
                 order.totalAmount(), order.createdBy(), order.createdAt(), order.updatedAt(),
-                order.items(), order.dueDate(), order.isCreditSale(), order.reason()
+                order.items(), order.dueDate(), order.isCreditSale(), order.reason(),
+                order.discountTotal(), order.documentDiscount(), order.documentDiscountType(),
+                order.documentDiscountValue(), order.discountAuthorizedBy(), order.discountReason()
         );
         documentRepo.save(invoicedOrder);
 
         // 7. Calculate change
-        var change = totalPaid.subtract(totals.total()).max(BigDecimal.ZERO);
+        var change = totalPaid.subtract(computed.total()).max(BigDecimal.ZERO);
 
         // 8. Publish accounting + DIAN event with per-rate tax amounts (0/5/19).
         eventPublisher.publishEvent(new InvoiceIssuedEvent(this, savedInvoice.id(), savedInvoice.documentNumber(),
-                totals.net(),
-                totals.tax0(), totals.tax5(), totals.tax19(),
-                totals.total()));
+                computed.net(),
+                computed.tax0(), computed.tax5(), computed.tax19(),
+                computed.total()));
 
         // 9. Return INVOICE
         return CheckoutResponse.from(documentRepo.findById(savedInvoice.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Factura", savedInvoice.id())), change);
     }
 
-    private record Totals(
-            BigDecimal net, BigDecimal tax0, BigDecimal tax5,
-            BigDecimal tax19, BigDecimal total
-    ) {}
-
-    private Totals calculateTotals(List<SaleItem> items) {
-        var tax0 = BigDecimal.ZERO.setScale(2);
-        var tax5 = BigDecimal.ZERO.setScale(2);
-        var tax19 = BigDecimal.ZERO.setScale(2);
-        var net = BigDecimal.ZERO.setScale(2);
-
-        for (var item : items) {
-            net = net.add(item.subtotal());
-            var rate = item.taxRate();
-            var amount = item.taxAmount();
-            if (rate.compareTo(BigDecimal.ZERO) == 0) {
-                tax0 = tax0.add(amount);
-            } else if (rate.compareTo(new BigDecimal("5")) == 0) {
-                tax5 = tax5.add(amount);
-            } else {
-                tax19 = tax19.add(amount);
-            }
+    private String resolveRole(UUID userId) {
+        if (userId == null) {
+            return null;
         }
-
-        var total = net.add(tax0).add(tax5).add(tax19);
-        return new Totals(net, tax0, tax5, tax19, total);
+        return userRepo.findById(userId)
+                .map(user -> user.role() == null ? null : user.role().name())
+                .orElse(null);
     }
 }

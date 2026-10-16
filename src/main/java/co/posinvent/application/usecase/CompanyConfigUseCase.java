@@ -70,6 +70,17 @@ public class CompanyConfigUseCase {
                 fiscalResponsibilityRepository.findAllActive(),
                 request.fiscalResponsibilityCodes());
 
+        // Discount ceilings are administrative policy, not part of the everyday company
+        // form. Preserve the currently persisted values when the request omits them so a
+        // routine config save never resets the ceilings back to their defaults.
+        var existing = repository.findConfig().orElse(null);
+        var maxDiscountPct = request.maxDiscountPct() != null
+                ? request.maxDiscountPct()
+                : (existing == null ? null : existing.maxDiscountPct());
+        var cashierMaxDiscountPct = request.cashierMaxDiscountPct() != null
+                ? request.cashierMaxDiscountPct()
+                : (existing == null ? null : existing.cashierMaxDiscountPct());
+
         var config = new CompanyConfig(
                 1L,
                 request.companyName(),
@@ -106,7 +117,9 @@ public class CompanyConfigUseCase {
                 request.autoGenerateJournalEntries() != null ? request.autoGenerateJournalEntries() : true,
                 request.purchaseRetefuenteRate(),
                 null,
-                null
+                null,
+                maxDiscountPct,
+                cashierMaxDiscountPct
         );
 
         var saved = repository.save(config);
