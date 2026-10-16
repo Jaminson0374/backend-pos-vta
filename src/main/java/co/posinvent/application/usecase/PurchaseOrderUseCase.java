@@ -10,6 +10,7 @@ import co.posinvent.domain.model.PurchaseLineItem;
 import co.posinvent.domain.model.PurchaseOrder;
 import co.posinvent.domain.model.PurchaseOrderStatus;
 import co.posinvent.domain.model.ThirdParty;
+import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.PurchaseOrderRepository;
 import co.posinvent.domain.repository.ThirdPartyCategoryRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
@@ -30,18 +31,21 @@ public class PurchaseOrderUseCase {
     private final ThirdPartyRepository thirdPartyRepository;
     private final ThirdPartyCategoryRepository thirdPartyCategoryRepository;
     private final WarehouseRepository warehouseRepository;
+    private final ProductRepository productRepository;
     private final PurchaseOrderDomainService domainService;
 
     public PurchaseOrderUseCase(
             PurchaseOrderRepository purchaseOrderRepository,
             ThirdPartyRepository thirdPartyRepository,
             ThirdPartyCategoryRepository thirdPartyCategoryRepository,
-            WarehouseRepository warehouseRepository
+            WarehouseRepository warehouseRepository,
+            ProductRepository productRepository
     ) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.thirdPartyRepository = thirdPartyRepository;
         this.thirdPartyCategoryRepository = thirdPartyCategoryRepository;
         this.warehouseRepository = warehouseRepository;
+        this.productRepository = productRepository;
         this.domainService = new PurchaseOrderDomainService();
     }
 
@@ -113,6 +117,8 @@ public class PurchaseOrderUseCase {
             }
         }
 
+        validateLineReferences(request);
+
         var dueDate = request.dueDate() != null
                 ? request.dueDate()
                 : request.orderDate().plusDays(supplier.creditDays());
@@ -146,12 +152,21 @@ public class PurchaseOrderUseCase {
     private String generateDocumentNumber() {
         var today = java.time.LocalDate.now();
         var prefix = "OC-" + today.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
-        var last = purchaseOrderRepository.findFirstByDocumentNumberStartingWith(prefix);
-        var seq = last.map(po -> {
-            var parts = po.documentNumber().split("-");
-            return Integer.parseInt(parts[parts.length - 1]) + 1;
-        }).orElse(1);
-        return prefix + String.format("%04d", seq);
+        // nextval() is atomic, so concurrent creations never collide on the sequence value.
+        return prefix + String.format("%06d", purchaseOrderRepository.nextDocumentSequence());
+    }
+
+    /**
+     * Ensures every warehouse and product referenced by the order lines exists, so an unknown
+     * reference fails as a clear not-found business error instead of a raw FK violation (500).
+     */
+    private void validateLineReferences(PurchaseOrderRequest request) {
+        for (var line : request.lines()) {
+            warehouseRepository.findById(line.warehouseId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Bodega", line.warehouseId()));
+            productRepository.findById(line.productId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Producto", line.productId()));
+        }
     }
 
     @Auditable(entityType = "PURCHASE_ORDER", action = "UPDATE")
@@ -169,11 +184,8 @@ public class PurchaseOrderUseCase {
         var supplier = thirdPartyRepository.findById(request.supplierId())
                 .orElseThrow(() -> new ResourceNotFoundException("Proveedor", request.supplierId()));
 
-        // Validate all warehouses exist
-        for (var line : request.lines()) {
-            warehouseRepository.findById(line.warehouseId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Bodega", line.warehouseId()));
-        }
+        // Validate all warehouses and products referenced by the lines exist
+        validateLineReferences(request);
 
         if (request.buyerId() != null) {
             var buyer = thirdPartyRepository.findById(request.buyerId())

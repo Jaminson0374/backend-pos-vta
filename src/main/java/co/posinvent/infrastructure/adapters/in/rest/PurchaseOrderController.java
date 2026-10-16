@@ -28,6 +28,7 @@ public class PurchaseOrderController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<PageResponse<PurchaseOrderResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -50,6 +51,7 @@ public class PurchaseOrderController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<PurchaseOrderResponse> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(purchaseOrderUseCase.getById(id));
     }

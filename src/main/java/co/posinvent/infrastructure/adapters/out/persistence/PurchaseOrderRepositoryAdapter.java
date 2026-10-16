@@ -63,8 +63,7 @@ class PurchaseOrderRepositoryAdapter implements PurchaseOrderRepository {
     }
 
     @Override
-    public Optional<PurchaseOrder> findFirstByDocumentNumberStartingWith(String prefix) {
-        return jpa.findFirstByDocumentNumberStartingWithOrderByDocumentNumberDesc(prefix)
-                .map(mapper::toDomain);
+    public long nextDocumentSequence() {
+        return jpa.nextDocumentSequence();
     }
 }
