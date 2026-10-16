@@ -16,6 +16,7 @@ import co.posinvent.domain.repository.PurchaseRetentionConfigRepository;
 import co.posinvent.domain.repository.SupplierInvoiceRepository;
 import co.posinvent.domain.repository.ThirdPartyCategoryRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
+import co.posinvent.domain.repository.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,12 +26,16 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class SupplierInvoiceUseCase {
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
+
+    /** Roles allowed to set a manual retention override (backend-owned retention policy, A2). */
+    private static final Set<String> OVERRIDE_ROLES = Set.of("ADMIN", "CONTADOR");
 
     private final SupplierInvoiceRepository invoiceRepository;
     private final ThirdPartyRepository thirdPartyRepository;
@@ -39,6 +44,7 @@ public class SupplierInvoiceUseCase {
     private final AccountsPayableUseCase accountsPayableUseCase;
     private final PurchaseRetentionConfigRepository retentionConfigRepository;
     private final CompanyConfigRepository companyConfigRepository;
+    private final UserRepository userRepository;
 
     public SupplierInvoiceUseCase(
             SupplierInvoiceRepository invoiceRepository,
@@ -47,7 +53,8 @@ public class SupplierInvoiceUseCase {
             ApplicationEventPublisher eventPublisher,
             AccountsPayableUseCase accountsPayableUseCase,
             PurchaseRetentionConfigRepository retentionConfigRepository,
-            CompanyConfigRepository companyConfigRepository
+            CompanyConfigRepository companyConfigRepository,
+            UserRepository userRepository
     ) {
         this.invoiceRepository = invoiceRepository;
         this.thirdPartyRepository = thirdPartyRepository;
@@ -56,6 +63,7 @@ public class SupplierInvoiceUseCase {
         this.accountsPayableUseCase = accountsPayableUseCase;
         this.retentionConfigRepository = retentionConfigRepository;
         this.companyConfigRepository = companyConfigRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -113,24 +121,36 @@ public class SupplierInvoiceUseCase {
         // active PurchaseRetentionConfig catalog (matching the supplier, baseMin satisfied) and
         // ICA comes from company_config.purchase_ica_rate. A non-null request.retentionTotal is a
         // manual override of the whole retention; null triggers the data-driven calculation.
+        var isOverride = request.retentionTotal() != null;
+        if (isOverride && !canOverrideRetention(operatorId)) {
+            throw new BusinessException("RETENTION_OVERRIDE_FORBIDDEN",
+                    "Solo un administrador o contador puede fijar la retención manualmente");
+        }
+
         var retention = computeRetention(request.subtotal(), supplier);
-        var effectiveRetention = request.retentionTotal() != null
-                ? request.retentionTotal()
-                : retention.total();
+        var effectiveRetention = isOverride ? request.retentionTotal() : retention.total();
         // The journal entry must stay balanced: retefuente + ica must equal the effective
         // retention. A manual override carries no split, so it is posted entirely as retefuente.
-        var retefuente = request.retentionTotal() != null ? effectiveRetention : retention.retefuente();
-        var ica = request.retentionTotal() != null ? BigDecimal.ZERO : retention.ica();
+        var retefuente = isOverride ? effectiveRetention : retention.retefuente();
+        var ica = isOverride ? BigDecimal.ZERO : retention.ica();
 
-        // Validate DIAN totals with 1.0 tolerance
+        // The backend owns the total when the retention is automatic: it is recomputed from
+        // subtotal + IVA - effectiveRetention (any client-provided total is ignored). A manual
+        // override keeps the DIAN consistency validation with a 1.0 tolerance.
         var computedTotal = request.subtotal()
                 .add(request.ivaTotal())
                 .subtract(effectiveRetention);
-        var diff = request.total().subtract(computedTotal).abs();
-        if (diff.compareTo(BigDecimal.ONE) > 0) {
-            throw new BusinessException("INV_DIAN_MISMATCH",
-                    "El total no coincide con subtotal + IVA - retención. " +
-                    "Total recibido: " + request.total() + ", Calculado: " + computedTotal);
+        BigDecimal effectiveTotal;
+        if (isOverride) {
+            var diff = request.total().subtract(computedTotal).abs();
+            if (diff.compareTo(BigDecimal.ONE) > 0) {
+                throw new BusinessException("INV_DIAN_MISMATCH",
+                        "El total no coincide con subtotal + IVA - retención. " +
+                        "Total recibido: " + request.total() + ", Calculado: " + computedTotal);
+            }
+            effectiveTotal = request.total();
+        } else {
+            effectiveTotal = computedTotal;
         }
 
         // Check invoice number uniqueness per supplier
@@ -151,7 +171,7 @@ public class SupplierInvoiceUseCase {
                 request.subtotal(),
                 request.ivaTotal(),
                 effectiveRetention,
-                request.total(),
+                effectiveTotal,
                 InvoiceStatus.PENDING,
                 request.notes(),
                 operatorId,
@@ -180,6 +200,19 @@ public class SupplierInvoiceUseCase {
         // AccountsPayable opened on reconcile (hallazgo C2 double-book fix). The invoice total is
         // not added to third_parties.current_balance anymore.
         return SupplierInvoiceResponse.from(saved);
+    }
+
+    /**
+     * The retention override is a restricted action: only an ADMIN or CONTADOR operator may set it.
+     * Unknown operators (or a null operator) are treated as unauthorized.
+     */
+    private boolean canOverrideRetention(UUID operatorId) {
+        if (operatorId == null) {
+            return false;
+        }
+        return userRepository.findById(operatorId)
+                .map(user -> user.role() != null && OVERRIDE_ROLES.contains(user.role().name()))
+                .orElse(false);
     }
 
     /**
