@@ -31,9 +31,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -80,8 +83,9 @@ class AccountingEventListenerTest {
 
         when(companyConfigRepo.findConfig()).thenReturn(Optional.empty()); // journal generation enabled
         when(templateResolver.resolveDefault("SALE")).thenReturn(Optional.of(saleTemplate()));
-        when(templateResolver.resolveForProduct(any(), eq("SALE"))).thenReturn(Optional.empty());
-        when(pucRepo.findById(any())).thenAnswer(inv ->
+        // Lenient: the missing-PUC test exercises the fallback path and never resolves these.
+        lenient().when(templateResolver.resolveForProduct(any(), eq("SALE"))).thenReturn(Optional.empty());
+        lenient().when(pucRepo.findById(any())).thenAnswer(inv ->
                 Optional.of(new PucAccount(inv.getArgument(0), "0000", "Cuenta", 1, null, 1,
                         "DEBITO", true, true, null, null)));
     }
@@ -205,6 +209,26 @@ class AccountingEventListenerTest {
         assertThat(debitOn(lines, ACCT_INVENTORY)).isEqualByComparingTo("3000.00");
 
         assertThat(totalDebit(lines)).isEqualByComparingTo(totalCredit(lines));
+    }
+
+    @Test
+    void missingPucAccountDoesNotThrowAndSkipsTheEntry() {
+        // No accounting template configured and none of the fallback PUC accounts exist:
+        // the listener must swallow the failure (best-effort posting) instead of aborting
+        // the business operation that already committed.
+        when(templateResolver.resolveDefault("SALE")).thenReturn(Optional.empty());
+        when(pucRepo.findByCode(anyString())).thenReturn(Optional.empty());
+        when(salesDocumentRepo.findByIdWithItems(INVOICE_ID)).thenReturn(Optional.of(invoiceWithItems()));
+
+        assertThatCode(() -> listener.onInvoiceIssued(new InvoiceIssuedEvent(
+                this, INVOICE_ID, "FV-MISSING-PUC",
+                new BigDecimal("25000.00"),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("25000.00"))))
+                .doesNotThrowAnyException();
+
+        // A missing PUC account means "warn and omit", never a broken entry.
+        verify(journalUseCase, never()).createAuto(any(), any(), any(), any(), any());
     }
 
     // ── fixtures ────────────────────────────────────────────────────────────

@@ -14,8 +14,11 @@ import co.posinvent.domain.repository.PucAccountRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -56,29 +59,41 @@ public class AccountingEventListener {
     // FACTURA EMITIDA (dispatch por tipo de documento)
     // ════════════════════════════════════════════════════════════════
 
-    @EventListener
+    /**
+     * Posts the accounting for an emitted sales document after its business transaction has
+     * committed (WU-34). Running in {@code AFTER_COMMIT} with its own {@code REQUIRES_NEW}
+     * transaction keeps a missing PUC account or any other accounting failure from rolling back
+     * the sale that was already charged. The failure is logged and swallowed — best-effort posting.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onInvoiceIssued(InvoiceIssuedEvent event) {
-        // Guard: skip if auto journal generation is disabled
-        if (!isJournalGenerationEnabled()) {
-            return;
-        }
+        try {
+            // Guard: skip if auto journal generation is disabled
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
 
-        // The event carries no document type, so the accounting treatment is decided from the
-        // persisted document: an INVOICE posts the sale entry; a CREDIT_NOTE posts the reversal
-        // entry that undoes it. Any other type is not accounted here.
-        var docOpt = salesDocumentRepo.findByIdWithItems(event.salesDocumentId());
-        if (docOpt.isEmpty()) {
-            log.warn("InvoiceIssuedEvent for unknown sales document {}; skipping journal entry",
-                    event.salesDocumentId());
-            return;
-        }
-        var doc = docOpt.get();
+            // The event carries no document type, so the accounting treatment is decided from the
+            // persisted document: an INVOICE posts the sale entry; a CREDIT_NOTE posts the reversal
+            // entry that undoes it. Any other type is not accounted here.
+            var docOpt = salesDocumentRepo.findByIdWithItems(event.salesDocumentId());
+            if (docOpt.isEmpty()) {
+                log.warn("InvoiceIssuedEvent for unknown sales document {}; skipping journal entry",
+                        event.salesDocumentId());
+                return;
+            }
+            var doc = docOpt.get();
 
-        switch (doc.type()) {
-            case INVOICE -> postSaleEntry(event, doc);
-            case CREDIT_NOTE -> postCreditNoteReversal(event);
-            default -> log.debug("No accounting treatment for sales document type {} (id {}); skipping",
-                    doc.type(), event.salesDocumentId());
+            switch (doc.type()) {
+                case INVOICE -> postSaleEntry(event, doc);
+                case CREDIT_NOTE -> postCreditNoteReversal(event);
+                default -> log.debug("No accounting treatment for sales document type {} (id {}); skipping",
+                        doc.type(), event.salesDocumentId());
+            }
+        } catch (Exception ex) {
+            log.error("Accounting failed for sales document {} ({}); the business operation is unaffected",
+                    event.salesDocumentId(), event.invoiceNumber(), ex);
         }
     }
 
@@ -102,7 +117,7 @@ public class AccountingEventListener {
                     taxEntries.add(entry);
                     continue;
                 }
-                var account = pucRepo.findById(entry.accountId()).orElse(null);
+                var account = resolveById(entry.accountId(), entry.eventType());
                 if (account == null) continue;
 
                 switch (entry.eventType()) {
@@ -118,7 +133,7 @@ public class AccountingEventListener {
 
             // Process SALE_TAX entries — one per rate, only for non-zero amounts
             for (var taxEntry : taxEntries) {
-                var account = pucRepo.findById(taxEntry.accountId()).orElse(null);
+                var account = resolveById(taxEntry.accountId(), taxEntry.eventType());
                 if (account == null) continue;
 
                 BigDecimal rateAmount = resolveTaxAmount(event, account);
@@ -155,7 +170,7 @@ public class AccountingEventListener {
                             continue;
                         }
 
-                        var account = pucRepo.findById(entry.accountId()).orElse(null);
+                        var account = resolveById(entry.accountId(), entry.eventType());
                         if (account == null) continue;
 
                         String desc = entry.eventType() + " producto " + event.invoiceNumber();
@@ -169,8 +184,13 @@ public class AccountingEventListener {
             }
         } else {
             // ── FALLBACK: hardcoded PUC accounts (backward compatibility) ──
-            var clientAcct = pucRepo.findByCode("1305").orElseThrow();
-            var revenueAcct = pucRepo.findByCode("4135").orElseThrow();
+            var clientAcct = resolveByCode("1305", "SALE receivable");
+            var revenueAcct = resolveByCode("4135", "SALE income");
+            if (clientAcct == null || revenueAcct == null) {
+                log.warn("Missing PUC receivable/income account for sale {}; skipping SALE journal entry",
+                        event.invoiceNumber());
+                return;
+            }
 
             lines.add(debitLine(clientAcct.id(), event.total(),
                     "Venta " + event.invoiceNumber()));
@@ -188,14 +208,16 @@ public class AccountingEventListener {
                     default -> BigDecimal.ZERO;
                 };
                 if (amount.compareTo(BigDecimal.ZERO) > 0) {
-                    var acct = pucRepo.findByCode(code).orElseThrow();
-                    lines.add(creditLine(acct.id(), amount,
-                            "IVA " + rate + "% venta " + event.invoiceNumber()));
+                    var acct = resolveByCode(code, "SALE tax " + rate + "%");
+                    if (acct != null) {
+                        lines.add(creditLine(acct.id(), amount,
+                                "IVA " + rate + "% venta " + event.invoiceNumber()));
+                    }
                 }
             });
         }
 
-        journalUseCase.createAuto("SALE", event.salesDocumentId(), LocalDate.now(),
+        postEntryIfBalanced("SALE", event.salesDocumentId(),
                 "Factura de venta " + event.invoiceNumber(), lines);
     }
 
@@ -231,7 +253,7 @@ public class AccountingEventListener {
                     taxEntries.add(entry);
                     continue;
                 }
-                var account = pucRepo.findById(entry.accountId()).orElse(null);
+                var account = resolveById(entry.accountId(), entry.eventType());
                 if (account == null) continue;
 
                 switch (entry.eventType()) {
@@ -247,7 +269,7 @@ public class AccountingEventListener {
 
             // Per-rate tax reversal — debited (the sale credited it), only for non-zero amounts.
             for (var taxEntry : taxEntries) {
-                var account = pucRepo.findById(taxEntry.accountId()).orElse(null);
+                var account = resolveById(taxEntry.accountId(), taxEntry.eventType());
                 if (account == null) continue;
 
                 BigDecimal rateAmount = resolveTaxAmount(event, account).abs();
@@ -297,8 +319,13 @@ public class AccountingEventListener {
             }
         } else {
             // ── FALLBACK: hardcoded PUC accounts (backward compatibility) ──
-            var clientAcct = pucRepo.findByCode("1305").orElseThrow();
-            var revenueAcct = pucRepo.findByCode("4135").orElseThrow();
+            var clientAcct = resolveByCode("1305", "NC receivable");
+            var revenueAcct = resolveByCode("4135", "NC income");
+            if (clientAcct == null || revenueAcct == null) {
+                log.warn("Missing PUC receivable/income account for credit note {}; "
+                        + "skipping reversal journal entry", event.invoiceNumber());
+                return;
+            }
 
             lines.add(creditLine(clientAcct.id(), event.total().abs(),
                     "Reversa NC " + event.invoiceNumber()));
@@ -315,14 +342,16 @@ public class AccountingEventListener {
                     default -> BigDecimal.ZERO;
                 };
                 if (amount.compareTo(BigDecimal.ZERO) > 0) {
-                    var acct = pucRepo.findByCode(code).orElseThrow();
-                    lines.add(debitLine(acct.id(), amount,
-                            "Reversa IVA " + rate + "% NC " + event.invoiceNumber()));
+                    var acct = resolveByCode(code, "NC tax " + rate + "%");
+                    if (acct != null) {
+                        lines.add(debitLine(acct.id(), amount,
+                                "Reversa IVA " + rate + "% NC " + event.invoiceNumber()));
+                    }
                 }
             });
         }
 
-        journalUseCase.createAuto("SALE", event.salesDocumentId(), LocalDate.now(),
+        postEntryIfBalanced("SALE", event.salesDocumentId(),
                 "Nota crédito " + event.invoiceNumber(), lines);
     }
 
@@ -350,52 +379,84 @@ public class AccountingEventListener {
     // PAGO RECIBIDO (unchanged — out of scope)
     // ════════════════════════════════════════════════════════════════
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onCashReceipt(co.posinvent.domain.model.CashReceiptEvent event) {
-        var cashAcct = pucRepo.findByCode("1105").orElseThrow();
-        var clientAcct = pucRepo.findByCode("1305").orElseThrow();
+        try {
+            var cashAcct = resolveByCode("1105", "PAYMENT cash");
+            var clientAcct = resolveByCode("1305", "PAYMENT receivable");
+            if (cashAcct == null || clientAcct == null) {
+                log.warn("Missing PUC account for cash receipt {}; skipping PAYMENT journal entry",
+                        event.receiptNumber());
+                return;
+            }
 
-        var lines = new ArrayList<JournalEntryLine>();
-        lines.add(debitLine(cashAcct.id(), event.amount(),
-                "Recibo " + event.receiptNumber()));
-        lines.add(creditLine(clientAcct.id(), event.amount(),
-                "Abono cliente recibo " + event.receiptNumber()));
-        journalUseCase.createAuto("PAYMENT", event.receiptId(), LocalDate.now(),
-                "Recibo de caja " + event.receiptNumber(), lines);
+            var lines = new ArrayList<JournalEntryLine>();
+            lines.add(debitLine(cashAcct.id(), event.amount(),
+                    "Recibo " + event.receiptNumber()));
+            lines.add(creditLine(clientAcct.id(), event.amount(),
+                    "Abono cliente recibo " + event.receiptNumber()));
+            postEntryIfBalanced("PAYMENT", event.receiptId(),
+                    "Recibo de caja " + event.receiptNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for cash receipt {}; the business operation is unaffected",
+                    event.receiptNumber(), ex);
+        }
     }
 
     // ════════════════════════════════════════════════════════════════
     // AJUSTE DE INVENTARIO (unchanged — out of scope)
     // ════════════════════════════════════════════════════════════════
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onAdjustment(co.posinvent.domain.model.AdjustmentAppliedEvent event) {
-        var inventoryAcct = pucRepo.findByCode("1435").orElseThrow();
-        var lossAcct = pucRepo.findByCode("5195").orElseThrow();
+        try {
+            var inventoryAcct = resolveByCode("1435", "INVENTORY inventory");
+            var lossAcct = resolveByCode("5195", "INVENTORY loss");
+            if (inventoryAcct == null || lossAcct == null) {
+                log.warn("Missing PUC account for inventory adjustment '{}'; skipping INVENTORY journal entry",
+                        event.reason());
+                return;
+            }
 
-        var lines = new ArrayList<JournalEntryLine>();
-        if (event.delta().compareTo(BigDecimal.ZERO) < 0) {
-            var absDelta = event.delta().abs();
-            lines.add(debitLine(lossAcct.id(), absDelta,
-                    "Pérdida inventario " + event.reason()));
-            lines.add(creditLine(inventoryAcct.id(), absDelta,
-                    "Ajuste inventario " + event.reason()));
-        } else {
-            lines.add(debitLine(inventoryAcct.id(), event.delta(),
-                    "Sobrante inventario " + event.reason()));
-            lines.add(creditLine(lossAcct.id(), event.delta(),
-                    "Ingreso sobrante " + event.reason()));
+            var lines = new ArrayList<JournalEntryLine>();
+            if (event.delta().compareTo(BigDecimal.ZERO) < 0) {
+                var absDelta = event.delta().abs();
+                lines.add(debitLine(lossAcct.id(), absDelta,
+                        "Pérdida inventario " + event.reason()));
+                lines.add(creditLine(inventoryAcct.id(), absDelta,
+                        "Ajuste inventario " + event.reason()));
+            } else {
+                lines.add(debitLine(inventoryAcct.id(), event.delta(),
+                        "Sobrante inventario " + event.reason()));
+                lines.add(creditLine(lossAcct.id(), event.delta(),
+                        "Ingreso sobrante " + event.reason()));
+            }
+            postEntryIfBalanced("INVENTORY", event.adjustmentId(),
+                    "Ajuste inventario: " + event.reason(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for inventory adjustment '{}'; the business operation is unaffected",
+                    event.reason(), ex);
         }
-        journalUseCase.createAuto("INVENTORY", event.adjustmentId(), LocalDate.now(),
-                "Ajuste inventario: " + event.reason(), lines);
     }
 
     // ════════════════════════════════════════════════════════════════
     // COMPRA
     // ════════════════════════════════════════════════════════════════
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onPurchase(co.posinvent.domain.model.PurchaseAccountedEvent event) {
+        try {
+            postPurchaseEntry(event);
+        } catch (Exception ex) {
+            log.error("Accounting failed for purchase {}; the business operation is unaffected",
+                    event.invoiceNumber(), ex);
+        }
+    }
+
+    private void postPurchaseEntry(co.posinvent.domain.model.PurchaseAccountedEvent event) {
         // Guard: skip if auto journal generation is disabled
         if (!isJournalGenerationEnabled()) {
             return;
@@ -407,7 +468,7 @@ public class AccountingEventListener {
 
         if (defaultTemplate.isPresent()) {
             for (var entry : defaultTemplate.get().entries()) {
-                var account = pucRepo.findById(entry.accountId()).orElse(null);
+                var account = resolveById(entry.accountId(), entry.eventType());
                 if (account == null) continue;
 
                 switch (entry.eventType()) {
@@ -445,8 +506,13 @@ public class AccountingEventListener {
             }
         } else {
             // ── FALLBACK: hardcoded PUC accounts (backward compatibility) ──
-            var inventoryAcct = pucRepo.findByCode("1435").orElseThrow();
-            var supplierAcct = pucRepo.findByCode("2205").orElseThrow();
+            var inventoryAcct = resolveByCode("1435", "PURCHASE inventory");
+            var supplierAcct = resolveByCode("2205", "PURCHASE payable");
+            if (inventoryAcct == null || supplierAcct == null) {
+                log.warn("Missing PUC account for purchase {}; skipping PURCHASE journal entry",
+                        event.invoiceNumber());
+                return;
+            }
 
             lines.add(debitLine(inventoryAcct.id(), event.subtotal(),
                     "Compra factura " + event.invoiceNumber()));
@@ -465,7 +531,7 @@ public class AccountingEventListener {
             }
         }
 
-        journalUseCase.createAuto("PURCHASE", event.invoiceId(), LocalDate.now(),
+        postEntryIfBalanced("PURCHASE", event.invoiceId(),
                 "Factura proveedor " + event.invoiceNumber(), lines);
     }
 
@@ -500,6 +566,50 @@ public class AccountingEventListener {
         return companyConfigRepo.findConfig()
                 .map(config -> config.autoGenerateJournalEntries())
                 .orElse(true); // default to enabled if config not found
+    }
+
+    /**
+     * Resolves a PUC account by id, warning (instead of failing) when it is absent so the caller
+     * can simply omit the affected journal line. Accounting is best-effort after commit.
+     */
+    private PucAccount resolveById(java.util.UUID accountId, String context) {
+        return pucRepo.findById(accountId).orElseGet(() -> {
+            log.warn("PUC account {} referenced by {} not found; skipping that journal line",
+                    accountId, context);
+            return null;
+        });
+    }
+
+    /** Resolves a PUC account by code, warning instead of throwing when it is absent. */
+    private PucAccount resolveByCode(String code, String context) {
+        return pucRepo.findByCode(code).orElseGet(() -> {
+            log.warn("PUC account with code {} for {} not found; skipping that journal line",
+                    code, context);
+            return null;
+        });
+    }
+
+    /**
+     * Posts an automatic entry only when it is well formed (non-empty and balanced). A missing
+     * PUC account can leave the lines unbalanced; rather than throwing and marking the post-commit
+     * transaction rollback-only, the entry is skipped with a warning.
+     */
+    private void postEntryIfBalanced(String sourceType, java.util.UUID sourceId,
+                                     String description, List<JournalEntryLine> lines) {
+        if (lines.isEmpty()) {
+            log.warn("No journal lines resolved for {} {}; skipping entry", sourceType, sourceId);
+            return;
+        }
+        BigDecimal debit = lines.stream().map(JournalEntryLine::debit)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal credit = lines.stream().map(JournalEntryLine::credit)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (debit.compareTo(credit) != 0) {
+            log.warn("Unbalanced journal entry for {} {} (debit={}, credit={}); skipping entry",
+                    sourceType, sourceId, debit, credit);
+            return;
+        }
+        journalUseCase.createAuto(sourceType, sourceId, LocalDate.now(), description, lines);
     }
 
     private JournalEntryLine debitLine(java.util.UUID accountId, BigDecimal amount, String description) {
