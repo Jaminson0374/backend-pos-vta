@@ -36,6 +36,7 @@ public class PosCheckoutUseCase {
     private final DianNumberingService numberingService;
     private final DiscountEngineService discountEngine;
     private final UserRepository userRepo;
+    private final AuthorizeDiscountUseCase authorizeDiscountUseCase;
 
     public PosCheckoutUseCase(
             SalesDocumentRepository documentRepo,
@@ -50,7 +51,8 @@ public class PosCheckoutUseCase {
             OptimisticConcurrencyExecutor concurrencyExecutor,
             DianNumberingService numberingService,
             DiscountEngineService discountEngine,
-            UserRepository userRepo
+            UserRepository userRepo,
+            AuthorizeDiscountUseCase authorizeDiscountUseCase
     ) {
         this.documentRepo = documentRepo;
         this.salePaymentRepo = salePaymentRepo;
@@ -65,6 +67,7 @@ public class PosCheckoutUseCase {
         this.numberingService = numberingService;
         this.discountEngine = discountEngine;
         this.userRepo = userRepo;
+        this.authorizeDiscountUseCase = authorizeDiscountUseCase;
     }
 
     /**
@@ -131,11 +134,20 @@ public class PosCheckoutUseCase {
 
         // 2c. Discount policy: a manual discount above the cashier ceiling or a total
         //     discount above the global ceiling requires an administrator authorization.
-        if (computed.discountTotal().signum() > 0) {
-            discountEngine.validateAuthorization(
-                    resolveRole(userId),
-                    discountEngine.manualDiscountPct(lineInputs),
-                    discountEngine.totalDiscountPct(lineInputs, computed.discountTotal()));
+        //     The admin approves out-of-band and hands the cashier a single-use token;
+        //     the checkout carries only that token id, never the admin credentials.
+        //     When no authorization is required the token (if any) is ignored.
+        UUID discountAuthorizedBy = null;
+        if (computed.discountTotal().signum() > 0
+                && discountEngine.requiresDiscountAuthorization(
+                        resolveRole(userId),
+                        discountEngine.manualDiscountPct(lineInputs),
+                        discountEngine.totalDiscountPct(lineInputs, computed.discountTotal()))) {
+            if (request.discountAuthorizationId() == null) {
+                throw new BusinessException("DISCOUNT_AUTHORIZATION_REQUIRED",
+                        "El descuento requiere autorización de un administrador");
+            }
+            discountAuthorizedBy = authorizeDiscountUseCase.consume(request.discountAuthorizationId());
         }
 
         // 3 & 4. Decrement stock using FEFO: pick batches by expiration date
@@ -241,7 +253,7 @@ public class PosCheckoutUseCase {
                 computed.documentDiscount(),
                 request.documentDiscountType(),
                 request.documentDiscountValue(),
-                null,   // discountAuthorizedBy — token validation lands in WU-27
+                discountAuthorizedBy,
                 request.discountReason()
         );
 

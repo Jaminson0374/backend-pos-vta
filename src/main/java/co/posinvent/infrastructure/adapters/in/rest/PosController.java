@@ -2,9 +2,12 @@ package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.DevolutionRequest;
 import co.posinvent.application.dto.DevolutionResponse;
+import co.posinvent.application.dto.DiscountAuthorizationRequest;
+import co.posinvent.application.dto.DiscountAuthorizationResponse;
 import co.posinvent.application.dto.ElectronicInvoiceResponse;
 import co.posinvent.application.dto.PageResponse;
 import co.posinvent.application.dto.ProductResponse;
+import co.posinvent.application.usecase.AuthorizeDiscountUseCase;
 import co.posinvent.application.usecase.CheckoutRequest;
 import co.posinvent.application.usecase.CheckoutResponse;
 import co.posinvent.application.usecase.ManageElectronicInvoiceUseCase;
@@ -34,17 +37,20 @@ public class PosController {
     private final ProductRepository productRepo;
     private final SalesDocumentRepository salesDocumentRepo;
     private final ManageElectronicInvoiceUseCase electronicInvoiceUseCase;
+    private final AuthorizeDiscountUseCase authorizeDiscountUseCase;
 
     public PosController(PosCheckoutUseCase checkoutUseCase,
                          PosDevolutionUseCase devolutionUseCase,
                          ProductRepository productRepo,
                          SalesDocumentRepository salesDocumentRepo,
-                         ManageElectronicInvoiceUseCase electronicInvoiceUseCase) {
+                         ManageElectronicInvoiceUseCase electronicInvoiceUseCase,
+                         AuthorizeDiscountUseCase authorizeDiscountUseCase) {
         this.checkoutUseCase = checkoutUseCase;
         this.devolutionUseCase = devolutionUseCase;
         this.productRepo = productRepo;
         this.salesDocumentRepo = salesDocumentRepo;
         this.electronicInvoiceUseCase = electronicInvoiceUseCase;
+        this.authorizeDiscountUseCase = authorizeDiscountUseCase;
     }
 
     @PostMapping("/checkout")
@@ -55,6 +61,22 @@ public class PosController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(checkoutUseCase.checkout(request, principal.userId()));
+    }
+
+    /**
+     * Issues a single-use discount authorization token. The cashier calls this with an
+     * administrator's credentials; the checkout later carries only the returned token id.
+     */
+    @PostMapping("/discount-authorizations")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
+    public ResponseEntity<DiscountAuthorizationResponse> authorizeDiscount(
+            @Valid @RequestBody DiscountAuthorizationRequest request,
+            @AuthenticationPrincipal PosUserDetails principal
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(authorizeDiscountUseCase.authorize(
+                        request.username(), request.password(),
+                        request.cashRegisterId(), principal.userId()));
     }
 
     @PostMapping("/devolutions")

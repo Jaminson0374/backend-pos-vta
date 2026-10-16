@@ -71,6 +71,9 @@ class PosControllerDianStatusTest {
     private ManageElectronicInvoiceUseCase electronicInvoiceUseCase;
 
     @MockitoBean
+    private co.posinvent.application.usecase.AuthorizeDiscountUseCase authorizeDiscountUseCase;
+
+    @MockitoBean
     private JwtService jwtService;
 
     @MockitoBean
