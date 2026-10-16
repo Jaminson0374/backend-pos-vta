@@ -27,7 +27,6 @@ import static org.mockito.Mockito.*;
 class PosCheckoutUseCaseTest {
 
     @Mock private SalesDocumentRepository documentRepo;
-    @Mock private SaleItemRepository itemRepo;
     @Mock private SalePaymentRepository salePaymentRepo;
     @Mock private StockRepository stockRepo;
     @Mock private ProductRepository productRepo;
@@ -38,6 +37,8 @@ class PosCheckoutUseCaseTest {
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private OptimisticConcurrencyExecutor concurrencyExecutor;
     @Mock private DianNumberingService numberingService;
+    @Mock private CompanyConfigRepository companyConfigRepo;
+    @Mock private UserRepository userRepo;
 
     private PosCheckoutUseCase useCase;
 
@@ -61,9 +62,10 @@ class PosCheckoutUseCaseTest {
                 ((Supplier<?>) inv.getArgument(0)).get());
 
         useCase = new PosCheckoutUseCase(
-                documentRepo, itemRepo, salePaymentRepo, stockRepo, productRepo,
+                documentRepo, salePaymentRepo, stockRepo, productRepo,
                 priceEngine, fefoPicker, recordMovement, costingService,
-                eventPublisher, concurrencyExecutor, numberingService
+                eventPublisher, concurrencyExecutor, numberingService,
+                new DiscountEngineService(productRepo, companyConfigRepo), userRepo
         );
 
         // Numbering is delegated to the active DIAN resolution service; its own
@@ -160,10 +162,6 @@ class PosCheckoutUseCaseTest {
                     doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
             );
         }).when(documentRepo).save(any(SalesDocument.class));
-
-        doReturn(new SaleItem(UUID.randomUUID(), null, PRODUCT_ID,
-                BigDecimal.ONE, null, null, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0, null))
-                .when(itemRepo).save(any(SaleItem.class));
 
         // ── Act ─────────────────────────────────────────────────────────
         var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID,
@@ -288,10 +286,6 @@ class PosCheckoutUseCaseTest {
                     doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
             );
         }).when(documentRepo).save(any(SalesDocument.class));
-
-        doReturn(new SaleItem(UUID.randomUUID(), null, PRODUCT_ID,
-                BigDecimal.ONE, null, null, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0, null))
-                .when(itemRepo).save(any(SaleItem.class));
 
         // ── Act ─────────────────────────────────────────────────────────
         var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID,

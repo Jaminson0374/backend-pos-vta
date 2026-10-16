@@ -47,4 +47,16 @@ public class SaleItemEntity {
 
     @Column(name = "batch_id")
     private UUID batchId;
+
+    @Column(name = "discount_type", nullable = false, length = 10)
+    private String discountType = "NONE";
+
+    @Column(name = "discount_value", nullable = false, precision = 19, scale = 2)
+    private BigDecimal discountValue = BigDecimal.ZERO;
+
+    @Column(name = "discount_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(name = "promotion_id")
+    private UUID promotionId;
 }

@@ -95,6 +95,24 @@ public class SalesDocumentEntity {
     @Column(length = 500)
     private String reason;
 
+    @Column(name = "discount_total", nullable = false, precision = 19, scale = 2)
+    private BigDecimal discountTotal = BigDecimal.ZERO;
+
+    @Column(name = "document_discount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal documentDiscount = BigDecimal.ZERO;
+
+    @Column(name = "document_discount_type", nullable = false, length = 10)
+    private String documentDiscountType = "NONE";
+
+    @Column(name = "document_discount_value", nullable = false, precision = 19, scale = 2)
+    private BigDecimal documentDiscountValue = BigDecimal.ZERO;
+
+    @Column(name = "discount_authorized_by")
+    private UUID discountAuthorizedBy;
+
+    @Column(name = "discount_reason", length = 255)
+    private String discountReason;
+
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("lineNumber ASC")
     private List<SaleItemEntity> items = new ArrayList<>();

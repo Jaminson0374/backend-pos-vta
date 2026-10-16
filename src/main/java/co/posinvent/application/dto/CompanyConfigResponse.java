@@ -42,7 +42,9 @@ public record CompanyConfigResponse(
     boolean autoGenerateJournalEntries,
     java.math.BigDecimal purchaseRetefuenteRate,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt
+    OffsetDateTime updatedAt,
+    java.math.BigDecimal maxDiscountPct,
+    java.math.BigDecimal cashierMaxDiscountPct
 ) {
     public static CompanyConfigResponse from(CompanyConfig c) {
         return new CompanyConfigResponse(
@@ -81,7 +83,9 @@ public record CompanyConfigResponse(
             c.autoGenerateJournalEntries(),
             c.purchaseRetefuenteRate(),
             c.createdAt(),
-            c.updatedAt()
+            c.updatedAt(),
+            c.maxDiscountPct(),
+            c.cashierMaxDiscountPct()
         );
     }
 }

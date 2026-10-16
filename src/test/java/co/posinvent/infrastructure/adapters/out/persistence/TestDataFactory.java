@@ -168,6 +168,8 @@ public final class TestDataFactory {
             item.setSubtotal(BigDecimal.ZERO);
             item.setLineNumber(lineNumber++);
             item.setBatchId(line.batchId());
+            item.setDiscountType(line.discountType());
+            item.setDiscountValue(line.discountValue());
             doc.getItems().add(item);
         }
 
@@ -176,7 +178,17 @@ public final class TestDataFactory {
     }
 
     /** A product/batch/quantity tuple used to seed a CONFIRMED order line. */
-    public record OrderLine(UUID productId, UUID batchId, BigDecimal quantity) {}
+    public record OrderLine(
+            UUID productId,
+            UUID batchId,
+            BigDecimal quantity,
+            String discountType,
+            BigDecimal discountValue
+    ) {
+        public OrderLine(UUID productId, UUID batchId, BigDecimal quantity) {
+            this(productId, batchId, quantity, "NONE", BigDecimal.ZERO);
+        }
+    }
 
     /**
      * Persists an ACTIVE DIAN resolution covering {@code [validFrom, validTo]} and the

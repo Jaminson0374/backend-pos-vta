@@ -11,8 +11,27 @@ import java.util.UUID;
 public record CheckoutRequest(
         @NotNull UUID orderId,
         @NotNull UUID cashRegisterId,
-        @Size(min = 1) List<PaymentLine> payments
+        @Size(min = 1) List<PaymentLine> payments,
+        String documentDiscountType,
+        BigDecimal documentDiscountValue,
+        String discountReason,
+        UUID discountAuthorizationId
 ) {
+
+    public CheckoutRequest {
+        if (documentDiscountType == null || documentDiscountType.isBlank()) documentDiscountType = "NONE";
+        if (documentDiscountValue == null) documentDiscountValue = BigDecimal.ZERO;
+    }
+
+    /** Backwards-compatible constructor for a checkout without a document-level discount. */
+    public CheckoutRequest(
+            UUID orderId,
+            UUID cashRegisterId,
+            List<PaymentLine> payments
+    ) {
+        this(orderId, cashRegisterId, payments, "NONE", BigDecimal.ZERO, null, null);
+    }
+
     public record PaymentLine(
             @NotBlank String method,
             @NotNull BigDecimal amount
