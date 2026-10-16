@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -54,7 +53,7 @@ public class AccountingEventListener {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // VENTA
+    // FACTURA EMITIDA (dispatch por tipo de documento)
     // ════════════════════════════════════════════════════════════════
 
     @EventListener
@@ -64,6 +63,30 @@ public class AccountingEventListener {
             return;
         }
 
+        // The event carries no document type, so the accounting treatment is decided from the
+        // persisted document: an INVOICE posts the sale entry; a CREDIT_NOTE posts the reversal
+        // entry that undoes it. Any other type is not accounted here.
+        var docOpt = salesDocumentRepo.findByIdWithItems(event.salesDocumentId());
+        if (docOpt.isEmpty()) {
+            log.warn("InvoiceIssuedEvent for unknown sales document {}; skipping journal entry",
+                    event.salesDocumentId());
+            return;
+        }
+        var doc = docOpt.get();
+
+        switch (doc.type()) {
+            case INVOICE -> postSaleEntry(event, doc);
+            case CREDIT_NOTE -> postCreditNoteReversal(event);
+            default -> log.debug("No accounting treatment for sales document type {} (id {}); skipping",
+                    doc.type(), event.salesDocumentId());
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VENTA (INVOICE)
+    // ════════════════════════════════════════════════════════════════
+
+    private void postSaleEntry(InvoiceIssuedEvent event, SalesDocument doc) {
         var lines = new ArrayList<JournalEntryLine>();
 
         // Resolve the default template for SALE module
@@ -111,10 +134,9 @@ public class AccountingEventListener {
             //    this sale's EXIT movements), never from the sale price. The POS sale
             //    movements are keyed by the source ORDER id, which the invoice carries in
             //    sourceDocumentId.
-            var doc = salesDocumentRepo.findByIdWithItems(event.salesDocumentId());
-            if (doc.isPresent() && doc.get().items() != null) {
-                var costByProduct = resolveCostByProduct(event, doc.get());
-                for (var item : doc.get().items()) {
+            if (doc.items() != null) {
+                var costByProduct = resolveCostByProduct(event, doc);
+                for (var item : doc.items()) {
                     var productTemplate = templateResolver.resolveForProduct(item.productId(), "SALE");
                     var effectiveEntries = productTemplate.isPresent()
                             ? productTemplate.get().entries()
@@ -175,6 +197,153 @@ public class AccountingEventListener {
 
         journalUseCase.createAuto("SALE", event.salesDocumentId(), LocalDate.now(),
                 "Factura de venta " + event.invoiceNumber(), lines);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // NOTA CRÉDITO (reversa de la venta)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the reversal entry for a credit note (POS devolution).
+     *
+     * <p>A credit note carries negative totals. Accounting it like a sale would produce negative
+     * journal lines and violate the {@code journal_entry_lines} CHECK ({@code debit >= 0},
+     * {@code credit >= 0}), aborting the whole devolution. Instead the reversal uses absolute
+     * magnitudes and crosses the nature of every sale line:</p>
+     * <ul>
+     *   <li>{@code SALE_RECEIVABLE} → credited {@code |total|} (undoes the sale debit),</li>
+     *   <li>{@code SALE_INCOME} → debited {@code |subtotal|},</li>
+     *   <li>each {@code SALE_TAX} → debited {@code |tax_rate|},</li>
+     *   <li>{@code SALE_COGS} / {@code SALE_INVENTORY_OUT} → swapped at the returned Kardex cost.</li>
+     * </ul>
+     */
+    private void postCreditNoteReversal(InvoiceIssuedEvent event) {
+        var lines = new ArrayList<JournalEntryLine>();
+
+        // Keep the same template resolution as the sale (default → product-specific).
+        var defaultTemplate = templateResolver.resolveDefault("SALE");
+
+        if (defaultTemplate.isPresent()) {
+            // 1. Aggregate entries (receivable, income) with the sale's nature crossed.
+            var taxEntries = new ArrayList<AccountingTemplateEntry>();
+            for (var entry : defaultTemplate.get().entries()) {
+                if ("SALE_TAX".equals(entry.eventType())) {
+                    taxEntries.add(entry);
+                    continue;
+                }
+                var account = pucRepo.findById(entry.accountId()).orElse(null);
+                if (account == null) continue;
+
+                switch (entry.eventType()) {
+                    case "SALE_RECEIVABLE" -> lines.add(creditLine(account.id(), event.total().abs(),
+                            "Reversa cartera NC " + event.invoiceNumber()));
+                    case "SALE_INCOME" -> lines.add(debitLine(account.id(), event.subtotal().abs(),
+                            "Reversa ingreso NC " + event.invoiceNumber()));
+                    case "SALE_COGS", "SALE_INVENTORY_OUT" -> {
+                        // Handled per-product below
+                    }
+                }
+            }
+
+            // Per-rate tax reversal — debited (the sale credited it), only for non-zero amounts.
+            for (var taxEntry : taxEntries) {
+                var account = pucRepo.findById(taxEntry.accountId()).orElse(null);
+                if (account == null) continue;
+
+                BigDecimal rateAmount = resolveTaxAmount(event, account).abs();
+                if (rateAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    int ratePercent = ratePercentFromCode(account.code());
+                    lines.add(debitLine(account.id(), rateAmount,
+                            "Reversa IVA " + ratePercent + "% NC " + event.invoiceNumber()));
+                }
+            }
+
+            // 2. Per-product cost reversal — the returned goods re-enter inventory, so the cost
+            //    pair is swapped (SALE_COGS credited, SALE_INVENTORY_OUT debited) at the real
+            //    returned cost from the Kardex. The devolution records those ENTRY movements
+            //    under "SALE" keyed by the credit note id.
+            var costByProduct = resolveReturnCostByProduct(event);
+            for (var costEntry : costByProduct.entrySet()) {
+                UUID productId = costEntry.getKey();
+                BigDecimal amount = costEntry.getValue();
+                if (amount == null || amount.compareTo(BigDecimal.ZERO) == 0) {
+                    log.warn("No Kardex return cost found for product {} on credit note {}; "
+                                    + "skipping cost reversal",
+                            productId, event.invoiceNumber());
+                    continue;
+                }
+
+                var productTemplate = templateResolver.resolveForProduct(productId, "SALE");
+                var effectiveEntries = productTemplate.isPresent()
+                        ? productTemplate.get().entries()
+                        : defaultTemplate.get().entries();
+
+                for (var entry : effectiveEntries) {
+                    if (!"SALE_COGS".equals(entry.eventType())
+                            && !"SALE_INVENTORY_OUT".equals(entry.eventType())) {
+                        continue;
+                    }
+                    var account = pucRepo.findById(entry.accountId()).orElse(null);
+                    if (account == null) continue;
+
+                    String desc = entry.eventType() + " reversa producto " + event.invoiceNumber();
+                    // Cross the nature the template declared for the sale.
+                    if (entry.isDebit()) {
+                        lines.add(creditLine(account.id(), amount, desc));
+                    } else {
+                        lines.add(debitLine(account.id(), amount, desc));
+                    }
+                }
+            }
+        } else {
+            // ── FALLBACK: hardcoded PUC accounts (backward compatibility) ──
+            var clientAcct = pucRepo.findByCode("1305").orElseThrow();
+            var revenueAcct = pucRepo.findByCode("4135").orElseThrow();
+
+            lines.add(creditLine(clientAcct.id(), event.total().abs(),
+                    "Reversa NC " + event.invoiceNumber()));
+            lines.add(debitLine(revenueAcct.id(), event.subtotal().abs(),
+                    "Reversa ingreso NC " + event.invoiceNumber()));
+
+            Map.of(
+                    5, "240805",
+                    19, "240815"
+            ).forEach((rate, code) -> {
+                var amount = switch (rate) {
+                    case 5 -> event.taxAmount5().abs();
+                    case 19 -> event.taxAmount19().abs();
+                    default -> BigDecimal.ZERO;
+                };
+                if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                    var acct = pucRepo.findByCode(code).orElseThrow();
+                    lines.add(debitLine(acct.id(), amount,
+                            "Reversa IVA " + rate + "% NC " + event.invoiceNumber()));
+                }
+            });
+        }
+
+        journalUseCase.createAuto("SALE", event.salesDocumentId(), LocalDate.now(),
+                "Nota crédito " + event.invoiceNumber(), lines);
+    }
+
+    /**
+     * Values the cost returned by a credit note from the Kardex: sums {@code quantity × unitCost}
+     * of the note's ENTRY movements (the goods physically re-entering inventory), grouped by
+     * product. The devolution records those movements under {@code "SALE"} keyed by the credit
+     * note id.
+     */
+    private Map<UUID, BigDecimal> resolveReturnCostByProduct(InvoiceIssuedEvent event) {
+        var costByProduct = new HashMap<UUID, BigDecimal>();
+        List<InventoryMovement> movements = kardexRepo.findByReference("SALE", event.salesDocumentId());
+        for (InventoryMovement movement : movements) {
+            if (movement.movementType() != MovementType.ENTRY) {
+                continue;
+            }
+            BigDecimal quantity = movement.quantity() != null ? movement.quantity() : BigDecimal.ZERO;
+            BigDecimal unitCost = movement.unitCost() != null ? movement.unitCost() : BigDecimal.ZERO;
+            costByProduct.merge(movement.productId(), quantity.multiply(unitCost).abs(), BigDecimal::add);
+        }
+        return costByProduct;
     }
 
     // ════════════════════════════════════════════════════════════════
