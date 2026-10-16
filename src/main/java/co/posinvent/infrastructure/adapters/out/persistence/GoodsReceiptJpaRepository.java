@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 interface GoodsReceiptJpaRepository extends JpaRepository<GoodsReceiptEntity, UUID> {
@@ -12,4 +13,6 @@ interface GoodsReceiptJpaRepository extends JpaRepository<GoodsReceiptEntity, UU
     Page<GoodsReceiptEntity> findByOcId(UUID ocId, Pageable pageable);
 
     List<GoodsReceiptEntity> findByOcId(UUID ocId);
+
+    Optional<GoodsReceiptEntity> findByIdempotencyKey(String idempotencyKey);
 }

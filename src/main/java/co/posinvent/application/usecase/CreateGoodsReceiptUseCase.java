@@ -6,10 +6,12 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.model.Batch.BatchStatus;
 import co.posinvent.domain.repository.*;
+import co.posinvent.domain.service.PurchaseOrderDomainService;
 import co.posinvent.domain.service.ReceiptDomainService;
 import co.posinvent.domain.service.ReceiptDomainService.ReceiptLineItemInput;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class CreateGoodsReceiptUseCase {
     private final ProductRepository productRepository;
     private final RecordMovementUseCase recordMovement;
     private final ReceiptDomainService domainService;
+    private final PurchaseOrderDomainService purchaseOrderDomainService;
     private final ApplicationEventPublisher eventPublisher;
 
     public CreateGoodsReceiptUseCase(
@@ -50,14 +53,37 @@ public class CreateGoodsReceiptUseCase {
         this.productRepository = productRepository;
         this.recordMovement = recordMovement;
         this.domainService = domainService;
+        this.purchaseOrderDomainService = new PurchaseOrderDomainService();
         this.eventPublisher = eventPublisher;
     }
 
     @Transactional
     public GoodsReceiptResponse process(GoodsReceiptRequest request, UUID operatorId) {
-        // 1. Fetch PurchaseOrder (must exist)
-        var oc = purchaseOrderRepository.findById(request.ocId())
+        // 0a. Idempotency fast path (C3/A8): a retried submission carrying a key that is already
+        //     registered returns the existing receipt untouched — no new stock, no OC change.
+        if (request.idempotencyKey() != null) {
+            var existing = goodsReceiptRepository.findByIdempotencyKey(request.idempotencyKey());
+            if (existing.isPresent()) {
+                return existingResponse(existing.get());
+            }
+        }
+
+        // 1. Fetch PurchaseOrder with a PESSIMISTIC_WRITE lock (must exist). Locking the OC row
+        //    serializes concurrent receipts of the same order, so the pending-quantity guard
+        //    below is always evaluated against fresh data and over-receipt is impossible.
+        var oc = purchaseOrderRepository.findByIdForUpdate(request.ocId())
                 .orElseThrow(() -> new ResourceNotFoundException("Orden de compra", request.ocId()));
+
+        // 1a. Re-check idempotency now that the OC lock is held: a concurrent retry that passed
+        //     the fast path may have committed while we waited for the lock. This runs before
+        //     validateOcProcessable so a duplicate still returns the existing receipt even if
+        //     the first receipt already moved the OC to RECEIVED.
+        if (request.idempotencyKey() != null) {
+            var existing = goodsReceiptRepository.findByIdempotencyKey(request.idempotencyKey());
+            if (existing.isPresent()) {
+                return existingResponse(existing.get());
+            }
+        }
 
         // 2. Validate OC is PENDING or PARTIAL
         domainService.validateOcProcessable(oc);
@@ -109,9 +135,21 @@ public class CreateGoodsReceiptUseCase {
                 null,
                 null,
                 receiptLineItems,
-                batchIds
+                batchIds,
+                request.idempotencyKey()
         );
-        goodsReceiptRepository.saveAndFlush(goodsReceipt);
+        try {
+            goodsReceiptRepository.saveAndFlush(goodsReceipt);
+        } catch (DataIntegrityViolationException e) {
+            // Lost a concurrent race on the same idempotency key (partial unique index
+            // uq_goods_receipts_idempotency_key). Return the winning receipt instead of failing.
+            if (request.idempotencyKey() != null) {
+                return goodsReceiptRepository.findByIdempotencyKey(request.idempotencyKey())
+                        .map(this::existingResponse)
+                        .orElseThrow(() -> e);
+            }
+            throw e;
+        }
 
         // 5b. Publish the accounting event (C6): the inventory is recognised at physical control.
         // Entry cost = Σ(receivedQty × actualCost), where actualCost is the real unit cost.
@@ -231,12 +269,14 @@ public class CreateGoodsReceiptUseCase {
                 })
                 .toList();
 
-        // 8. Update PurchaseOrder status
+        // 8. Update PurchaseOrder status through the validated state machine (A4).
         var allReceived = updatedOcLines.stream()
                 .allMatch(line -> line.receivedQty().compareTo(line.orderedQty()) >= 0);
         var newOcStatus = allReceived
                 ? PurchaseOrderStatus.RECEIVED
                 : PurchaseOrderStatus.PARTIAL;
+
+        purchaseOrderDomainService.validateTransition(oc.status(), newOcStatus);
 
         purchaseOrderRepository.save(new PurchaseOrder(
                 oc.id(),
@@ -260,5 +300,16 @@ public class CreateGoodsReceiptUseCase {
 
         // 9. Return response (batchIds collected during loop, deviations from domain service)
         return GoodsReceiptResponse.from(goodsReceipt, batchIds, expirationDates, deviations);
+    }
+
+    /**
+     * Builds the response for an already-registered receipt (idempotent replay), resolving the
+     * batch ids and expiration dates persisted against it. No stock, kardex or OC state is touched.
+     */
+    private GoodsReceiptResponse existingResponse(GoodsReceipt existing) {
+        var batches = batchRepository.findBySourceReceiptId(existing.id());
+        var batchIds = batches.stream().map(Batch::id).toList();
+        var expirationDates = batches.stream().map(Batch::expirationDate).toList();
+        return GoodsReceiptResponse.from(existing, batchIds, expirationDates, List.of());
     }
 }

@@ -14,6 +14,7 @@ public final class PurchaseOrderDomainService {
 
     private static final Set<Transition> ALLOWED_TRANSITIONS = Set.of(
             new Transition(PurchaseOrderStatus.PENDING, PurchaseOrderStatus.PARTIAL),
+            new Transition(PurchaseOrderStatus.PENDING, PurchaseOrderStatus.RECEIVED),
             new Transition(PurchaseOrderStatus.PENDING, PurchaseOrderStatus.CANCELLED),
             new Transition(PurchaseOrderStatus.PARTIAL, PurchaseOrderStatus.RECEIVED),
             new Transition(PurchaseOrderStatus.PARTIAL, PurchaseOrderStatus.CANCELLED)

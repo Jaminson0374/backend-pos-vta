@@ -16,7 +16,8 @@ public record GoodsReceipt(
         OffsetDateTime updatedAt,
         Long version,
         List<ReceiptLineItem> lines,
-        List<UUID> batchIds
+        List<UUID> batchIds,
+        String idempotencyKey
 ) {
     public GoodsReceipt {
         if (lines == null) lines = List.of();

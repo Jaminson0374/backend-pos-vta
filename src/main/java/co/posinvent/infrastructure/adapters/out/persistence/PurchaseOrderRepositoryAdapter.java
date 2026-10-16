@@ -38,6 +38,11 @@ class PurchaseOrderRepositoryAdapter implements PurchaseOrderRepository {
     }
 
     @Override
+    public Optional<PurchaseOrder> findByIdForUpdate(UUID id) {
+        return jpa.findByIdForUpdate(id).map(mapper::toDomain);
+    }
+
+    @Override
     public Page<PurchaseOrder> findAll(Pageable pageable) {
         return jpa.findAll(pageable).map(mapper::toDomain);
     }
