@@ -1,7 +1,9 @@
 package co.posinvent.application.usecase;
 
+import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.JournalEntry;
 import co.posinvent.domain.model.JournalEntryLine;
+import co.posinvent.domain.repository.CurrentUserProvider;
 import co.posinvent.domain.repository.JournalEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,8 +19,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -32,15 +36,19 @@ class CreateJournalEntryUseCaseTest {
     private static final String DATE_PART = ENTRY_DATE.format(DateTimeFormatter.BASIC_ISO_DATE);
     private static final UUID DEBIT_ACCOUNT = UUID.randomUUID();
     private static final UUID CREDIT_ACCOUNT = UUID.randomUUID();
+    private static final UUID USER_ID = UUID.randomUUID();
 
     @Mock private JournalEntryRepository repo;
+    @Mock private AccountingPeriodUseCase accountingPeriodUseCase;
+    @Mock private CurrentUserProvider currentUserProvider;
 
     private CreateJournalEntryUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new CreateJournalEntryUseCase(repo);
+        useCase = new CreateJournalEntryUseCase(repo, accountingPeriodUseCase, currentUserProvider);
         lenient().when(repo.save(any(JournalEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(currentUserProvider.currentUserId()).thenReturn(Optional.empty());
     }
 
     @Test
@@ -86,7 +94,7 @@ class CreateJournalEntryUseCaseTest {
     void createAuto_returnsExistingEntryWhenSourceWasAlreadyPosted() {
         UUID sourceId = UUID.randomUUID();
         var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000001",
-                ENTRY_DATE, "existing", "SALE", sourceId, null, balancedLines());
+                ENTRY_DATE, "existing", "SALE", sourceId, null, null, balancedLines());
         when(repo.findBySourceTypeAndSourceId("SALE", sourceId)).thenReturn(Optional.of(existing));
 
         JournalEntry result = useCase.createAuto("SALE", sourceId, ENTRY_DATE, "duplicate", balancedLines());
@@ -100,7 +108,7 @@ class CreateJournalEntryUseCaseTest {
     void createAuto_postsOnceForSameSourceAcrossTwoCalls() {
         UUID sourceId = UUID.randomUUID();
         var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000100",
-                ENTRY_DATE, "first", "SALE", sourceId, null, balancedLines());
+                ENTRY_DATE, "first", "SALE", sourceId, null, null, balancedLines());
         when(repo.nextEntrySequence()).thenReturn(100L);
         when(repo.findBySourceTypeAndSourceId("SALE", sourceId))
                 .thenReturn(Optional.empty())
@@ -138,6 +146,57 @@ class CreateJournalEntryUseCaseTest {
 
         verify(repo, times(2)).save(any(JournalEntry.class));
         verify(repo, never()).findBySourceTypeAndSourceId(anyString(), any());
+    }
+
+    @Test
+    void createManual_setsCreatedByFromAuthenticatedUser() {
+        when(repo.nextEntrySequence()).thenReturn(9L);
+        when(currentUserProvider.currentUserId()).thenReturn(Optional.of(USER_ID));
+
+        JournalEntry entry = useCase.createManual(ENTRY_DATE, "manual", balancedLines());
+
+        assertThat(entry.createdBy()).isEqualTo(USER_ID);
+        verify(accountingPeriodUseCase).assertOpen(ENTRY_DATE);
+    }
+
+    @Test
+    void createManual_rejectsEntryInClosedPeriod() {
+        doThrow(new BusinessException("ACCOUNTING_PERIOD_CLOSED", "El período contable 2026-03 está cerrado"))
+                .when(accountingPeriodUseCase).assertOpen(ENTRY_DATE);
+
+        assertThatThrownBy(() -> useCase.createManual(ENTRY_DATE, "closed", balancedLines()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo("ACCOUNTING_PERIOD_CLOSED");
+
+        verify(repo, never()).save(any(JournalEntry.class));
+        verify(repo, never()).nextEntrySequence();
+    }
+
+    @Test
+    void createAuto_rejectsNewEntryInClosedPeriod() {
+        UUID sourceId = UUID.randomUUID();
+        when(repo.findBySourceTypeAndSourceId("SALE", sourceId)).thenReturn(Optional.empty());
+        doThrow(new BusinessException("ACCOUNTING_PERIOD_CLOSED", "El período contable 2026-03 está cerrado"))
+                .when(accountingPeriodUseCase).assertOpen(ENTRY_DATE);
+
+        assertThatThrownBy(() -> useCase.createAuto("SALE", sourceId, ENTRY_DATE, "closed", balancedLines()))
+                .isInstanceOf(BusinessException.class);
+
+        verify(repo, never()).save(any(JournalEntry.class));
+    }
+
+    @Test
+    void createAuto_returnsExistingEntryWithoutCheckingPeriodOnRetry() {
+        UUID sourceId = UUID.randomUUID();
+        var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000001",
+                ENTRY_DATE, "existing", "SALE", sourceId, null, null, balancedLines());
+        when(repo.findBySourceTypeAndSourceId("SALE", sourceId)).thenReturn(Optional.of(existing));
+
+        JournalEntry result = useCase.createAuto("SALE", sourceId, ENTRY_DATE, "retry", balancedLines());
+
+        assertThat(result).isSameAs(existing);
+        verify(accountingPeriodUseCase, never()).assertOpen(any());
     }
 
     private List<JournalEntryLine> balancedLines() {
