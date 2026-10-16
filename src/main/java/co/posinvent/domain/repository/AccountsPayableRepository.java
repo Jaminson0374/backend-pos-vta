@@ -4,6 +4,7 @@ import co.posinvent.domain.model.AccountsPayable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -14,6 +15,15 @@ public interface AccountsPayableRepository {
     AccountsPayable save(AccountsPayable ap);
 
     Optional<AccountsPayable> findById(UUID id);
+
+    Optional<AccountsPayable> findByDocumentIdForUpdate(UUID documentId);
+
+    /**
+     * Derived supplier balance: the sum of the outstanding balance of every CxP row for the
+     * supplier. This is the single source of truth for what is owed to the supplier, replacing
+     * the static {@code third_parties.current_balance} field on the payable side.
+     */
+    BigDecimal sumOutstandingBySupplierId(UUID supplierId);
 
     Page<AccountsPayable> findBySupplierId(UUID supplierId, Pageable pageable);
 

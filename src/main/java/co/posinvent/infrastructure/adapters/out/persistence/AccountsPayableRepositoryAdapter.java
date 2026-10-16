@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -60,6 +61,16 @@ public class AccountsPayableRepositoryAdapter implements AccountsPayableReposito
     @Override
     public Optional<AccountsPayable> findByDocumentId(UUID documentId) {
         return jpa.findByDocumentId(documentId).map(mapper::toDomain);
+    }
+
+    @Override
+    public Optional<AccountsPayable> findByDocumentIdForUpdate(UUID documentId) {
+        return jpa.findByDocumentIdForUpdate(documentId).map(mapper::toDomain);
+    }
+
+    @Override
+    public BigDecimal sumOutstandingBySupplierId(UUID supplierId) {
+        return jpa.sumOutstandingBySupplierId(supplierId);
     }
 
     @Override

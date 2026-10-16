@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -65,6 +66,57 @@ public class AccountsPayableUseCase {
         );
         var saved = apRepo.save(ap);
 
+        return enrich(AccountsPayableResponse.from(saved));
+    }
+
+    // ── Apply Payment ──────────────────────────────────────────────────────
+
+    /**
+     * Applies a payment to the CxP of an invoice: adds to {@code paidAmount}, recomputes
+     * {@code outstanding = total - paid} (clamped at zero) and the resulting status. It is the
+     * single writer of the accounts payable and replaces the old static supplier balance writes.
+     *
+     * <p>The row is locked for the transaction so concurrent payments cannot lose an update. An
+     * amount greater than the current outstanding is rejected: this is the real overpayment guard
+     * (comparing against the remaining balance, not the raw invoice total).</p>
+     *
+     * @param invoiceId the supplier invoice whose CxP is being paid
+     * @param amount    the amount applied to this invoice
+     * @throws BusinessException when the amount is not positive or exceeds the outstanding balance
+     */
+    @Transactional
+    public AccountsPayableResponse applyPayment(UUID invoiceId, BigDecimal amount) {
+        var ap = apRepo.findByDocumentIdForUpdate(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("CxP para factura", invoiceId));
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("INVALID_PAYMENT_AMOUNT",
+                    "El monto aplicado a la CxP debe ser mayor a cero");
+        }
+        if (amount.compareTo(ap.outstanding()) > 0) {
+            throw new BusinessException("OVERPAYMENT",
+                    "El monto aplicado (" + amount + ") excede el saldo pendiente de la CxP ("
+                            + ap.outstanding() + ") de la factura " + invoiceId);
+        }
+
+        var newPaid = ap.paidAmount().add(amount);
+        var newOutstanding = AccountsPayable.computeOutstanding(ap.totalAmount(), newPaid)
+                .max(BigDecimal.ZERO);
+
+        var newStatus = newOutstanding.compareTo(BigDecimal.ZERO) == 0
+                ? AccountsPayable.ApStatus.PAID
+                : (ap.status() == AccountsPayable.ApStatus.OVERDUE
+                        ? AccountsPayable.ApStatus.OVERDUE
+                        : AccountsPayable.ApStatus.PARTIAL);
+
+        var updated = new AccountsPayable(
+                ap.id(), ap.supplierId(), ap.documentId(),
+                ap.debitCreditNoteId(),
+                ap.totalAmount(), newPaid, newOutstanding,
+                ap.dueDate(), newStatus,
+                ap.createdAt(), null
+        );
+        var saved = apRepo.save(updated);
         return enrich(AccountsPayableResponse.from(saved));
     }
 
@@ -162,6 +214,29 @@ public class AccountsPayableUseCase {
         var ap = apRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CxP", id));
         return enrich(AccountsPayableResponse.from(ap));
+    }
+
+    /** The CxP row backing an invoice, when it exists (reconciled invoices only). */
+    @Transactional(readOnly = true)
+    public Optional<AccountsPayableResponse> findByDocumentId(UUID documentId) {
+        return apRepo.findByDocumentId(documentId).map(AccountsPayableResponse::from);
+    }
+
+    /**
+     * Derived supplier balance: {@code SUM(outstanding)} over the supplier's CxP rows. This is the
+     * single source of truth for the payable side, replacing the static
+     * {@code third_parties.current_balance} field.
+     *
+     * <p>Known pending work (out of this WU's edit surface): the client/CxC side still uses
+     * {@code current_balance}, and {@code ThirdPartyUseCase} still exposes that static field for
+     * suppliers in its responses. Debit/credit notes ({@code ManageDebitCreditNoteUseCase}) also
+     * still write the static supplier balance. Those readers/writers must be migrated to this
+     * derived balance before the {@code current_balance} column can be dropped.</p>
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal supplierOutstanding(UUID supplierId) {
+        var sum = apRepo.sumOutstandingBySupplierId(supplierId);
+        return sum != null ? sum : BigDecimal.ZERO;
     }
 
     @Transactional(readOnly = true)

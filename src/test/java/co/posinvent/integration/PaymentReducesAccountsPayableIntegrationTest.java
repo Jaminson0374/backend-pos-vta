@@ -1,0 +1,168 @@
+package co.posinvent.integration;
+
+import co.posinvent.application.dto.PaymentRequest;
+import co.posinvent.application.dto.SupplierInvoiceRequest;
+import co.posinvent.application.usecase.AccountsPayableUseCase;
+import co.posinvent.application.usecase.PaymentUseCase;
+import co.posinvent.application.usecase.SupplierInvoiceUseCase;
+import co.posinvent.domain.exception.BusinessException;
+import co.posinvent.domain.model.AccountsPayable;
+import co.posinvent.domain.model.InvoiceStatus;
+import co.posinvent.domain.model.ThirdParty;
+import co.posinvent.domain.repository.AccountsPayableRepository;
+import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyEntity;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * Integration guard for Auditoría Compras hallazgo C2 (crítico) and A1.
+ *
+ * <p>C2: paying a supplier must update the AccountsPayable ({@code paidAmount}/{@code outstanding}/
+ * {@code status}) for every invoice referenced by the payment. Before this WU the payment only
+ * touched the shared static supplier balance, leaving the CxP stale.</p>
+ *
+ * <p>A1: the overpayment check compares the applied amount against the <em>remaining</em> balance
+ * (the CxP outstanding / total minus previous payments), not the raw invoice total.</p>
+ *
+ * <p>Deliberately NOT {@code @Transactional}: fixtures and the use cases commit their own
+ * transactions so the AFTER_COMMIT accounting listener runs exactly like in production.</p>
+ */
+class PaymentReducesAccountsPayableIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired private SupplierInvoiceUseCase supplierInvoiceUseCase;
+    @Autowired private PaymentUseCase paymentUseCase;
+    @Autowired private AccountsPayableUseCase accountsPayableUseCase;
+    @Autowired private AccountsPayableRepository accountsPayableRepository;
+
+    private UUID supplierId;
+
+    @BeforeEach
+    void setUp() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                supplierId = createSupplier());
+    }
+
+    @Test
+    void partialPaymentReducesOutstandingAndKeepsInvoiceReconciled() {
+        var invoiceId = reconciledInvoice(new BigDecimal("1000.00"));
+
+        var apBefore = accountsPayable(invoiceId);
+        assertThat(apBefore.outstanding()).isEqualByComparingTo("1000.00");
+        assertThat(apBefore.status()).isEqualTo(AccountsPayable.ApStatus.OPEN);
+
+        pay(invoiceId, "400.00");
+
+        var apAfter = accountsPayable(invoiceId);
+        assertThat(apAfter.paidAmount()).isEqualByComparingTo("400.00");
+        assertThat(apAfter.outstanding()).isEqualByComparingTo("600.00");
+        assertThat(apAfter.status()).isEqualTo(AccountsPayable.ApStatus.PARTIAL);
+        assertThat(invoiceStatus(invoiceId)).isEqualTo(InvoiceStatus.RECONCILED);
+
+        // Derived supplier balance is SUM(outstanding) of the active CxP rows.
+        assertThat(accountsPayableUseCase.supplierOutstanding(supplierId)).isEqualByComparingTo("600.00");
+    }
+
+    @Test
+    void fullPaymentClearsOutstandingAndMarksInvoicePaid() {
+        var invoiceId = reconciledInvoice(new BigDecimal("1000.00"));
+
+        pay(invoiceId, "1000.00");
+
+        var ap = accountsPayable(invoiceId);
+        assertThat(ap.outstanding()).isEqualByComparingTo("0.00");
+        assertThat(ap.paidAmount()).isEqualByComparingTo("1000.00");
+        assertThat(ap.status()).isEqualTo(AccountsPayable.ApStatus.PAID);
+        assertThat(invoiceStatus(invoiceId)).isEqualTo(InvoiceStatus.PAID);
+        assertThat(accountsPayableUseCase.supplierOutstanding(supplierId)).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void overpaymentBeyondRemainingBalanceIsRejectedAndLeavesStateUntouched() {
+        var invoiceId = reconciledInvoice(new BigDecimal("1000.00"));
+
+        pay(invoiceId, "600.00");
+
+        // The real A1 scenario: total is 1000, but only 400 remains outstanding.
+        assertThatThrownBy(() -> pay(invoiceId, "500.00"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo("OVERPAYMENT");
+
+        var ap = accountsPayable(invoiceId);
+        assertThat(ap.paidAmount()).isEqualByComparingTo("600.00");
+        assertThat(ap.outstanding()).isEqualByComparingTo("400.00");
+    }
+
+    @Test
+    void multiInvoicePaymentReducesBothAccountsPayable() {
+        var invoiceA = reconciledInvoice(new BigDecimal("600.00"));
+        var invoiceB = reconciledInvoice(new BigDecimal("400.00"));
+
+        paymentUseCase.create(new PaymentRequest(
+                supplierId, new BigDecimal("600.00"), LocalDate.now(), "TRANSFERENCIA",
+                "PAG-MULTI-" + UUID.randomUUID().toString().substring(0, 6), null,
+                List.of(
+                        new PaymentRequest.InvoicePaymentInput(invoiceA, new BigDecimal("300.00")),
+                        new PaymentRequest.InvoicePaymentInput(invoiceB, new BigDecimal("300.00")))),
+                TEST_USER_ID);
+
+        assertThat(accountsPayable(invoiceA).outstanding()).isEqualByComparingTo("300.00");
+        assertThat(accountsPayable(invoiceB).outstanding()).isEqualByComparingTo("100.00");
+        assertThat(accountsPayableUseCase.supplierOutstanding(supplierId)).isEqualByComparingTo("400.00");
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+
+    private UUID createSupplier() {
+        var supplier = new ThirdPartyEntity();
+        supplier.setNumIdentification("SUP-CXP-" + UUID.randomUUID().toString().substring(0, 8));
+        supplier.setName("Supplier CxP Payment");
+        supplier.setType(ThirdParty.ThirdPartyType.SUPPLIER);
+        supplier.setPersonType(ThirdParty.PersonType.JURIDICA);
+        supplier.setTaxRegime(ThirdParty.TaxRegime.ORDINARIO);
+        supplier.setTaxResponsibilities(List.of());
+        supplier.setActive(true);
+        supplier.setCreditLimit(BigDecimal.ZERO);
+        supplier.setCurrentBalance(BigDecimal.ZERO);
+        em.persist(supplier);
+        return supplier.getId();
+    }
+
+    private UUID reconciledInvoice(BigDecimal total) {
+        var created = supplierInvoiceUseCase.create(new SupplierInvoiceRequest(
+                supplierId,
+                "FAC-CXP-" + UUID.randomUUID().toString().substring(0, 8),
+                LocalDate.now(), LocalDate.now().plusDays(30),
+                total, BigDecimal.ZERO, BigDecimal.ZERO, total,
+                null, List.of()), TEST_USER_ID);
+        supplierInvoiceUseCase.reconcile(created.id());
+        return created.id();
+    }
+
+    private void pay(UUID invoiceId, String amount) {
+        paymentUseCase.create(new PaymentRequest(
+                supplierId, new BigDecimal(amount), LocalDate.now(), "TRANSFERENCIA",
+                "PAG-CXP-" + UUID.randomUUID().toString().substring(0, 6), null,
+                List.of(new PaymentRequest.InvoicePaymentInput(invoiceId, new BigDecimal(amount)))),
+                TEST_USER_ID);
+    }
+
+    private AccountsPayable accountsPayable(UUID invoiceId) {
+        return accountsPayableRepository.findByDocumentId(invoiceId).orElseThrow();
+    }
+
+    private InvoiceStatus invoiceStatus(UUID invoiceId) {
+        // getById maps the invoice inside its read-only transaction (the adapter lazily loads ocIds).
+        return supplierInvoiceUseCase.getById(invoiceId).status();
+    }
+}
