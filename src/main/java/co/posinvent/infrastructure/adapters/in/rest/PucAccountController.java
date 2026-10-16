@@ -22,24 +22,25 @@ public class PucAccountController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public List<PucAccountResponse> listAll(@RequestParam(required = false) Integer accountClass) {
         return accountClass != null ? useCase.listByClass(accountClass) : useCase.listAll();
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public PucAccountResponse getById(@PathVariable UUID id) {
         return useCase.getById(id);
     }
 
     @GetMapping("/tree")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public List<PucAccountResponse> tree(@RequestParam(required = false) String search) {
         return useCase.tree(search);
     }
 
     @GetMapping("/check-code")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public Map<String, Object> checkCode(@RequestParam String code) {
         boolean exists = useCase.existsByCode(code);
         return Map.of("code", code, "available", !exists);
