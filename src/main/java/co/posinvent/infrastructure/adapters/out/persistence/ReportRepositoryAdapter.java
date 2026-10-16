@@ -81,7 +81,8 @@ class ReportRepositoryAdapter implements ReportRepository {
                    + "COUNT(sd.id) as totalInvoices, "
                    + "COALESCE(SUM(sd.total_amount), 0) as totalRevenue, "
                    + "COALESCE(SUM(sd.total_net), 0) as totalNet, "
-                   + "COALESCE(SUM(sd.total_tax_0 + sd.total_tax_5 + sd.total_tax_19), 0) as totalTax "
+                   + "COALESCE(SUM(sd.total_tax_0 + sd.total_tax_5 + sd.total_tax_19), 0) as totalTax, "
+                   + "COALESCE(SUM(sd.discount_total), 0) as totalDiscount "
                    + "FROM sales_documents sd "
                    + "WHERE sd.type = 'INVOICE' AND sd.status = 'ISSUED' "
                    + "AND sd.created_at >= ? AND sd.created_at < ? "
@@ -96,7 +97,8 @@ class ReportRepositoryAdapter implements ReportRepository {
                 rs.getInt("totalInvoices"),
                 rs.getBigDecimal("totalRevenue"),
                 rs.getBigDecimal("totalNet"),
-                rs.getBigDecimal("totalTax")
+                rs.getBigDecimal("totalTax"),
+                rs.getBigDecimal("totalDiscount")
         ), tsFrom, tsTo);
     }
 

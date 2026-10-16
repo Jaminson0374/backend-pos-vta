@@ -7,5 +7,11 @@ public record SalesByPeriodRow(
         int totalInvoices,
         BigDecimal totalRevenue,
         BigDecimal totalNet,
-        BigDecimal totalTax
-) {}
+        BigDecimal totalTax,
+        BigDecimal totalDiscount
+) {
+
+    public SalesByPeriodRow {
+        if (totalDiscount == null) totalDiscount = BigDecimal.ZERO;
+    }
+}

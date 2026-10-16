@@ -405,7 +405,142 @@ class PosDevolutionUseCaseTest {
         assertThat(tpCaptor.getValue().currentBalance()).isEqualByComparingTo("9500.00");
     }
 
+    // ── Scenario 10: Discounted invoice → refund reverts the NET PAID ───────
+    //
+    // Regression target of WU-30: the old code refunded the LIST price
+    // (invoiceItem.unitPrice()), over-refunding any discounted sale. The credit
+    // note must instead revert the net actually paid, i.e. the line net minus its
+    // prorated share of the document discount.
+
+    @Test
+    void discountedInvoice_refundsNetPaidProportionally() {
+        // Invoice mirroring DiscountTotalsIntegrationTest:
+        //   EXENTO  gross 10,000 - 10% line discount (1,000) = 9,000 net-before-doc
+        //   IVA_19  gross 10,000 (2 x 5,000) - 500 line discount = 9,500 net-before-doc
+        //   netBeforeDoc = 18,500; document discount 10% = 1,850 prorated 900 / 950.
+        //   IVA_19 final base = 9,500 - 950 = 8,550 → tax 1,624.50
+        var exento = discountedInvoiceItem(
+                PRODUCT_A_ID, BigDecimal.ONE, new BigDecimal("10000.00"),
+                new BigDecimal("10000.00"), "EXENTO", new BigDecimal("0.00"),
+                new BigDecimal("0.00"), "PCT", new BigDecimal("10.00"),
+                new BigDecimal("1000.00"), 1);
+        var iva19 = discountedInvoiceItem(
+                PRODUCT_B_ID, new BigDecimal("2"), new BigDecimal("5000.00"),
+                new BigDecimal("10000.00"), "IVA_19", TAX_RATE_19,
+                new BigDecimal("1624.50"), "AMOUNT", new BigDecimal("500.00"),
+                new BigDecimal("500.00"), 2);
+        var invoice = discountedInvoice(List.of(exento, iva19), new BigDecimal("1850.00"));
+
+        when(documentRepo.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        when(documentRepo.findBySourceDocumentIdAndType(INVOICE_ID, SalesDocumentType.CREDIT_NOTE))
+                .thenReturn(List.of());
+        stubPersistence(PRODUCT_B_ID, new BigDecimal("50"));
+
+        // Return ONE of the two IVA_19 units → half of the net paid (8,550 / 2 = 4,275)
+        // and half of the tax (1,624.50 / 2 = 812.25). NOT 10,000 list price.
+        var request = new DevolutionRequest(INVOICE_ID,
+                List.of(item(PRODUCT_B_ID, BigDecimal.ONE)), "Devolución con descuento");
+
+        useCase.processDevolution(request, USER_ID);
+
+        var docCaptor = ArgumentCaptor.forClass(SalesDocument.class);
+        verify(documentRepo).save(docCaptor.capture());
+        var creditNote = docCaptor.getValue();
+        assertThat(creditNote.totalNet()).isEqualByComparingTo("-4275.00");
+        assertThat(creditNote.totalTax19()).isEqualByComparingTo("-812.25");
+        assertThat(creditNote.totalAmount()).isEqualByComparingTo("-5087.25");
+
+        var itemCaptor = ArgumentCaptor.forClass(SaleItem.class);
+        verify(itemRepo).save(itemCaptor.capture());
+        var creditItem = itemCaptor.getValue();
+        assertThat(creditItem.quantity()).isEqualByComparingTo("-1");
+        assertThat(creditItem.subtotal()).isEqualByComparingTo("-4275.00");
+        assertThat(creditItem.taxAmount()).isEqualByComparingTo("-812.25");
+        assertThat(creditItem.unitPrice()).isEqualByComparingTo("4275.00");
+        assertThat(creditItem.taxType()).isEqualTo("IVA_19");
+        assertThat(creditItem.discountType()).isEqualTo(SaleItem.DISCOUNT_NONE);
+    }
+
+    // ── Scenario 11: No discount → refund equals list price (regression) ────
+
+    @Test
+    void noDiscountInvoice_refundsListPriceProportionally() {
+        var invoice = document(SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED, false,
+                List.of(invoiceItem(PRODUCT_A_ID, QTY_5, PRICE_10000)));
+        when(documentRepo.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        when(documentRepo.findBySourceDocumentIdAndType(INVOICE_ID, SalesDocumentType.CREDIT_NOTE))
+                .thenReturn(List.of());
+        stubPersistence(PRODUCT_A_ID, new BigDecimal("50"));
+
+        // 2 of 5 units at 10,000 → 20,000 net + 3,800 IVA = 23,800.
+        var request = new DevolutionRequest(INVOICE_ID,
+                List.of(item(PRODUCT_A_ID, new BigDecimal("2"))), "Devolución sin descuento");
+
+        useCase.processDevolution(request, USER_ID);
+
+        var docCaptor = ArgumentCaptor.forClass(SalesDocument.class);
+        verify(documentRepo).save(docCaptor.capture());
+        var creditNote = docCaptor.getValue();
+        assertThat(creditNote.totalNet()).isEqualByComparingTo("-20000.00");
+        assertThat(creditNote.totalTax19()).isEqualByComparingTo("-3800.00");
+        assertThat(creditNote.totalAmount()).isEqualByComparingTo("-23800.00");
+
+        var itemCaptor = ArgumentCaptor.forClass(SaleItem.class);
+        verify(itemRepo).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().subtotal()).isEqualByComparingTo("-20000.00");
+        assertThat(itemCaptor.getValue().taxAmount()).isEqualByComparingTo("-3800.00");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    /** Stubs the persistence collaborators used by the full devolution flow. */
+    private UUID stubPersistence(UUID productId, BigDecimal onHand) {
+        var stock = new InventoryStock(
+                STOCK_ID, productId, BATCH_ID, WAREHOUSE_ID,
+                onHand, BigDecimal.ZERO, BigDecimal.ZERO,
+                OffsetDateTime.now(), OffsetDateTime.now());
+        when(stockRepo.findByProductBatchWarehouse(productId, BATCH_ID, WAREHOUSE_ID))
+                .thenReturn(Optional.of(stock));
+
+        var savedId = UUID.randomUUID();
+        doAnswer(inv -> {
+            var doc = inv.getArgument(0, SalesDocument.class);
+            return new SalesDocument(
+                    savedId, doc.type(), doc.status(), doc.documentNumber(),
+                    doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(),
+                    doc.sourceDocumentId(), doc.totalNet(), doc.totalTax0(), doc.totalTax5(),
+                    doc.totalTax19(), doc.totalAmount(),
+                    doc.createdBy(), doc.createdAt(), doc.updatedAt(),
+                    doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason());
+        }).when(documentRepo).save(any(SalesDocument.class));
+
+        when(stockRepo.save(any(InventoryStock.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(recordMovement.record(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(null);
+        when(itemRepo.save(any(SaleItem.class))).thenAnswer(inv -> inv.getArgument(0));
+        return savedId;
+    }
+
+    /** Invoice line carrying line/discount data; {@code subtotal} is the GROSS amount. */
+    private SaleItem discountedInvoiceItem(
+            UUID productId, BigDecimal quantity, BigDecimal unitPrice, BigDecimal subtotal,
+            String taxType, BigDecimal taxRate, BigDecimal taxAmount,
+            String discountType, BigDecimal discountValue, BigDecimal discountAmount, int lineNumber) {
+        return new SaleItem(
+                UUID.randomUUID(), INVOICE_ID, productId,
+                quantity, unitPrice, taxType, taxRate, taxAmount, subtotal,
+                lineNumber, BATCH_ID, discountType, discountValue, discountAmount, null);
+    }
+
+    /** Invoice document with a document-level discount. */
+    private SalesDocument discountedInvoice(List<SaleItem> items, BigDecimal documentDiscount) {
+        return new SalesDocument(
+                INVOICE_ID, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED, "DOC-001",
+                CLIENT_ID, WAREHOUSE_ID, null, null, null,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                USER_ID, null, null, items, null, false, null,
+                documentDiscount, documentDiscount, "PCT", new BigDecimal("10"), null, null);
+    }
 
     private DevolutionRequest.DevolutionItem item(UUID productId, BigDecimal quantity) {
         return new DevolutionRequest.DevolutionItem(productId, quantity);
