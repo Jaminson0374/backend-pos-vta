@@ -29,5 +29,10 @@ public interface PurchaseOrderRepository {
 
     Page<PurchaseOrder> search(String q, Pageable pageable);
 
-    Optional<PurchaseOrder> findFirstByDocumentNumberStartingWith(String prefix);
+    /**
+     * Returns the next value of the {@code purchase_order_number_seq} database sequence.
+     * {@code nextval} is atomic and non-transactional, so concurrent OC creations never
+     * receive the same sequence value.
+     */
+    long nextDocumentSequence();
 }

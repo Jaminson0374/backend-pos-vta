@@ -34,5 +34,6 @@ interface PurchaseOrderJpaRepository extends JpaRepository<PurchaseOrderEntity, 
         """)
     Page<PurchaseOrderEntity> search(@Param("q") String q, Pageable pageable);
 
-    Optional<PurchaseOrderEntity> findFirstByDocumentNumberStartingWithOrderByDocumentNumberDesc(String prefix);
+    @Query(value = "SELECT nextval('purchase_order_number_seq')", nativeQuery = true)
+    Long nextDocumentSequence();
 }
