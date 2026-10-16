@@ -7,7 +7,6 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.AccountsReceivableRepository;
 import co.posinvent.domain.repository.ProductRepository;
-import co.posinvent.domain.repository.SaleItemRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
@@ -34,7 +33,6 @@ import static org.mockito.Mockito.*;
 class PosDevolutionUseCaseTest {
 
     @Mock private SalesDocumentRepository documentRepo;
-    @Mock private SaleItemRepository itemRepo;
     @Mock private StockRepository stockRepo;
     @Mock private ProductRepository productRepo;
     @Mock private RecordMovementUseCase recordMovement;
@@ -64,7 +62,7 @@ class PosDevolutionUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new PosDevolutionUseCase(
-                documentRepo, itemRepo, stockRepo, productRepo,
+                documentRepo, stockRepo, productRepo,
                 recordMovement, arRepo, thirdPartyRepo, eventPublisher);
     }
 
@@ -230,9 +228,6 @@ class PosDevolutionUseCaseTest {
         when(recordMovement.record(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(null);
 
-        // Item save
-        when(itemRepo.save(any(SaleItem.class))).thenAnswer(inv -> inv.getArgument(0));
-
         var request = new DevolutionRequest(INVOICE_ID,
                 List.of(item(PRODUCT_A_ID, QTY_5)), "Devolución total");
 
@@ -254,11 +249,13 @@ class PosDevolutionUseCaseTest {
         assertThat(creditNote.totalAmount()).isEqualByComparingTo("-59500.00");
         assertThat(creditNote.reason()).isEqualTo("Devolución total");
 
-        // Verify item has negative quantity
-        var itemCaptor = ArgumentCaptor.forClass(SaleItem.class);
-        verify(itemRepo).save(itemCaptor.capture());
-        assertThat(itemCaptor.getValue().quantity()).isEqualByComparingTo("-5");
-        assertThat(itemCaptor.getValue().unitPrice()).isEqualByComparingTo("10000.00");
+        // Credit-note lines travel inside the document and are persisted once by the
+        // cascade; there is no separate item save. Negative quantity is preserved.
+        assertThat(creditNote.items()).hasSize(1);
+        var creditLine = creditNote.items().get(0);
+        assertThat(creditLine.quantity()).isEqualByComparingTo("-5");
+        assertThat(creditLine.unitPrice()).isEqualByComparingTo("10000.00");
+        assertThat(creditLine.batchId()).isEqualTo(BATCH_ID);
 
         // Verify stock restored: currentQuantity went from 50 → 55
         var stockCaptor = ArgumentCaptor.forClass(InventoryStock.class);
@@ -316,7 +313,6 @@ class PosDevolutionUseCaseTest {
         when(stockRepo.save(any(InventoryStock.class))).thenAnswer(inv -> inv.getArgument(0));
         when(recordMovement.record(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(null);
-        when(itemRepo.save(any(SaleItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Only devolve product D (qty=3), not product A
         var request = new DevolutionRequest(INVOICE_ID,
@@ -367,7 +363,6 @@ class PosDevolutionUseCaseTest {
         when(stockRepo.save(any(InventoryStock.class))).thenAnswer(inv -> inv.getArgument(0));
         when(recordMovement.record(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(null);
-        when(itemRepo.save(any(SaleItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // AR with outstanding = 59,500 (totalAmount=59500, paidAmount=0)
         var ar = new AccountsReceivable(
@@ -450,9 +445,7 @@ class PosDevolutionUseCaseTest {
         assertThat(creditNote.totalTax19()).isEqualByComparingTo("-812.25");
         assertThat(creditNote.totalAmount()).isEqualByComparingTo("-5087.25");
 
-        var itemCaptor = ArgumentCaptor.forClass(SaleItem.class);
-        verify(itemRepo).save(itemCaptor.capture());
-        var creditItem = itemCaptor.getValue();
+        var creditItem = creditNote.items().get(0);
         assertThat(creditItem.quantity()).isEqualByComparingTo("-1");
         assertThat(creditItem.subtotal()).isEqualByComparingTo("-4275.00");
         assertThat(creditItem.taxAmount()).isEqualByComparingTo("-812.25");
@@ -485,10 +478,9 @@ class PosDevolutionUseCaseTest {
         assertThat(creditNote.totalTax19()).isEqualByComparingTo("-3800.00");
         assertThat(creditNote.totalAmount()).isEqualByComparingTo("-23800.00");
 
-        var itemCaptor = ArgumentCaptor.forClass(SaleItem.class);
-        verify(itemRepo).save(itemCaptor.capture());
-        assertThat(itemCaptor.getValue().subtotal()).isEqualByComparingTo("-20000.00");
-        assertThat(itemCaptor.getValue().taxAmount()).isEqualByComparingTo("-3800.00");
+        var creditItem = creditNote.items().get(0);
+        assertThat(creditItem.subtotal()).isEqualByComparingTo("-20000.00");
+        assertThat(creditItem.taxAmount()).isEqualByComparingTo("-3800.00");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -517,7 +509,6 @@ class PosDevolutionUseCaseTest {
         when(stockRepo.save(any(InventoryStock.class))).thenAnswer(inv -> inv.getArgument(0));
         when(recordMovement.record(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(null);
-        when(itemRepo.save(any(SaleItem.class))).thenAnswer(inv -> inv.getArgument(0));
         return savedId;
     }
 

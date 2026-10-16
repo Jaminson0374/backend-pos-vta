@@ -7,7 +7,6 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.AccountsReceivableRepository;
 import co.posinvent.domain.repository.ProductRepository;
-import co.posinvent.domain.repository.SaleItemRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
@@ -31,7 +30,6 @@ public class PosDevolutionUseCase {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final SalesDocumentRepository documentRepo;
-    private final SaleItemRepository itemRepo;
     private final StockRepository stockRepo;
     private final ProductRepository productRepo;
     private final RecordMovementUseCase recordMovement;
@@ -41,7 +39,6 @@ public class PosDevolutionUseCase {
 
     public PosDevolutionUseCase(
             SalesDocumentRepository documentRepo,
-            SaleItemRepository itemRepo,
             StockRepository stockRepo,
             ProductRepository productRepo,
             RecordMovementUseCase recordMovement,
@@ -50,7 +47,6 @@ public class PosDevolutionUseCase {
             ApplicationEventPublisher eventPublisher
     ) {
         this.documentRepo = documentRepo;
-        this.itemRepo = itemRepo;
         this.stockRepo = stockRepo;
         this.productRepo = productRepo;
         this.recordMovement = recordMovement;
@@ -169,17 +165,11 @@ public class PosDevolutionUseCase {
                 request.reason()
         );
 
+        // The credit-note lines are persisted exactly once, by the document cascade:
+        // SalesDocumentMapper.toEntity maps items() and SalesDocumentRepositoryAdapter
+        // links each one to the saved document. No separate per-item save here, otherwise
+        // every line would be inserted twice (same defect fixed in PosCheckoutUseCase).
         var savedCreditNote = documentRepo.save(creditNote);
-
-        // Save items with the credit note id
-        for (var item : returnItems) {
-            itemRepo.save(new SaleItem(
-                    null, savedCreditNote.id(), item.productId(),
-                    item.quantity(), item.unitPrice(),
-                    item.taxType(), item.taxRate(), item.taxAmount(), item.subtotal(),
-                    item.lineNumber(), item.batchId()
-            ));
-        }
 
         // 5. Reverse inventory: for each item, increment stock and record RETURN movement
         for (var devItem : request.items()) {
