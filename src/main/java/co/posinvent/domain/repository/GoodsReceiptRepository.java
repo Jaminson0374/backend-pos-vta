@@ -4,6 +4,7 @@ import co.posinvent.domain.model.GoodsReceipt;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,4 +25,10 @@ public interface GoodsReceiptRepository {
     Page<GoodsReceipt> findAll(Pageable pageable);
 
     Page<GoodsReceipt> findByOcId(UUID ocId, Pageable pageable);
+
+    /**
+     * All receipts registered against a purchase order, unpaged. Used by the reconciliation guard
+     * to compute the total received value ({@code Σ receivedQty × actualCost}) of the invoice's OCs.
+     */
+    List<GoodsReceipt> findByOcId(UUID ocId);
 }
