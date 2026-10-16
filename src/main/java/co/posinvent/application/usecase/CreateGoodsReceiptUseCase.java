@@ -9,6 +9,7 @@ import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.ReceiptDomainService;
 import co.posinvent.domain.service.ReceiptDomainService.ReceiptLineItemInput;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,7 @@ public class CreateGoodsReceiptUseCase {
     private final ProductRepository productRepository;
     private final RecordMovementUseCase recordMovement;
     private final ReceiptDomainService domainService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CreateGoodsReceiptUseCase(
             PurchaseOrderRepository purchaseOrderRepository,
@@ -39,7 +41,8 @@ public class CreateGoodsReceiptUseCase {
             StockRepository stockRepository,
             ProductRepository productRepository,
             RecordMovementUseCase recordMovement,
-            ReceiptDomainService domainService
+            ReceiptDomainService domainService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.goodsReceiptRepository = goodsReceiptRepository;
@@ -48,6 +51,7 @@ public class CreateGoodsReceiptUseCase {
         this.productRepository = productRepository;
         this.recordMovement = recordMovement;
         this.domainService = domainService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -109,6 +113,19 @@ public class CreateGoodsReceiptUseCase {
                 batchIds
         );
         goodsReceiptRepository.saveAndFlush(goodsReceipt);
+
+        // 5b. Publish the accounting event (C6): the inventory is recognised at physical control.
+        // Entry cost = Σ(receivedQty × actualCost), where actualCost is the real unit cost.
+        var totalCost = receiptInputs.stream()
+                .map(input -> input.receivedQty().multiply(input.actualCost()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        eventPublisher.publishEvent(new GoodsReceiptAccountedEvent(
+                this,
+                receiptId,
+                receiptId.toString(),
+                totalCost,
+                receiptDate
+        ));
 
         // Build map of OC lines by productId for quick lookup
         var ocLineByProduct = oc.lines().stream()

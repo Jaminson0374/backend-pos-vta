@@ -2,12 +2,14 @@ package co.posinvent.application.service;
 
 import co.posinvent.application.usecase.CreateJournalEntryUseCase;
 import co.posinvent.domain.model.AccountingTemplateEntry;
+import co.posinvent.domain.model.GoodsReceiptAccountedEvent;
 import co.posinvent.domain.model.InventoryMovement;
 import co.posinvent.domain.model.InvoiceIssuedEvent;
 import co.posinvent.domain.model.JournalEntryLine;
 import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.model.PucAccount;
 import co.posinvent.domain.model.SalesDocument;
+import co.posinvent.domain.model.SupplierNoteAccountedEvent;
 import co.posinvent.domain.repository.CompanyConfigRepository;
 import co.posinvent.domain.repository.KardexRepository;
 import co.posinvent.domain.repository.PucAccountRepository;
@@ -33,6 +35,13 @@ import java.util.UUID;
 public class AccountingEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(AccountingEventListener.class);
+
+    /** Mercancía recibida no facturada — puente transitorio entre recepción y factura (WU-36b). */
+    private static final String BRIDGE_ACCOUNT_CODE = "220510";
+    /** Inventario de mercancías — reconocido una sola vez, en la recepción (WU-36b). */
+    private static final String INVENTORY_ACCOUNT_CODE = "1435";
+    /** Proveedores nacionales. */
+    private static final String PAYABLE_ACCOUNT_CODE = "2205";
 
     private final CreateJournalEntryUseCase journalUseCase;
     private final PucAccountRepository pucRepo;
@@ -443,6 +452,54 @@ public class AccountingEventListener {
     }
 
     // ════════════════════════════════════════════════════════════════
+    // RECEPCIÓN DE MERCANCÍA (C6, WU-36b)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the inventory recognition for a committed goods receipt (C6). Per NIIF the
+     * inventory is recognised when physical control is assumed, so the receipt debits
+     * inventory {@code 1435} and credits the bridge account {@code 220510} ("mercancía
+     * recibida no facturada"). The supplier invoice later debits that same bridge, so the
+     * inventory is recognised exactly once.
+     *
+     * <p>Best-effort: runs {@code AFTER_COMMIT} in its own transaction and swallows any
+     * accounting failure so the committed receipt is never rolled back.</p>
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onGoodsReceipt(GoodsReceiptAccountedEvent event) {
+        try {
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+            if (event.totalCost() == null || event.totalCost().compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("Goods receipt {} has no entry cost; skipping INVENTORY journal entry",
+                        event.voucherNumber());
+                return;
+            }
+
+            var inventoryAcct = resolveByCode(INVENTORY_ACCOUNT_CODE, "INVENTORY inventory");
+            var bridgeAcct = resolveByCode(BRIDGE_ACCOUNT_CODE, "INVENTORY bridge");
+            if (inventoryAcct == null || bridgeAcct == null) {
+                log.warn("Missing PUC account for goods receipt {}; skipping INVENTORY journal entry",
+                        event.voucherNumber());
+                return;
+            }
+
+            var lines = new ArrayList<JournalEntryLine>();
+            lines.add(debitLine(inventoryAcct.id(), event.totalCost(),
+                    "Recepción mercancía " + event.voucherNumber()));
+            lines.add(creditLine(bridgeAcct.id(), event.totalCost(),
+                    "Mercancía recibida no facturada " + event.voucherNumber()));
+            postEntryIfBalanced("INVENTORY", event.voucherId(), entryDate(event.entryDate()),
+                    "Recepción de mercancía " + event.voucherNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for goods receipt {}; the business operation is unaffected",
+                    event.voucherNumber(), ex);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
     // COMPRA
     // ════════════════════════════════════════════════════════════════
 
@@ -457,6 +514,18 @@ public class AccountingEventListener {
         }
     }
 
+    /**
+     * Posts the supplier invoice entry (C6 → invoice). The invoice no longer debits inventory:
+     * the debit goes to the bridge account {@code 220510} to reverse the temporary liability
+     * recognised by the receipt, keeping the inventory recognised exactly once.
+     *
+     * <p><b>Purchase price difference.</b> When the invoice subtotal differs from the receipt
+     * cost, that difference stays absorbed in the bridge account and is cleared by a periodic
+     * adjustment. {@code SupplierInvoice} only links to purchase orders ({@code ocIds}), not to a
+     * specific receipt, and several invoices may reference the same OC: summing all receipts per
+     * OC would overstate the difference and could double-clear the bridge, so no difference amount
+     * is posted here (the {@code 529515} adjustment account is available for the periodic entry).</p>
+     */
     private void postPurchaseEntry(co.posinvent.domain.model.PurchaseAccountedEvent event) {
         // Guard: skip if auto journal generation is disabled
         if (!isJournalGenerationEnabled()) {
@@ -473,8 +542,15 @@ public class AccountingEventListener {
                 if (account == null) continue;
 
                 switch (entry.eventType()) {
-                    case "PURCHASE_INVENTORY" -> lines.add(debitLine(account.id(), event.subtotal(),
-                            "Compra factura " + event.invoiceNumber()));
+                    case "PURCHASE_INVENTORY" -> {
+                        // WU-36b: the inventory was recognised at the receipt (C6). The invoice
+                        // clears the bridge liability instead of debiting inventory a second time.
+                        var bridge = resolveByCode(BRIDGE_ACCOUNT_CODE, "PURCHASE bridge");
+                        if (bridge != null) {
+                            lines.add(debitLine(bridge.id(), event.subtotal(),
+                                    "Compra factura " + event.invoiceNumber()));
+                        }
+                    }
                     case "PURCHASE_PAYABLE" -> lines.add(creditLine(account.id(), event.netPayable(),
                             "Proveedor factura " + event.invoiceNumber()));
                     case "PURCHASE_RETENTION" -> {
@@ -507,15 +583,15 @@ public class AccountingEventListener {
             }
         } else {
             // ── FALLBACK: hardcoded PUC accounts (backward compatibility) ──
-            var inventoryAcct = resolveByCode("1435", "PURCHASE inventory");
-            var supplierAcct = resolveByCode("2205", "PURCHASE payable");
-            if (inventoryAcct == null || supplierAcct == null) {
+            var bridgeAcct = resolveByCode(BRIDGE_ACCOUNT_CODE, "PURCHASE bridge");
+            var supplierAcct = resolveByCode(PAYABLE_ACCOUNT_CODE, "PURCHASE payable");
+            if (bridgeAcct == null || supplierAcct == null) {
                 log.warn("Missing PUC account for purchase {}; skipping PURCHASE journal entry",
                         event.invoiceNumber());
                 return;
             }
 
-            lines.add(debitLine(inventoryAcct.id(), event.subtotal(),
+            lines.add(debitLine(bridgeAcct.id(), event.subtotal(),
                     "Compra factura " + event.invoiceNumber()));
             lines.add(creditLine(supplierAcct.id(), event.netPayable(),
                     "Proveedor factura " + event.invoiceNumber()));
@@ -594,6 +670,66 @@ public class AccountingEventListener {
             }
         }
         return resolveByCode("2205", "PAYMENT payable");
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // NOTA DÉBITO / CRÉDITO DE PROVEEDOR (C5, WU-36b)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the accounting for a committed supplier debit/credit note (C5). The note adjusts
+     * what we owe against the bridge account:
+     *
+     * <ul>
+     *   <li>Credit note (the supplier credits us) → debit proveedores {@code 2205} /
+     *       credit puente {@code 220510}.</li>
+     *   <li>Debit note (the supplier charges us more) → debit puente {@code 220510} /
+     *       credit proveedores {@code 2205}.</li>
+     * </ul>
+     *
+     * <p>Best-effort: {@code AFTER_COMMIT} in its own transaction, dated with the note.</p>
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onSupplierNote(SupplierNoteAccountedEvent event) {
+        try {
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+
+            var amount = event.amount() != null ? event.amount().abs() : BigDecimal.ZERO;
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("Supplier note {} has no amount; skipping PURCHASE journal entry",
+                        event.noteNumber());
+                return;
+            }
+
+            var payableAcct = resolveByCode(PAYABLE_ACCOUNT_CODE, "PURCHASE payable");
+            var bridgeAcct = resolveByCode(BRIDGE_ACCOUNT_CODE, "PURCHASE bridge");
+            if (payableAcct == null || bridgeAcct == null) {
+                log.warn("Missing PUC account for supplier note {}; skipping PURCHASE journal entry",
+                        event.noteNumber());
+                return;
+            }
+
+            var lines = new ArrayList<JournalEntryLine>();
+            if (event.isDebitNote()) {
+                lines.add(debitLine(bridgeAcct.id(), amount,
+                        "Nota débito proveedor " + event.noteNumber()));
+                lines.add(creditLine(payableAcct.id(), amount,
+                        "Nota débito proveedor " + event.noteNumber()));
+            } else {
+                lines.add(debitLine(payableAcct.id(), amount,
+                        "Nota crédito proveedor " + event.noteNumber()));
+                lines.add(creditLine(bridgeAcct.id(), amount,
+                        "Nota crédito proveedor " + event.noteNumber()));
+            }
+            postEntryIfBalanced("PURCHASE", event.noteId(), entryDate(event.entryDate()),
+                    "Nota proveedor " + event.noteNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for supplier note {}; the business operation is unaffected",
+                    event.noteNumber(), ex);
+        }
     }
 
     // ════════════════════════════════════════════════════════════════
