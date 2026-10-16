@@ -40,6 +40,7 @@ public record CompanyConfigRequest(
     @Size(max = 255) String legalRepresentativeAddress,
     @Email @Size(max = 255) String legalRepresentativeEmail,
     java.math.BigDecimal purchaseRetefuenteRate,
+    java.math.BigDecimal purchaseIcaRate,
     Boolean autoGenerateJournalEntries,
     java.math.BigDecimal maxDiscountPct,
     java.math.BigDecimal cashierMaxDiscountPct

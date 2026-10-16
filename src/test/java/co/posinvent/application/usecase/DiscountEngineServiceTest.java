@@ -216,6 +216,6 @@ class DiscountEngineServiceTest {
                 1L, "Company", "NIT", null, null, null, null, null, null, false,
                 List.of(), List.of(), List.of(), null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null,
-                null, null, false, null, null, null, max, cashierMax);
+                null, null, false, null, null, null, null, max, cashierMax);
     }
 }

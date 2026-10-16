@@ -40,6 +40,7 @@ public record CompanyConfig(
     String legalRepresentativeEmail,
     boolean autoGenerateJournalEntries,
     java.math.BigDecimal purchaseRetefuenteRate,
+    java.math.BigDecimal purchaseIcaRate,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
     BigDecimal maxDiscountPct,
@@ -52,6 +53,7 @@ public record CompanyConfig(
     public CompanyConfig {
         if (maxDiscountPct == null) maxDiscountPct = DEFAULT_MAX_DISCOUNT_PCT;
         if (cashierMaxDiscountPct == null) cashierMaxDiscountPct = DEFAULT_CASHIER_MAX_DISCOUNT_PCT;
+        if (purchaseIcaRate == null) purchaseIcaRate = BigDecimal.ZERO;
     }
 
     /**
@@ -104,6 +106,7 @@ public record CompanyConfig(
                 legalRepresentativeIdentificationTypeId, legalRepresentativeDocumentNumber,
                 legalRepresentativeName, legalRepresentativePosition, legalRepresentativeAddress,
                 legalRepresentativeEmail, autoGenerateJournalEntries, purchaseRetefuenteRate,
+                BigDecimal.ZERO,
                 createdAt, updatedAt,
                 DEFAULT_MAX_DISCOUNT_PCT, DEFAULT_CASHIER_MAX_DISCOUNT_PCT);
     }

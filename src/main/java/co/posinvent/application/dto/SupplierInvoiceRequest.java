@@ -16,7 +16,9 @@ public record SupplierInvoiceRequest(
         LocalDate dueDate,
         @NotNull @DecimalMin("0") BigDecimal subtotal,
         @NotNull @DecimalMin("0") BigDecimal ivaTotal,
-        @NotNull @DecimalMin("0") BigDecimal retentionTotal,
+        // Optional manual override. When null the retention is computed data-driven from the
+        // active PurchaseRetentionConfig catalog (retefuente) plus company_config.purchase_ica_rate.
+        @DecimalMin("0") BigDecimal retentionTotal,
         @NotNull @DecimalMin("0") BigDecimal total,
         String notes,
         List<UUID> ocIds

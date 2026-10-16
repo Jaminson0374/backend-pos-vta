@@ -140,6 +140,9 @@ public class CompanyConfigEntity {
     @Column(name = "purchase_retefuente_rate", precision = 5, scale = 2)
     private java.math.BigDecimal purchaseRetefuenteRate = java.math.BigDecimal.ZERO;
 
+    @Column(name = "purchase_ica_rate", nullable = false, precision = 5, scale = 2)
+    private java.math.BigDecimal purchaseIcaRate = java.math.BigDecimal.ZERO;
+
     @Column(name = "max_discount_pct", nullable = false, precision = 5, scale = 2)
     private java.math.BigDecimal maxDiscountPct = new java.math.BigDecimal("30");
 
