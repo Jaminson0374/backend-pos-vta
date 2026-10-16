@@ -140,7 +140,6 @@ public class PosDevolutionUseCase {
                 totals.net(),
                 totals.tax0(),
                 totals.tax5(),
-                totals.tax8(),
                 totals.tax19(),
                 totals.total(),
                 userId,
@@ -259,11 +258,11 @@ public class PosDevolutionUseCase {
             }
         }
 
-        // 7. Publish event (credit note) with per-rate tax amounts
+        // 7. Publish event (credit note) with per-rate tax amounts (0/5/19).
         eventPublisher.publishEvent(new InvoiceIssuedEvent(this, savedCreditNote.id(), savedCreditNote.documentNumber(),
                 savedCreditNote.totalNet(),
                 savedCreditNote.totalTax0(), savedCreditNote.totalTax5(),
-                savedCreditNote.totalTax8(), savedCreditNote.totalTax19(),
+                savedCreditNote.totalTax19(),
                 savedCreditNote.totalAmount()));
 
         // 8. Build response
@@ -283,13 +282,12 @@ public class PosDevolutionUseCase {
 
     private record Totals(
             BigDecimal net, BigDecimal tax0, BigDecimal tax5,
-            BigDecimal tax8, BigDecimal tax19, BigDecimal total
+            BigDecimal tax19, BigDecimal total
     ) {}
 
     private Totals calculateTotals(List<SaleItem> items) {
         var tax0 = BigDecimal.ZERO.setScale(2);
         var tax5 = BigDecimal.ZERO.setScale(2);
-        var tax8 = BigDecimal.ZERO.setScale(2);
         var tax19 = BigDecimal.ZERO.setScale(2);
         var net = BigDecimal.ZERO.setScale(2);
 
@@ -301,14 +299,12 @@ public class PosDevolutionUseCase {
                 tax0 = tax0.add(amount);
             } else if (rate.compareTo(new BigDecimal("5")) == 0) {
                 tax5 = tax5.add(amount);
-            } else if (rate.compareTo(new BigDecimal("8")) == 0) {
-                tax8 = tax8.add(amount);
             } else {
                 tax19 = tax19.add(amount);
             }
         }
 
-        var total = net.add(tax0).add(tax5).add(tax8).add(tax19);
-        return new Totals(net, tax0, tax5, tax8, tax19, total);
+        var total = net.add(tax0).add(tax5).add(tax19);
+        return new Totals(net, tax0, tax5, tax19, total);
     }
 }

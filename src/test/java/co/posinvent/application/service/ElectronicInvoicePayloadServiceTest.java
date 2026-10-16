@@ -185,7 +185,7 @@ class ElectronicInvoicePayloadServiceTest {
                 DOC_ID, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED,
                 "FV-001", CLIENT_ID, null, null, null, null,
                 new BigDecimal("100000"), new BigDecimal("1000"), BigDecimal.ZERO,
-                null, new BigDecimal("19000"), new BigDecimal("120500"),
+                new BigDecimal("19000"), new BigDecimal("120500"),
                 null,
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),

@@ -97,7 +97,6 @@ public record Product(
 
         int ivaRate = switch (defaultString(taxType, DEFAULT_TAX_TYPE)) {
             case "IVA_5" -> 5;
-            case "IVA_8" -> 8;
             case "IVA_19" -> 19;
             default -> 0;
         };

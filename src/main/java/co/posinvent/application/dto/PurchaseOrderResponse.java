@@ -37,7 +37,6 @@ public record PurchaseOrderResponse(
     private static final Map<String, BigDecimal> TAX_RATES = Map.of(
             "EXENTO", BigDecimal.ZERO,
             "IVA_5", new BigDecimal("5"),
-            "IVA_8", new BigDecimal("8"),
             "IVA_19", new BigDecimal("19")
     );
 

@@ -80,7 +80,7 @@ class PosCheckoutUseCaseTest {
         var order = new SalesDocument(
                 ORDER_ID, SalesDocumentType.ORDER, SalesDocumentStatus.CONFIRMED,
                 "ORD-001", CLIENT_ID, WAREHOUSE_ID, null, null, null,
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, USER_ID,
                 OffsetDateTime.now(), OffsetDateTime.now(),
                 List.of(item), null, false, null
@@ -95,7 +95,7 @@ class PosCheckoutUseCaseTest {
             return Optional.of(new SalesDocument(
                     id, SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT,
                     "INV-001", CLIENT_ID, WAREHOUSE_ID, null, CASH_REGISTER_ID, ORDER_ID,
-                    new BigDecimal("400000"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    new BigDecimal("400000"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     new BigDecimal("400000"), USER_ID,
                     OffsetDateTime.now(), OffsetDateTime.now(),
                     List.of(), null, false, null
@@ -155,7 +155,7 @@ class PosCheckoutUseCaseTest {
             return new SalesDocument(
                     assignedId, doc.type(), doc.status(), doc.documentNumber(),
                     doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
-                    doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax8(), doc.totalTax19(),
+                    doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax19(),
                     doc.totalAmount(), doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                     doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
             );
@@ -220,7 +220,7 @@ class PosCheckoutUseCaseTest {
         var order = new SalesDocument(
                 ORDER_ID, SalesDocumentType.ORDER, SalesDocumentStatus.CONFIRMED,
                 "ORD-002", CLIENT_ID, WAREHOUSE_ID, null, null, null,
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, USER_ID,
                 OffsetDateTime.now(), OffsetDateTime.now(),
                 List.of(item), null, false, null
@@ -234,7 +234,7 @@ class PosCheckoutUseCaseTest {
             return Optional.of(new SalesDocument(
                     id, SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT,
                     "INV-002", CLIENT_ID, WAREHOUSE_ID, null, CASH_REGISTER_ID, ORDER_ID,
-                    new BigDecimal("400000"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    new BigDecimal("400000"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     new BigDecimal("400000"), USER_ID,
                     OffsetDateTime.now(), OffsetDateTime.now(),
                     List.of(), null, false, null
@@ -283,7 +283,7 @@ class PosCheckoutUseCaseTest {
             return new SalesDocument(
                     assignedId, doc.type(), doc.status(), doc.documentNumber(),
                     doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
-                    doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax8(), doc.totalTax19(),
+                    doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax19(),
                     doc.totalAmount(), doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                     doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
             );

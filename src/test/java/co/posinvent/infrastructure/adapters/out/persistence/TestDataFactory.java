@@ -131,6 +131,18 @@ public final class TestDataFactory {
     public static UUID createConfirmedOrder(EntityManager em, String documentNumber,
                                             UUID clientId, UUID warehouseId,
                                             UUID productId, UUID batchId, BigDecimal quantity) {
+        return createConfirmedOrder(em, documentNumber, clientId, warehouseId,
+                List.of(new OrderLine(productId, batchId, quantity)));
+    }
+
+    /**
+     * Persists a CONFIRMED ORDER document with one line per supplied {@link OrderLine},
+     * ready to be invoiced by the POS checkout. Used to exercise multiple tax rates in
+     * a single invoice.
+     */
+    public static UUID createConfirmedOrder(EntityManager em, String documentNumber,
+                                            UUID clientId, UUID warehouseId,
+                                            List<OrderLine> lines) {
         var doc = new SalesDocumentEntity();
         doc.setType(SalesDocumentType.ORDER);
         doc.setStatus(SalesDocumentStatus.CONFIRMED);
@@ -140,26 +152,31 @@ public final class TestDataFactory {
         doc.setTotalNet(BigDecimal.ZERO);
         doc.setTotalTax0(BigDecimal.ZERO);
         doc.setTotalTax5(BigDecimal.ZERO);
-        doc.setTotalTax8(BigDecimal.ZERO);
         doc.setTotalTax19(BigDecimal.ZERO);
         doc.setTotalAmount(BigDecimal.ZERO);
 
-        var item = new SaleItemEntity();
-        item.setDocument(doc);
-        item.setProductId(productId);
-        item.setQuantity(quantity);
-        item.setUnitPrice(BigDecimal.ZERO);
-        item.setTaxType("EXENTO");
-        item.setTaxRate(BigDecimal.ZERO);
-        item.setTaxAmount(BigDecimal.ZERO);
-        item.setSubtotal(BigDecimal.ZERO);
-        item.setLineNumber(1);
-        item.setBatchId(batchId);
-        doc.getItems().add(item);
+        int lineNumber = 1;
+        for (var line : lines) {
+            var item = new SaleItemEntity();
+            item.setDocument(doc);
+            item.setProductId(line.productId());
+            item.setQuantity(line.quantity());
+            item.setUnitPrice(BigDecimal.ZERO);
+            item.setTaxType("EXENTO");
+            item.setTaxRate(BigDecimal.ZERO);
+            item.setTaxAmount(BigDecimal.ZERO);
+            item.setSubtotal(BigDecimal.ZERO);
+            item.setLineNumber(lineNumber++);
+            item.setBatchId(line.batchId());
+            doc.getItems().add(item);
+        }
 
         em.persist(doc);
         return doc.getId();
     }
+
+    /** A product/batch/quantity tuple used to seed a CONFIRMED order line. */
+    public record OrderLine(UUID productId, UUID batchId, BigDecimal quantity) {}
 
     /**
      * Persists an ACTIVE DIAN resolution covering {@code [validFrom, validTo]} and the

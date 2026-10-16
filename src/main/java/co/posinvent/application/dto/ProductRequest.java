@@ -26,8 +26,8 @@ public record ProductRequest(
         @NotNull @DecimalMin("0") BigDecimal costPrice,
         @DecimalMin("0") @DecimalMax("100") BigDecimal profitMargin,
 
-        @Pattern(regexp = "EXENTO|IVA_5|IVA_8|IVA_19",
-                 message = "taxType debe ser EXENTO, IVA_5, IVA_8 o IVA_19")
+        @Pattern(regexp = "EXENTO|IVA_5|IVA_19",
+                 message = "taxType debe ser EXENTO, IVA_5 o IVA_19")
         String taxType,
 
         @Pattern(regexp = "PEPS|PROMEDIO_PONDERADO|ESTANDAR|IDENTIFICACION_ESPECIFICA|YIELD_COSTING",

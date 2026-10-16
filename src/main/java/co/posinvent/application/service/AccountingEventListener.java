@@ -134,12 +134,10 @@ public class AccountingEventListener {
             // Per-rate tax to sub-accounts (fallback without template)
             Map.of(
                     5, "240805",
-                    8, "240810",
                     19, "240815"
             ).forEach((rate, code) -> {
                 var amount = switch (rate) {
                     case 5 -> event.taxAmount5();
-                    case 8 -> event.taxAmount8();
                     case 19 -> event.taxAmount19();
                     default -> BigDecimal.ZERO;
                 };
@@ -303,7 +301,6 @@ public class AccountingEventListener {
     private BigDecimal resolveTaxAmount(InvoiceIssuedEvent event, PucAccount account) {
         return switch (account.code()) {
             case "240805" -> event.taxAmount5();
-            case "240810" -> event.taxAmount8();
             case "240815" -> event.taxAmount19();
             default -> event.taxAmount0();
         };
@@ -311,12 +308,11 @@ public class AccountingEventListener {
 
     /**
      * Extracts the tax rate percentage from a PUC account code suffix.
-     * 240805 → 5, 240810 → 8, 240815 → 19, fallback → 0.
+     * 240805 → 5, 240815 → 19, fallback → 0.
      */
     private int ratePercentFromCode(String code) {
         return switch (code) {
             case "240805" -> 5;
-            case "240810" -> 8;
             case "240815" -> 19;
             default -> 0;
         };

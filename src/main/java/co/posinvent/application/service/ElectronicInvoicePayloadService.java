@@ -35,7 +35,6 @@ public class ElectronicInvoicePayloadService {
     /** Tax rate keys used by the sales document totals, kept in deterministic order. */
     private static final String TAX_RATE_0 = "0";
     private static final String TAX_RATE_5 = "5";
-    private static final String TAX_RATE_8 = "8";
     private static final String TAX_RATE_19 = "19";
 
     /** DIAN fiscal responsibility code for "Regimen Simple de Tributacion". */
@@ -136,7 +135,7 @@ public class ElectronicInvoicePayloadService {
 
     /**
      * Maps the document totals by DIAN tax rate. Null or zero totals are omitted so the payload
-     * only carries taxes that actually apply; the insertion order stays 0, 5, 8, 19.
+     * only carries taxes that actually apply; the insertion order stays 0, 5, 19.
      */
     private Map<String, BigDecimal> resolveTaxTotals(SalesDocument document) {
         var totals = new LinkedHashMap<String, BigDecimal>();
@@ -145,7 +144,6 @@ public class ElectronicInvoicePayloadService {
         }
         putIfApplicable(totals, TAX_RATE_0, document.totalTax0());
         putIfApplicable(totals, TAX_RATE_5, document.totalTax5());
-        putIfApplicable(totals, TAX_RATE_8, document.totalTax8());
         putIfApplicable(totals, TAX_RATE_19, document.totalTax19());
         return totals;
     }

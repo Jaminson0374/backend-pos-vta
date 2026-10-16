@@ -81,7 +81,7 @@ class ReportRepositoryAdapter implements ReportRepository {
                    + "COUNT(sd.id) as totalInvoices, "
                    + "COALESCE(SUM(sd.total_amount), 0) as totalRevenue, "
                    + "COALESCE(SUM(sd.total_net), 0) as totalNet, "
-                   + "COALESCE(SUM(sd.total_tax_0 + sd.total_tax_5 + sd.total_tax_8 + sd.total_tax_19), 0) as totalTax "
+                   + "COALESCE(SUM(sd.total_tax_0 + sd.total_tax_5 + sd.total_tax_19), 0) as totalTax "
                    + "FROM sales_documents sd "
                    + "WHERE sd.type = 'INVOICE' AND sd.status = 'ISSUED' "
                    + "AND sd.created_at >= ? AND sd.created_at < ? "

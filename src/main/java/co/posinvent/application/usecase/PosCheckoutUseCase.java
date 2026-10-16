@@ -187,7 +187,6 @@ public class PosCheckoutUseCase {
                 totals.net(),
                 totals.tax0(),
                 totals.tax5(),
-                totals.tax8(),
                 totals.tax19(),
                 totals.total(),
                 userId,
@@ -225,7 +224,7 @@ public class PosCheckoutUseCase {
                 order.id(), order.type(), SalesDocumentStatus.INVOICED,
                 order.documentNumber(), order.clientId(), order.warehouseId(),
                 order.shiftId(), order.cashRegisterId(), order.sourceDocumentId(),
-                order.totalNet(), order.totalTax0(), order.totalTax5(), order.totalTax8(), order.totalTax19(),
+                order.totalNet(), order.totalTax0(), order.totalTax5(), order.totalTax19(),
                 order.totalAmount(), order.createdBy(), order.createdAt(), order.updatedAt(),
                 order.items(), order.dueDate(), order.isCreditSale(), order.reason()
         );
@@ -234,10 +233,10 @@ public class PosCheckoutUseCase {
         // 7. Calculate change
         var change = totalPaid.subtract(totals.total()).max(BigDecimal.ZERO);
 
-        // 8. Publish accounting + DIAN event with per-rate tax amounts
+        // 8. Publish accounting + DIAN event with per-rate tax amounts (0/5/19).
         eventPublisher.publishEvent(new InvoiceIssuedEvent(this, savedInvoice.id(), savedInvoice.documentNumber(),
                 totals.net(),
-                totals.tax0(), totals.tax5(), totals.tax8(), totals.tax19(),
+                totals.tax0(), totals.tax5(), totals.tax19(),
                 totals.total()));
 
         // 9. Return INVOICE
@@ -247,13 +246,12 @@ public class PosCheckoutUseCase {
 
     private record Totals(
             BigDecimal net, BigDecimal tax0, BigDecimal tax5,
-            BigDecimal tax8, BigDecimal tax19, BigDecimal total
+            BigDecimal tax19, BigDecimal total
     ) {}
 
     private Totals calculateTotals(List<SaleItem> items) {
         var tax0 = BigDecimal.ZERO.setScale(2);
         var tax5 = BigDecimal.ZERO.setScale(2);
-        var tax8 = BigDecimal.ZERO.setScale(2);
         var tax19 = BigDecimal.ZERO.setScale(2);
         var net = BigDecimal.ZERO.setScale(2);
 
@@ -265,14 +263,12 @@ public class PosCheckoutUseCase {
                 tax0 = tax0.add(amount);
             } else if (rate.compareTo(new BigDecimal("5")) == 0) {
                 tax5 = tax5.add(amount);
-            } else if (rate.compareTo(new BigDecimal("8")) == 0) {
-                tax8 = tax8.add(amount);
             } else {
                 tax19 = tax19.add(amount);
             }
         }
 
-        var total = net.add(tax0).add(tax5).add(tax8).add(tax19);
-        return new Totals(net, tax0, tax5, tax8, tax19, total);
+        var total = net.add(tax0).add(tax5).add(tax19);
+        return new Totals(net, tax0, tax5, tax19, total);
     }
 }
