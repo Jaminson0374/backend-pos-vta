@@ -10,8 +10,18 @@ import java.util.UUID;
 
 public record GoodsReceiptRequest(
         @NotNull UUID ocId,
-        @NotNull @NotEmpty @Valid List<ReceiptLine> lines
+        @NotNull @NotEmpty @Valid List<ReceiptLine> lines,
+        @Size(max = 100) String idempotencyKey
 ) {
+
+    /**
+     * Backwards-compatible constructor for callers that do not supply an idempotency key
+     * (the key is optional; without it the receipt is not deduplicated).
+     */
+    public GoodsReceiptRequest(UUID ocId, List<ReceiptLine> lines) {
+        this(ocId, lines, null);
+    }
+
     public record ReceiptLine(
             @NotNull UUID productId,
             @NotNull UUID warehouseId,

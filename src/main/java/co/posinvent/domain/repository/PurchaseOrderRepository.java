@@ -14,6 +14,13 @@ public interface PurchaseOrderRepository {
 
     Optional<PurchaseOrder> findById(UUID id);
 
+    /**
+     * Loads a purchase order acquiring a PESSIMISTIC_WRITE lock on its row, so concurrent
+     * goods receipts against the same OC are serialized and the pending-quantity guard is
+     * evaluated against fresh data (no over-receipt). Must be called inside a transaction.
+     */
+    Optional<PurchaseOrder> findByIdForUpdate(UUID id);
+
     Page<PurchaseOrder> findAll(Pageable pageable);
 
     Page<PurchaseOrder> findByStatus(PurchaseOrderStatus status, Pageable pageable);

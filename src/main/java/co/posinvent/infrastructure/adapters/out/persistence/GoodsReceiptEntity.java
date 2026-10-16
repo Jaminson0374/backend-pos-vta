@@ -45,6 +45,9 @@ public class GoodsReceiptEntity {
     @Version
     private Long version;
 
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
     @OneToMany(mappedBy = "goodsReceipt", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReceiptLineItemEntity> lines = new ArrayList<>();
 

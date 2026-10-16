@@ -52,6 +52,12 @@ class GoodsReceiptRepositoryAdapter implements GoodsReceiptRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<GoodsReceipt> findByIdempotencyKey(String idempotencyKey) {
+        return jpa.findByIdempotencyKey(idempotencyKey).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<GoodsReceipt> findAll(Pageable pageable) {
         return jpa.findAll(pageable).map(mapper::toDomain);
     }
