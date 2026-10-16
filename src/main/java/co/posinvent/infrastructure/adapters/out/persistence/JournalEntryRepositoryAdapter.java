@@ -32,6 +32,11 @@ class JournalEntryRepositoryAdapter implements JournalEntryRepository {
     }
 
     @Override
+    public Optional<JournalEntry> findBySourceTypeAndSourceId(String sourceType, UUID sourceId) {
+        return jpa.findBySourceTypeAndSourceId(sourceType, sourceId).map(mapper::toDomain);
+    }
+
+    @Override
     public long nextEntrySequence() {
         return jpa.nextEntrySequence();
     }
