@@ -22,6 +22,7 @@ public class JournalEntryEntity {
     @Column(name = "source_id") private UUID sourceId;
     @Column(name = "created_at", nullable = false) private OffsetDateTime createdAt;
     @Column(name = "created_by") private UUID createdBy;
+    @Column(name = "justification", length = 500) private String justification;
 
     @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<JournalEntryLineEntity> lines = new ArrayList<>();

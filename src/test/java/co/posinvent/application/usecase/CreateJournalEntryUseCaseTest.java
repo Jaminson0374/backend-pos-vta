@@ -55,8 +55,8 @@ class CreateJournalEntryUseCaseTest {
     void createManual_usesSequenceFromRepository() {
         when(repo.nextEntrySequence()).thenReturn(41L, 42L);
 
-        JournalEntry first = useCase.createManual(ENTRY_DATE, "first", balancedLines());
-        JournalEntry second = useCase.createManual(ENTRY_DATE, "second", balancedLines());
+        JournalEntry first = useCase.createManual(ENTRY_DATE, "first", "justificación de prueba", balancedLines());
+        JournalEntry second = useCase.createManual(ENTRY_DATE, "second", "justificación de prueba", balancedLines());
 
         assertThat(first.entryNumber()).isEqualTo("JE-" + DATE_PART + "-000041");
         assertThat(second.entryNumber()).isEqualTo("JE-" + DATE_PART + "-000042");
@@ -68,8 +68,8 @@ class CreateJournalEntryUseCaseTest {
     void createManual_producesDistinctNumbersAndKeepsShape() {
         when(repo.nextEntrySequence()).thenReturn(7L, 8L);
 
-        JournalEntry first = useCase.createManual(ENTRY_DATE, "first", balancedLines());
-        JournalEntry second = useCase.createManual(ENTRY_DATE, "second", balancedLines());
+        JournalEntry first = useCase.createManual(ENTRY_DATE, "first", "justificación de prueba", balancedLines());
+        JournalEntry second = useCase.createManual(ENTRY_DATE, "second", "justificación de prueba", balancedLines());
 
         assertThat(first.entryNumber()).isNotEqualTo(second.entryNumber());
         assertThat(first.entryNumber()).startsWith("JE-" + DATE_PART + "-");
@@ -94,7 +94,7 @@ class CreateJournalEntryUseCaseTest {
     void createAuto_returnsExistingEntryWhenSourceWasAlreadyPosted() {
         UUID sourceId = UUID.randomUUID();
         var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000001",
-                ENTRY_DATE, "existing", "SALE", sourceId, null, null, balancedLines());
+                ENTRY_DATE, "existing", "SALE", sourceId, null, null, null, balancedLines());
         when(repo.findBySourceTypeAndSourceId("SALE", sourceId)).thenReturn(Optional.of(existing));
 
         JournalEntry result = useCase.createAuto("SALE", sourceId, ENTRY_DATE, "duplicate", balancedLines());
@@ -108,7 +108,7 @@ class CreateJournalEntryUseCaseTest {
     void createAuto_postsOnceForSameSourceAcrossTwoCalls() {
         UUID sourceId = UUID.randomUUID();
         var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000100",
-                ENTRY_DATE, "first", "SALE", sourceId, null, null, balancedLines());
+                ENTRY_DATE, "first", "SALE", sourceId, null, null, null, balancedLines());
         when(repo.nextEntrySequence()).thenReturn(100L);
         when(repo.findBySourceTypeAndSourceId("SALE", sourceId))
                 .thenReturn(Optional.empty())
@@ -141,8 +141,8 @@ class CreateJournalEntryUseCaseTest {
     void createManual_isNeverGuardedBySource() {
         when(repo.nextEntrySequence()).thenReturn(1L, 2L);
 
-        useCase.createManual(ENTRY_DATE, "first", balancedLines());
-        useCase.createManual(ENTRY_DATE, "second", balancedLines());
+        useCase.createManual(ENTRY_DATE, "first", "justificación de prueba", balancedLines());
+        useCase.createManual(ENTRY_DATE, "second", "justificación de prueba", balancedLines());
 
         verify(repo, times(2)).save(any(JournalEntry.class));
         verify(repo, never()).findBySourceTypeAndSourceId(anyString(), any());
@@ -153,10 +153,31 @@ class CreateJournalEntryUseCaseTest {
         when(repo.nextEntrySequence()).thenReturn(9L);
         when(currentUserProvider.currentUserId()).thenReturn(Optional.of(USER_ID));
 
-        JournalEntry entry = useCase.createManual(ENTRY_DATE, "manual", balancedLines());
+        JournalEntry entry = useCase.createManual(ENTRY_DATE, "manual", "Ajuste de cierre", balancedLines());
 
         assertThat(entry.createdBy()).isEqualTo(USER_ID);
         verify(accountingPeriodUseCase).assertOpen(ENTRY_DATE);
+    }
+
+    @Test
+    void createManual_persistsJustificationAndSourceType() {
+        when(repo.nextEntrySequence()).thenReturn(11L);
+        when(currentUserProvider.currentUserId()).thenReturn(Optional.of(USER_ID));
+
+        JournalEntry entry = useCase.createManual(ENTRY_DATE, "manual", "Ajuste de cierre", balancedLines());
+
+        assertThat(entry.justification()).isEqualTo("Ajuste de cierre");
+        assertThat(entry.sourceType()).isEqualTo("MANUAL");
+        assertThat(entry.createdBy()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void createAuto_doesNotCarryJustification() {
+        when(repo.nextEntrySequence()).thenReturn(77L);
+
+        JournalEntry entry = useCase.createAuto("SALE", UUID.randomUUID(), ENTRY_DATE, "auto", balancedLines());
+
+        assertThat(entry.justification()).isNull();
     }
 
     @Test
@@ -164,7 +185,7 @@ class CreateJournalEntryUseCaseTest {
         doThrow(new BusinessException("ACCOUNTING_PERIOD_CLOSED", "El período contable 2026-03 está cerrado"))
                 .when(accountingPeriodUseCase).assertOpen(ENTRY_DATE);
 
-        assertThatThrownBy(() -> useCase.createManual(ENTRY_DATE, "closed", balancedLines()))
+        assertThatThrownBy(() -> useCase.createManual(ENTRY_DATE, "closed", "justificación de prueba", balancedLines()))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).getErrorCode())
                 .isEqualTo("ACCOUNTING_PERIOD_CLOSED");
@@ -190,7 +211,7 @@ class CreateJournalEntryUseCaseTest {
     void createAuto_returnsExistingEntryWithoutCheckingPeriodOnRetry() {
         UUID sourceId = UUID.randomUUID();
         var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000001",
-                ENTRY_DATE, "existing", "SALE", sourceId, null, null, balancedLines());
+                ENTRY_DATE, "existing", "SALE", sourceId, null, null, null, balancedLines());
         when(repo.findBySourceTypeAndSourceId("SALE", sourceId)).thenReturn(Optional.of(existing));
 
         JournalEntry result = useCase.createAuto("SALE", sourceId, ENTRY_DATE, "retry", balancedLines());

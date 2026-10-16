@@ -27,10 +27,16 @@ public class CreateJournalEntryUseCase {
         this.currentUserProvider = currentUserProvider;
     }
 
+    /**
+     * Posts a manual journal entry (A8). Manual posting is a deliberate human action, so the
+     * justification is mandatory and the author is captured through {@code created_by}
+     * (see WU-35); the entry is flagged with {@code source_type = MANUAL}.
+     */
     @Transactional
-    public JournalEntry createManual(LocalDate entryDate, String description, List<JournalEntryLine> lines) {
+    public JournalEntry createManual(LocalDate entryDate, String description, String justification,
+                                     List<JournalEntryLine> lines) {
         accountingPeriodUseCase.assertOpen(entryDate);
-        var entry = buildEntry(entryDate, description, "MANUAL", null, lines);
+        var entry = buildEntry(entryDate, description, "MANUAL", null, justification, lines);
         entry.validate();
         return repo.save(entry);
     }
@@ -61,7 +67,7 @@ public class CreateJournalEntryUseCase {
         // entry must not land in an explicitly CLOSED accounting period.
         accountingPeriodUseCase.assertOpen(entryDate);
 
-        var entry = buildEntry(entryDate, description, sourceType, sourceId, lines);
+        var entry = buildEntry(entryDate, description, sourceType, sourceId, null, lines);
         entry.validate();
         try {
             return repo.save(entry);
@@ -88,11 +94,11 @@ public class CreateJournalEntryUseCase {
     }
 
     private JournalEntry buildEntry(LocalDate date, String description, String sourceType, UUID sourceId,
-                                      List<JournalEntryLine> lines) {
+                                      String justification, List<JournalEntryLine> lines) {
         String datePart = date.format(DateTimeFormatter.BASIC_ISO_DATE);
         long seq = repo.nextEntrySequence();
         UUID createdBy = currentUserProvider.currentUserId().orElse(null);
         return new JournalEntry(null, "JE-" + datePart + "-" + String.format("%06d", seq), date, description,
-                sourceType, sourceId, null, createdBy, lines);
+                sourceType, sourceId, null, createdBy, justification, lines);
     }
 }

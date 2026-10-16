@@ -1,7 +1,9 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
+import co.posinvent.application.dto.ManualJournalEntryRequest;
 import co.posinvent.application.usecase.CreateJournalEntryUseCase;
 import co.posinvent.domain.model.JournalEntryLine;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,20 +21,15 @@ public class JournalEntryController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
-    public ResponseEntity<?> createManual(@RequestBody Map<String, Object> body) {
-        var entryDate = LocalDate.parse((String) body.get("entryDate"));
-        var description = (String) body.getOrDefault("description", "");
-
-        @SuppressWarnings("unchecked")
-        var linesRaw = (List<Map<String, Object>>) body.get("lines");
-        var lines = new ArrayList<JournalEntryLine>();
-        for (var l : linesRaw) {
-            var accountId = UUID.fromString((String) l.get("accountId"));
-            var debit = new BigDecimal(l.getOrDefault("debit", 0).toString());
-            var credit = new BigDecimal(l.getOrDefault("credit", 0).toString());
-            lines.add(new JournalEntryLine(null, null, accountId, debit, credit, (String) l.get("description")));
-        }
-        return ResponseEntity.ok(useCase.createManual(entryDate, description, lines));
+    public ResponseEntity<?> createManual(@Valid @RequestBody ManualJournalEntryRequest request) {
+        var lines = request.lines().stream()
+                .map(l -> new JournalEntryLine(null, null, l.accountId(),
+                        l.debit() != null ? l.debit() : BigDecimal.ZERO,
+                        l.credit() != null ? l.credit() : BigDecimal.ZERO,
+                        l.description()))
+                .toList();
+        return ResponseEntity.ok(
+                useCase.createManual(request.entryDate(), request.description(), request.justification(), lines));
     }
 
     @GetMapping
