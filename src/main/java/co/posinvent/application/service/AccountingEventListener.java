@@ -12,6 +12,7 @@ import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.model.ProductionAccountedEvent;
 import co.posinvent.domain.model.PucAccount;
 import co.posinvent.domain.model.SalesDocument;
+import co.posinvent.domain.model.ShiftClosedAccountedEvent;
 import co.posinvent.domain.model.SupplierNoteAccountedEvent;
 import co.posinvent.domain.repository.CompanyConfigRepository;
 import co.posinvent.domain.repository.KardexRepository;
@@ -52,6 +53,13 @@ public class AccountingEventListener {
      * the consumed-components cost (the conversion cost added by the production). Seeded by V126.
      */
     private static final String PRODUCTION_VARIANCE_ACCOUNT_CODE = "710595";
+
+    /** Gasto por faltante de caja al cerrar un turno con arqueo negativo (WU-36d). */
+    private static final String CASH_SHORTAGE_ACCOUNT_CODE = "529520";
+    /** Ingreso por sobrante de caja al cerrar un turno con arqueo positivo (WU-36d). */
+    private static final String CASH_SURPLUS_ACCOUNT_CODE = "429515";
+    /** Caja. */
+    private static final String CASH_ACCOUNT_CODE = "1105";
 
     private final CreateJournalEntryUseCase journalUseCase;
     private final PucAccountRepository pucRepo;
@@ -585,6 +593,83 @@ public class AccountingEventListener {
         } catch (Exception ex) {
             log.error("Accounting failed for production {}; the business operation is unaffected",
                     event.productionNumber(), ex);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // CIERRE DE TURNO / ARQUEO (WU-36d)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the arqueo adjustment for a closed shift (WU-36d). The event is only published when
+     * the cash count leaves a difference ({@code difference != 0}), so a perfect match posts
+     * nothing:
+     *
+     * <ul>
+     *   <li>Faltante ({@code difference > 0}, esperado &gt; contado) → debit FALTANTE DE CAJA
+     *       {@code 529520} / credit caja {@code 1105} for the absolute difference.</li>
+     *   <li>Sobrante ({@code difference < 0}, contado &gt; esperado) → debit caja {@code 1105} /
+     *       credit SOBRANTE DE CAJA {@code 429515} for the absolute difference.</li>
+     * </ul>
+     *
+     * <p>Always posted with positive magnitudes, dated with the shift's close date. Best-effort:
+     * runs {@code AFTER_COMMIT} in its own transaction and swallows any accounting failure so the
+     * already-committed shift close is never rolled back.</p>
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onShiftClose(ShiftClosedAccountedEvent event) {
+        try {
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+
+            var difference = event.difference() != null ? event.difference() : BigDecimal.ZERO;
+            if (difference.signum() == 0) {
+                log.warn("Shift {} closed with no arqueo difference; skipping SHIFT_CLOSE journal entry",
+                        event.shiftNumber());
+                return;
+            }
+
+            var cashAcct = resolveByCode(CASH_ACCOUNT_CODE, "SHIFT_CLOSE cash");
+            if (cashAcct == null) {
+                log.warn("Missing PUC cash account ({}) for shift {}; skipping SHIFT_CLOSE journal entry",
+                        CASH_ACCOUNT_CODE, event.shiftNumber());
+                return;
+            }
+
+            var magnitude = difference.abs();
+            var lines = new ArrayList<JournalEntryLine>();
+            if (difference.signum() > 0) {
+                // Faltante: esperado > contado → débito faltante / crédito caja.
+                var shortageAcct = resolveByCode(CASH_SHORTAGE_ACCOUNT_CODE, "SHIFT_CLOSE shortage");
+                if (shortageAcct == null) {
+                    log.warn("Missing PUC shortage account ({}) for shift {}; skipping SHIFT_CLOSE journal entry",
+                            CASH_SHORTAGE_ACCOUNT_CODE, event.shiftNumber());
+                    return;
+                }
+                lines.add(debitLine(shortageAcct.id(), magnitude,
+                        "Faltante de caja turno " + event.shiftNumber()));
+                lines.add(creditLine(cashAcct.id(), magnitude,
+                        "Ajuste caja faltante turno " + event.shiftNumber()));
+            } else {
+                // Sobrante: contado > esperado → débito caja / crédito sobrante.
+                var surplusAcct = resolveByCode(CASH_SURPLUS_ACCOUNT_CODE, "SHIFT_CLOSE surplus");
+                if (surplusAcct == null) {
+                    log.warn("Missing PUC surplus account ({}) for shift {}; skipping SHIFT_CLOSE journal entry",
+                            CASH_SURPLUS_ACCOUNT_CODE, event.shiftNumber());
+                    return;
+                }
+                lines.add(debitLine(cashAcct.id(), magnitude,
+                        "Ajuste caja sobrante turno " + event.shiftNumber()));
+                lines.add(creditLine(surplusAcct.id(), magnitude,
+                        "Sobrante de caja turno " + event.shiftNumber()));
+            }
+            postEntryIfBalanced("SHIFT_CLOSE", event.shiftId(), entryDate(event.entryDate()),
+                    "Ajuste de arqueo turno " + event.shiftNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for shift {}; the business operation is unaffected",
+                    event.shiftNumber(), ex);
         }
     }
 
