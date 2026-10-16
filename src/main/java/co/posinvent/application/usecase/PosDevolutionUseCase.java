@@ -83,6 +83,10 @@ public class PosDevolutionUseCase {
         }
 
         // 3. Validate each item exists in invoice with sufficient quantity
+        var invoiceLines = invoice.items();
+        // The document discount is prorated per invoice line with the same formula the checkout
+        // engine used, so a refund matches the amount actually charged (see DiscountEngineService).
+        var docShares = proratedDocumentShares(invoiceLines, invoice.documentDiscount());
         var totalReturned = BigDecimal.ZERO.setScale(2);
         var returnItems = new ArrayList<SaleItem>();
         int lineNumber = 1;
@@ -94,12 +98,13 @@ public class PosDevolutionUseCase {
                         "La cantidad a devolver debe ser mayor a cero para el producto " + devItem.productId());
             }
 
-            // Find matching item in invoice
-            var invoiceItem = invoice.items().stream()
-                    .filter(i -> i.productId().equals(devItem.productId()))
-                    .findFirst()
-                    .orElseThrow(() -> new BusinessException("DEV_ITEM_NOT_IN_INVOICE",
-                            "El producto " + devItem.productId() + " no está en la factura original"));
+            // Find matching item in invoice (first line wins for a duplicated product)
+            var lineIndex = indexOfProduct(invoiceLines, devItem.productId());
+            if (lineIndex < 0) {
+                throw new BusinessException("DEV_ITEM_NOT_IN_INVOICE",
+                        "El producto " + devItem.productId() + " no está en la factura original");
+            }
+            var invoiceItem = invoiceLines.get(lineIndex);
 
             if (qty.compareTo(invoiceItem.quantity()) > 0) {
                 throw new BusinessException("DEV_EXCESS_QTY",
@@ -107,20 +112,33 @@ public class PosDevolutionUseCase {
                         + invoiceItem.quantity() + ") para producto " + devItem.productId());
             }
 
-            var unitPrice = invoiceItem.unitPrice();
-            var subtotal = qty.multiply(unitPrice);
-            var taxAmount = subtotal.multiply(invoiceItem.taxRate())
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            // Refund the NET PAID, not the list price: the invoice line already reflects its line
+            // discount plus its prorated share of the document discount. Using unitPrice() here
+            // would over-refund every discounted sale.
+            var lineNetBeforeDoc = lineNetBeforeDoc(invoiceItem);
+            var docShare = docShares.get(lineIndex);
+            var lineNetPaid = lineNetBeforeDoc.subtract(docShare).max(BigDecimal.ZERO);
+            var lineTax = invoiceItem.taxAmount() != null ? invoiceItem.taxAmount() : BigDecimal.ZERO;
 
-            // Credit note items use negative quantities
+            // Proportional to the returned quantity (e.g. 1 of 2 units → 0.5).
+            var fraction = qty.divide(invoiceItem.quantity(), 6, RoundingMode.HALF_UP);
+            var refundNet = fraction.multiply(lineNetPaid).setScale(2, RoundingMode.HALF_UP);
+            var refundTax = fraction.multiply(lineTax).setScale(2, RoundingMode.HALF_UP);
+
+            // Effective unit net after discounts (informational; the line net is already net).
+            var unitPrice = refundNet.divide(qty, 2, RoundingMode.HALF_UP);
+
+            // Credit note items use negative quantities. Discount fields stay NONE/0: the credit
+            // line's subtotal IS the net paid, so carrying a discount would double-count it.
             var creditItem = new SaleItem(
                     null, null, devItem.productId(),
                     qty.negate(), unitPrice,
-                    invoiceItem.taxType(), invoiceItem.taxRate(), taxAmount.negate(), subtotal.negate(),
+                    invoiceItem.taxType(), invoiceItem.taxRate(), refundTax.negate(), refundNet.negate(),
                     lineNumber++, invoiceItem.batchId()
             );
             returnItems.add(creditItem);
-            totalReturned = totalReturned.add(subtotal);
+            // Net reversed (tax-excluded) drives the AR reduction below.
+            totalReturned = totalReturned.add(refundNet);
         }
 
         // 4. Create CREDIT_NOTE document
@@ -273,6 +291,57 @@ public class PosDevolutionUseCase {
                 request.items().size(),
                 arAdjustment
         );
+    }
+
+    /** Index of the first invoice line for a product, or {@code -1} when absent. */
+    private static int indexOfProduct(List<SaleItem> lines, UUID productId) {
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).productId().equals(productId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Line net before the document discount: gross subtotal minus the line discount (never negative). */
+    private static BigDecimal lineNetBeforeDoc(SaleItem item) {
+        var subtotal = item.subtotal() != null ? item.subtotal() : BigDecimal.ZERO;
+        var discount = item.discountAmount() != null ? item.discountAmount() : BigDecimal.ZERO;
+        return subtotal.subtract(discount).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Prorates the document discount across all invoice lines proportionally to each line net,
+     * pushing the rounding residue onto the last line so the shares add up to the document
+     * discount exactly. Mirrors {@code DiscountEngineService} / the checkout calculation, so a
+     * refund reverts the same amount that was charged.
+     *
+     * <p>Returns {@code 0} for every line when the document discount is zero or when the invoice
+     * has no discounted net.</p>
+     */
+    private static List<BigDecimal> proratedDocumentShares(List<SaleItem> lines, BigDecimal documentDiscount) {
+        var shares = new ArrayList<BigDecimal>(lines.size());
+        var total = BigDecimal.ZERO.setScale(2);
+        for (var line : lines) {
+            total = total.add(lineNetBeforeDoc(line));
+        }
+
+        var document = documentDiscount != null ? documentDiscount : BigDecimal.ZERO;
+        var allocated = BigDecimal.ZERO.setScale(2);
+        for (int i = 0; i < lines.size(); i++) {
+            BigDecimal share;
+            if (document.signum() == 0 || total.signum() == 0) {
+                share = BigDecimal.ZERO.setScale(2);
+            } else if (i == lines.size() - 1) {
+                share = document.subtract(allocated).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+            } else {
+                share = document.multiply(lineNetBeforeDoc(lines.get(i)))
+                        .divide(total, 2, RoundingMode.HALF_UP);
+                allocated = allocated.add(share);
+            }
+            shares.add(share);
+        }
+        return shares;
     }
 
     private String generateCreditNoteNumber() {
