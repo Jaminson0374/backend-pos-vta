@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -45,6 +46,7 @@ class FormulaProductionUseCaseTest {
     @Mock private CostingOrchestrator costingService;
     @Mock private ThirdPartyRepository thirdPartyRepo;
     @Mock private BatchRepository batchInventoryRepo;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     private FormulaProductionUseCase useCase;
 
@@ -61,7 +63,7 @@ class FormulaProductionUseCaseTest {
         useCase = new FormulaProductionUseCase(
                 formulaRepo, kardexRepo, recordMovementUseCase, batchRepo,
                 configRepo, productRepo, bomExploder, fefoPicker,
-                stockRepository, costingService, thirdPartyRepo, batchInventoryRepo
+                stockRepository, costingService, thirdPartyRepo, batchInventoryRepo, eventPublisher
         );
     }
 

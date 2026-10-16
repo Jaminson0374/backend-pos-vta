@@ -7,13 +7,16 @@ import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.Batch.BatchStatus;
 import co.posinvent.domain.model.InventoryStock;
 import co.posinvent.domain.model.MovementType;
+import co.posinvent.domain.model.DisposalAccountedEvent;
 import co.posinvent.domain.repository.BatchRepository;
 import co.posinvent.domain.repository.StockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -29,17 +32,20 @@ public class DisposeBatchUseCase implements DisposeBatchPort {
     private final StockRepository stockRepository;
     private final RecordMovementUseCase recordMovement;
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
+    private final ApplicationEventPublisher eventPublisher;
 
     public DisposeBatchUseCase(
             BatchRepository batchRepository,
             StockRepository stockRepository,
             RecordMovementUseCase recordMovement,
-            OptimisticConcurrencyExecutor concurrencyExecutor
+            OptimisticConcurrencyExecutor concurrencyExecutor,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.batchRepository = batchRepository;
         this.stockRepository = stockRepository;
         this.recordMovement = recordMovement;
         this.concurrencyExecutor = concurrencyExecutor;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -53,6 +59,7 @@ public class DisposeBatchUseCase implements DisposeBatchPort {
                 throw new BusinessException("BATCH_NO_STOCK", "El lote no tiene stock registrado");
             }
 
+            BigDecimal totalCost = BigDecimal.ZERO;
             for (var stock : stocks) {
                 if (stock.currentQuantity().compareTo(BigDecimal.ZERO) > 0) {
                     recordMovement.record(
@@ -68,6 +75,7 @@ public class DisposeBatchUseCase implements DisposeBatchPort {
                             BigDecimal.ZERO, stock.committedQuantity(), stock.unitCost(),
                             stock.createdAt(), null
                     ));
+                    totalCost = totalCost.add(stock.currentQuantity().multiply(stock.unitCost()));
                 }
             }
 
@@ -79,6 +87,10 @@ public class DisposeBatchUseCase implements DisposeBatchPort {
                     null, null, null,
                     batch.parentBatchId(), batch.batchType(), batch.unitOfMeasureId()
             ));
+
+            // Publish the accounting event (WU-36c): write off the whole batch at its stock cost.
+            eventPublisher.publishEvent(new DisposalAccountedEvent(
+                    this, batchId, "LOTE-" + batchId, totalCost, LocalDate.now()));
 
             log.info("Lote {} dispuesto por vencimiento (manual).", batchId);
             return null;

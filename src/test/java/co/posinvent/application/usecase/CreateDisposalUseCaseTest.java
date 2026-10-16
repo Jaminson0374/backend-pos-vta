@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -53,6 +54,9 @@ class CreateDisposalUseCaseTest {
     @Mock
     private OptimisticConcurrencyExecutor concurrencyExecutor;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private CreateDisposalUseCase useCase;
 
     private static final UUID PRODUCT_ID = UUID.randomUUID();
@@ -63,7 +67,7 @@ class CreateDisposalUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new CreateDisposalUseCase(
-                disposalRepo, stockRepo, productRepo, recordMovement, concurrencyExecutor);
+                disposalRepo, stockRepo, productRepo, recordMovement, concurrencyExecutor, eventPublisher);
         doAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get())
                 .when(concurrencyExecutor).execute(any());
     }

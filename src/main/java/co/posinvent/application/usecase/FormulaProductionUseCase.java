@@ -9,6 +9,7 @@ import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.BomExploder;
 import co.posinvent.domain.service.FefoPicker;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class FormulaProductionUseCase implements FormulaProductionPort {
     private final CostingOrchestrator costingService;
     private final ThirdPartyRepository thirdPartyRepo;
     private final BatchRepository batchInventoryRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
     public FormulaProductionUseCase(
             ProductFormulaRepository formulaRepo,
@@ -48,7 +50,8 @@ public class FormulaProductionUseCase implements FormulaProductionPort {
             StockRepository stockRepository,
             CostingOrchestrator costingService,
             ThirdPartyRepository thirdPartyRepo,
-            BatchRepository batchInventoryRepo) {
+            BatchRepository batchInventoryRepo,
+            ApplicationEventPublisher eventPublisher) {
         this.formulaRepo = formulaRepo;
         this.kardexRepo = kardexRepo;
         this.recordMovementUseCase = recordMovementUseCase;
@@ -61,6 +64,7 @@ public class FormulaProductionUseCase implements FormulaProductionPort {
         this.costingService = costingService;
         this.thirdPartyRepo = thirdPartyRepo;
         this.batchInventoryRepo = batchInventoryRepo;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
@@ -270,6 +274,13 @@ public class FormulaProductionUseCase implements FormulaProductionPort {
 
         // Step 8: Recalculate stock for finished product
         productRepo.recalculateTotalStock(request.formulaProductId());
+
+        // Publish the accounting event (WU-36c): finished goods enter inventory at totalCost while
+        // components leave it at mpdTotal (materials only); the difference is the conversion cost.
+        // Published inside this transaction so the AFTER_COMMIT listener posts once it is persisted.
+        eventPublisher.publishEvent(new ProductionAccountedEvent(
+                this, savedBatch.id(), savedBatch.id().toString(),
+                mpdTotal, totalCost, LocalDate.now()));
 
         return new ProduceResponse(
                 savedBatch.id(),

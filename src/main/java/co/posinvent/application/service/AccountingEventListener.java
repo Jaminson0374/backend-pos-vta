@@ -2,11 +2,14 @@ package co.posinvent.application.service;
 
 import co.posinvent.application.usecase.CreateJournalEntryUseCase;
 import co.posinvent.domain.model.AccountingTemplateEntry;
+import co.posinvent.domain.model.AdjustmentAppliedEvent;
+import co.posinvent.domain.model.DisposalAccountedEvent;
 import co.posinvent.domain.model.GoodsReceiptAccountedEvent;
 import co.posinvent.domain.model.InventoryMovement;
 import co.posinvent.domain.model.InvoiceIssuedEvent;
 import co.posinvent.domain.model.JournalEntryLine;
 import co.posinvent.domain.model.MovementType;
+import co.posinvent.domain.model.ProductionAccountedEvent;
 import co.posinvent.domain.model.PucAccount;
 import co.posinvent.domain.model.SalesDocument;
 import co.posinvent.domain.model.SupplierNoteAccountedEvent;
@@ -42,6 +45,13 @@ public class AccountingEventListener {
     private static final String INVENTORY_ACCOUNT_CODE = "1435";
     /** Proveedores nacionales. */
     private static final String PAYABLE_ACCOUNT_CODE = "2205";
+    /** Pérdida por inventario (decomisos, faltantes, ajustes negativos). */
+    private static final String LOSS_ACCOUNT_CODE = "5195";
+    /**
+     * Variación/costo de producción: absorbs the difference between the finished-goods cost and
+     * the consumed-components cost (the conversion cost added by the production). Seeded by V126.
+     */
+    private static final String PRODUCTION_VARIANCE_ACCOUNT_CODE = "710595";
 
     private final CreateJournalEntryUseCase journalUseCase;
     private final PucAccountRepository pucRepo;
@@ -415,15 +425,27 @@ public class AccountingEventListener {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // AJUSTE DE INVENTARIO (unchanged — out of scope)
+    // AJUSTE DE INVENTARIO (WU-36c: publisher added)
     // ════════════════════════════════════════════════════════════════
 
+    /**
+     * Posts the accounting for a committed inventory adjustment (WU-36c). A negative delta is a
+     * loss (debit pérdida {@code 5195} / credit inventario {@code 1435}); a positive delta is a
+     * surplus (debit inventario / credit pérdida). Always posted with positive magnitudes and
+     * dated with the adjustment itself.
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void onAdjustment(co.posinvent.domain.model.AdjustmentAppliedEvent event) {
+    public void onAdjustment(AdjustmentAppliedEvent event) {
         try {
-            var inventoryAcct = resolveByCode("1435", "INVENTORY inventory");
-            var lossAcct = resolveByCode("5195", "INVENTORY loss");
+            if (event.delta() == null || event.delta().compareTo(BigDecimal.ZERO) == 0) {
+                log.warn("Inventory adjustment '{}' has a zero delta; skipping INVENTORY journal entry",
+                        event.reason());
+                return;
+            }
+
+            var inventoryAcct = resolveByCode(INVENTORY_ACCOUNT_CODE, "INVENTORY inventory");
+            var lossAcct = resolveByCode(LOSS_ACCOUNT_CODE, "INVENTORY loss");
             if (inventoryAcct == null || lossAcct == null) {
                 log.warn("Missing PUC account for inventory adjustment '{}'; skipping INVENTORY journal entry",
                         event.reason());
@@ -443,11 +465,126 @@ public class AccountingEventListener {
                 lines.add(creditLine(lossAcct.id(), event.delta(),
                         "Ingreso sobrante " + event.reason()));
             }
-            postEntryIfBalanced("INVENTORY", event.adjustmentId(), LocalDate.now(),
+            postEntryIfBalanced("INVENTORY", event.adjustmentId(), entryDate(event.entryDate()),
                     "Ajuste inventario: " + event.reason(), lines);
         } catch (Exception ex) {
             log.error("Accounting failed for inventory adjustment '{}'; the business operation is unaffected",
                     event.reason(), ex);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // DECOMISO / DISPOSICIÓN DE INVENTARIO (WU-36c)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the accounting for a committed disposal/waste (WU-36c): the disposed inventory is
+     * written off at its Kardex/stock cost — debit pérdida {@code 5195} / credit inventario
+     * {@code 1435} — dated with the disposal. Skipped with a warning when the disposal carries no
+     * positive cost.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onDisposal(DisposalAccountedEvent event) {
+        try {
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+            var totalCost = event.totalCost() != null ? event.totalCost() : BigDecimal.ZERO;
+            if (totalCost.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("Disposal {} has no inventory cost; skipping INVENTORY journal entry",
+                        event.disposalNumber());
+                return;
+            }
+
+            var lossAcct = resolveByCode(LOSS_ACCOUNT_CODE, "INVENTORY loss");
+            var inventoryAcct = resolveByCode(INVENTORY_ACCOUNT_CODE, "INVENTORY inventory");
+            if (lossAcct == null || inventoryAcct == null) {
+                log.warn("Missing PUC account for disposal {}; skipping INVENTORY journal entry",
+                        event.disposalNumber());
+                return;
+            }
+
+            var lines = new ArrayList<JournalEntryLine>();
+            lines.add(debitLine(lossAcct.id(), totalCost,
+                    "Decomiso inventario " + event.disposalNumber()));
+            lines.add(creditLine(inventoryAcct.id(), totalCost,
+                    "Salida inventario decomiso " + event.disposalNumber()));
+            postEntryIfBalanced("INVENTORY", event.disposalId(), entryDate(event.entryDate()),
+                    "Decomiso de inventario " + event.disposalNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for disposal {}; the business operation is unaffected",
+                    event.disposalNumber(), ex);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // PRODUCCIÓN (WU-36c)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the accounting for a committed production (WU-36c): the finished goods enter inventory
+     * (debit {@code 1435}) at {@code outputCost} and the consumed components leave it (credit
+     * {@code 1435}) at {@code inputCost}. The difference (the conversion cost) is posted to the
+     * production variance/cost account. When no such account is configured the entry is skipped
+     * with a warning (documented limitation — see {@link #PRODUCTION_VARIANCE_ACCOUNT_CODE}).
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onProduction(ProductionAccountedEvent event) {
+        try {
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+            var inputCost = event.inputCost() != null ? event.inputCost() : BigDecimal.ZERO;
+            var outputCost = event.outputCost() != null ? event.outputCost() : BigDecimal.ZERO;
+            if (inputCost.compareTo(BigDecimal.ZERO) <= 0 && outputCost.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("Production {} has no cost; skipping PRODUCTION journal entry",
+                        event.productionNumber());
+                return;
+            }
+
+            var inventoryAcct = resolveByCode(INVENTORY_ACCOUNT_CODE, "PRODUCTION inventory");
+            if (inventoryAcct == null) {
+                log.warn("Missing PUC inventory account for production {}; skipping PRODUCTION journal entry",
+                        event.productionNumber());
+                return;
+            }
+
+            var difference = outputCost.subtract(inputCost);
+            PucAccount varianceAcct = null;
+            if (difference.compareTo(BigDecimal.ZERO) != 0) {
+                varianceAcct = resolveByCode(PRODUCTION_VARIANCE_ACCOUNT_CODE, "PRODUCTION variance");
+                if (varianceAcct == null) {
+                    log.warn("No production variance/cost account ({}) found; skipping PRODUCTION journal entry {}",
+                            PRODUCTION_VARIANCE_ACCOUNT_CODE, event.productionNumber());
+                    return;
+                }
+            }
+
+            var lines = new ArrayList<JournalEntryLine>();
+            if (outputCost.compareTo(BigDecimal.ZERO) > 0) {
+                lines.add(debitLine(inventoryAcct.id(), outputCost,
+                        "Producto terminado producción " + event.productionNumber()));
+            }
+            if (inputCost.compareTo(BigDecimal.ZERO) > 0) {
+                lines.add(creditLine(inventoryAcct.id(), inputCost,
+                        "Consumo componentes producción " + event.productionNumber()));
+            }
+            if (varianceAcct != null) {
+                if (difference.compareTo(BigDecimal.ZERO) > 0) {
+                    lines.add(creditLine(varianceAcct.id(), difference,
+                            "Variación costos producción " + event.productionNumber()));
+                } else {
+                    lines.add(debitLine(varianceAcct.id(), difference.abs(),
+                            "Variación costos producción " + event.productionNumber()));
+                }
+            }
+            postEntryIfBalanced("PRODUCTION", event.productionId(), entryDate(event.entryDate()),
+                    "Producción " + event.productionNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for production {}; the business operation is unaffected",
+                    event.productionNumber(), ex);
         }
     }
 
