@@ -4,15 +4,18 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.SalesDocument;
 import co.posinvent.domain.model.SalesDocumentType;
 import co.posinvent.domain.model.Shift;
+import co.posinvent.domain.model.ShiftClosedAccountedEvent;
 import co.posinvent.domain.model.ShiftStatus;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ShiftRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -23,14 +26,17 @@ public class CloseShiftUseCase {
 
     private final ShiftRepository shiftRepository;
     private final SalesDocumentRepository documentRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
     public CloseShiftUseCase(
             ShiftRepository shiftRepository,
-            SalesDocumentRepository documentRepo
+            SalesDocumentRepository documentRepo,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.shiftRepository = shiftRepository;
         this.documentRepo = documentRepo;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -89,6 +95,18 @@ public class CloseShiftUseCase {
                 zReport,
                 existing.createdAt()
         ));
+
+        // Publish the accounting event (WU-36d) only when the arqueo leaves a difference:
+        // the listener posts the faltante/sobrante adjustment against caja 1105. A perfect
+        // match posts nothing. Published inside this transaction so the
+        // @TransactionalEventListener(AFTER_COMMIT) fires only once the shift is persisted.
+        if (difference.signum() != 0) {
+            LocalDate entryDate = closed.closingTime() != null
+                    ? closed.closingTime().toLocalDate()
+                    : LocalDate.now();
+            eventPublisher.publishEvent(new ShiftClosedAccountedEvent(
+                    this, closed.id(), extractShortId(closed.id()), difference, entryDate));
+        }
 
         return ShiftResponse.from(closed);
     }
