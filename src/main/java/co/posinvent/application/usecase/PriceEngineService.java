@@ -14,7 +14,6 @@ import java.util.UUID;
 public class PriceEngineService {
 
     private static final BigDecimal TAX_19 = new BigDecimal("19");
-    private static final BigDecimal TAX_8 = new BigDecimal("8");
     private static final BigDecimal TAX_5 = new BigDecimal("5");
     private static final BigDecimal TAX_0 = BigDecimal.ZERO;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
@@ -72,7 +71,6 @@ public class PriceEngineService {
     private BigDecimal resolveTaxRate(String taxType) {
         return switch (taxType) {
             case "IVA_19" -> TAX_19;
-            case "IVA_8" -> TAX_8;
             case "IVA_5" -> TAX_5;
             default -> TAX_0;
         };

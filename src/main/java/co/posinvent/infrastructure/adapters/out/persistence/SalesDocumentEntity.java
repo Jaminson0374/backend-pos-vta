@@ -64,9 +64,6 @@ public class SalesDocumentEntity {
     @Column(name = "total_tax_5", nullable = false, precision = 19, scale = 2)
     private BigDecimal totalTax5;
 
-    @Column(name = "total_tax_8", nullable = false, precision = 19, scale = 2)
-    private BigDecimal totalTax8;
-
     @Column(name = "total_tax_19", nullable = false, precision = 19, scale = 2)
     private BigDecimal totalTax19;
 

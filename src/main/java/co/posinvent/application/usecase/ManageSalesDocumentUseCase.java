@@ -95,7 +95,6 @@ public class ManageSalesDocumentUseCase {
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
-                BigDecimal.ZERO,
                 userId,
                 null,
                 null,
@@ -139,7 +138,7 @@ public class ManageSalesDocumentUseCase {
                 doc.id(), doc.type(), target,
                 doc.documentNumber(), doc.clientId(), doc.warehouseId(),
                 doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
-                doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax8(), doc.totalTax19(),
+                doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax19(),
                 doc.totalAmount(), doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                 doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
         );
@@ -500,7 +499,6 @@ public class ManageSalesDocumentUseCase {
     private BigDecimal resolveTaxRate(String taxType) {
         return switch (taxType) {
             case "IVA_5" -> BigDecimal.valueOf(5);
-            case "IVA_8" -> BigDecimal.valueOf(8);
             case "IVA_19" -> BigDecimal.valueOf(19);
             default -> BigDecimal.ZERO;
         };
@@ -516,7 +514,6 @@ public class ManageSalesDocumentUseCase {
         var net = BigDecimal.ZERO.setScale(2);
         var tax0 = BigDecimal.ZERO.setScale(2);
         var tax5 = BigDecimal.ZERO.setScale(2);
-        var tax8 = BigDecimal.ZERO.setScale(2);
         var tax19 = BigDecimal.ZERO.setScale(2);
 
         for (var item : items) {
@@ -527,14 +524,12 @@ public class ManageSalesDocumentUseCase {
                 tax0 = tax0.add(amount);
             } else if (rate.compareTo(new BigDecimal("5")) == 0) {
                 tax5 = tax5.add(amount);
-            } else if (rate.compareTo(new BigDecimal("8")) == 0) {
-                tax8 = tax8.add(amount);
             } else {
                 tax19 = tax19.add(amount);
             }
         }
 
-        var total = net.add(tax0).add(tax5).add(tax8).add(tax19);
+        var total = net.add(tax0).add(tax5).add(tax19);
 
         var doc = documentRepo.findById(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Documento de venta", documentId));
@@ -543,7 +538,7 @@ public class ManageSalesDocumentUseCase {
                 doc.id(), doc.type(), doc.status(),
                 doc.documentNumber(), doc.clientId(), doc.warehouseId(),
                 doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
-                net, tax0, tax5, tax8, tax19, total,
+                net, tax0, tax5, tax19, total,
                 doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                 doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
         );
@@ -581,7 +576,7 @@ public class ManageSalesDocumentUseCase {
                             r.id(), r.type(), r.status(), r.documentNumber(),
                             r.clientId(), tp.name(),
                             r.warehouseId(), r.shiftId(), r.cashRegisterId(), r.sourceDocumentId(),
-                            r.totalNet(), r.totalTax0(), r.totalTax5(), r.totalTax8(), r.totalTax19(),
+                            r.totalNet(), r.totalTax0(), r.totalTax5(), r.totalTax19(),
                             r.totalAmount(), r.createdBy(), r.createdAt(), r.updatedAt(),
                             r.items(), r.dueDate(), r.isCreditSale()
                     ))

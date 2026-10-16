@@ -217,7 +217,7 @@ class PosDevolutionUseCaseTest {
                     savedId, doc.type(), doc.status(), doc.documentNumber(),
                     doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(),
                     doc.sourceDocumentId(), doc.totalNet(), doc.totalTax0(), doc.totalTax5(),
-                    doc.totalTax8(), doc.totalTax19(), doc.totalAmount(),
+                    doc.totalTax19(), doc.totalAmount(),
                     doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                     doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason());
         }).when(documentRepo).save(any(SalesDocument.class));
@@ -308,7 +308,7 @@ class PosDevolutionUseCaseTest {
                     savedId, doc.type(), doc.status(), doc.documentNumber(),
                     doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(),
                     doc.sourceDocumentId(), doc.totalNet(), doc.totalTax0(), doc.totalTax5(),
-                    doc.totalTax8(), doc.totalTax19(), doc.totalAmount(),
+                    doc.totalTax19(), doc.totalAmount(),
                     doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                     doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason());
         }).when(documentRepo).save(any(SalesDocument.class));
@@ -359,7 +359,7 @@ class PosDevolutionUseCaseTest {
                     savedId, doc.type(), doc.status(), doc.documentNumber(),
                     doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(),
                     doc.sourceDocumentId(), doc.totalNet(), doc.totalTax0(), doc.totalTax5(),
-                    doc.totalTax8(), doc.totalTax19(), doc.totalAmount(),
+                    doc.totalTax19(), doc.totalAmount(),
                     doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                     doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason());
         }).when(documentRepo).save(any(SalesDocument.class));
@@ -416,7 +416,7 @@ class PosDevolutionUseCaseTest {
         return new SalesDocument(
                 INVOICE_ID, type, status, "DOC-001",
                 CLIENT_ID, WAREHOUSE_ID, null, null, null,
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 USER_ID, null, null,
                 items, null, isCreditSale, null);

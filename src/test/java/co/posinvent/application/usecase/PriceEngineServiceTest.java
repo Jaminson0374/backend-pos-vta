@@ -133,7 +133,7 @@ class PriceEngineServiceTest {
     }
 
     @Test
-    void resolvePrice_iva8_taxRate() {
+    void resolvePrice_retiredIva8_fallsBackToZero() {
         when(thirdPartyRepo.findById(CLIENT_ID))
                 .thenReturn(Optional.of(clientWithoutPriceList()));
         when(customPriceRepo.findByClientIdAndProductId(CLIENT_ID, PRODUCT_ID))
@@ -143,8 +143,10 @@ class PriceEngineServiceTest {
 
         var result = service.resolvePrice(PRODUCT_ID, CLIENT_ID);
 
-        assertThat(result.taxRate()).isEqualByComparingTo("8");
-        assertThat(result.taxAmount()).isEqualByComparingTo("800.00");
+        // IVA 8% (Impoconsumo) is retired: an unknown/legacy rate must not be
+        // taxed, so it falls back to 0% instead of silently charging 8%.
+        assertThat(result.taxRate()).isEqualByComparingTo("0");
+        assertThat(result.taxAmount()).isEqualByComparingTo("0.00");
     }
 
     @Test

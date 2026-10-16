@@ -122,7 +122,7 @@ class CloseShiftUseCaseTest {
         return new SalesDocument(
                 UUID.randomUUID(), type, SalesDocumentStatus.ISSUED,
                 "DOC", null, null, SHIFT_ID, CASH_REGISTER_ID, null,
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 total, USER_ID, OffsetDateTime.now(), OffsetDateTime.now(),
                 List.of(), null, false, null);
     }

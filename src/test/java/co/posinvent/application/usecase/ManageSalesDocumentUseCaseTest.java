@@ -153,7 +153,7 @@ class ManageSalesDocumentUseCaseTest {
     private SalesDocument order(SalesDocumentStatus status, List<SaleItem> items) {
         return new SalesDocument(DOC_ID, SalesDocumentType.ORDER, status, "ORD-001",
                 CLIENT_ID, WAREHOUSE_ID, null, null, null,
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, USER_ID, OffsetDateTime.now(), OffsetDateTime.now(),
                 items, null, false, null);
     }

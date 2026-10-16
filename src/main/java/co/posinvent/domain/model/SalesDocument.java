@@ -19,7 +19,6 @@ public record SalesDocument(
         BigDecimal totalNet,
         BigDecimal totalTax0,
         BigDecimal totalTax5,
-        BigDecimal totalTax8,
         BigDecimal totalTax19,
         BigDecimal totalAmount,
         UUID createdBy,
