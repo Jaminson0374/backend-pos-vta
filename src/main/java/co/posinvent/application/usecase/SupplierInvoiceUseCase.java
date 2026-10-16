@@ -176,9 +176,9 @@ public class SupplierInvoiceUseCase {
                 saved.issueDate()       // accounting date = document date
         ));
 
-        // Update ThirdParty.currentBalance
-        updateSupplierBalance(supplier, request.total());
-
+        // No static supplier balance write here: the payable side is sourced exclusively from the
+        // AccountsPayable opened on reconcile (hallazgo C2 double-book fix). The invoice total is
+        // not added to third_parties.current_balance anymore.
         return SupplierInvoiceResponse.from(saved);
     }
 
@@ -340,62 +340,6 @@ public class SupplierInvoiceUseCase {
         );
 
         return SupplierInvoiceResponse.from(invoiceRepository.save(disputed));
-    }
-
-    /**
-     * Updates the supplier's currentBalance by adding the invoice total.
-     */
-    private void updateSupplierBalance(ThirdParty supplier, BigDecimal amount) {
-        var newBalance = supplier.currentBalance() != null
-                ? supplier.currentBalance().add(amount)
-                : amount;
-
-        var updated = new ThirdParty(
-                supplier.id(),
-                supplier.numIdentification(),
-                supplier.name(),
-                supplier.type(),
-                supplier.priceListId(),
-                supplier.creditLimit(),
-                newBalance,
-                supplier.personType(),
-                supplier.taxRegime(),
-                supplier.taxResponsibilities(),
-                supplier.cityCode(),
-                supplier.dianClassification(),
-                supplier.active(),
-                supplier.createdAt(),
-                null,
-                supplier.thirdPartyCategoryId(),
-                supplier.identificationTypeId(),
-                supplier.dv(),
-                supplier.lastName(),
-                supplier.commonName(),
-                supplier.phone(),
-                supplier.address(),
-                supplier.departmentId(),
-                supplier.cityId(),
-                supplier.email(),
-                supplier.website(),
-                supplier.entryDate(),
-                supplier.creditDays(),
-                supplier.contactName(),
-                supplier.contactPhone(),
-                supplier.contactAddress(),
-                supplier.contactEmail(),
-                supplier.taxContactFirstName(),
-                supplier.taxContactLastName(),
-                supplier.taxEmail(),
-                supplier.billingPhone(),
-                supplier.isGranContribuyente(),
-                supplier.isAutoretenedor(),
-                supplier.isAgenteRetencionIva(),
-                supplier.isRegimenSimple(),
-                supplier.otherTaxResp(),
-                supplier.employeeData()
-        );
-
-        thirdPartyRepository.save(updated);
     }
 
     private boolean isSupplier(ThirdParty tp) {
