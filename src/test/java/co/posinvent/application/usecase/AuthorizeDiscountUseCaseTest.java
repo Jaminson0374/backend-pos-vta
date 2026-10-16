@@ -131,11 +131,29 @@ class AuthorizeDiscountUseCaseTest {
                 AUTH_ID, REQUESTED_BY, admin.getId(), CASH_REGISTER_ID,
                 OffsetDateTime.now().plusMinutes(2), false, OffsetDateTime.now());
         when(authorizationRepo.findById(AUTH_ID)).thenReturn(Optional.of(token));
+        when(authorizationRepo.markUsedIfUnused(AUTH_ID)).thenReturn(true);
 
         var approver = useCase.consume(AUTH_ID);
 
         assertThat(approver).isEqualTo(admin.getId());
-        verify(authorizationRepo).markUsed(AUTH_ID);
+        verify(authorizationRepo).markUsedIfUnused(AUTH_ID);
+    }
+
+    @Test
+    void consumeWhenAtomicFlipLosesRaceIsRejected() {
+        var admin = user("admin1", "ADMIN");
+        var token = new DiscountAuthorization(
+                AUTH_ID, REQUESTED_BY, admin.getId(), CASH_REGISTER_ID,
+                OffsetDateTime.now().plusMinutes(2), false, OffsetDateTime.now());
+        when(authorizationRepo.findById(AUTH_ID)).thenReturn(Optional.of(token));
+        // A concurrent checkout already flipped the token between the read and the update.
+        when(authorizationRepo.markUsedIfUnused(AUTH_ID)).thenReturn(false);
+
+        var thrown = catchThrowable(() -> useCase.consume(AUTH_ID));
+
+        assertThat(thrown).isInstanceOf(BusinessException.class);
+        assertThat(((BusinessException) thrown).getErrorCode())
+                .isEqualTo("DISCOUNT_AUTHORIZATION_REQUIRED");
     }
 
     @Test
@@ -148,7 +166,7 @@ class AuthorizeDiscountUseCaseTest {
         assertThat(thrown).isInstanceOf(BusinessException.class);
         assertThat(((BusinessException) thrown).getErrorCode())
                 .isEqualTo("DISCOUNT_AUTHORIZATION_REQUIRED");
-        verify(authorizationRepo, org.mockito.Mockito.never()).markUsed(any());
+        verify(authorizationRepo, org.mockito.Mockito.never()).markUsedIfUnused(any());
     }
 
     @Test
@@ -161,7 +179,7 @@ class AuthorizeDiscountUseCaseTest {
         assertThat(thrown).isInstanceOf(BusinessException.class);
         assertThat(((BusinessException) thrown).getErrorCode())
                 .isEqualTo("DISCOUNT_AUTHORIZATION_REQUIRED");
-        verify(authorizationRepo, org.mockito.Mockito.never()).markUsed(any());
+        verify(authorizationRepo, org.mockito.Mockito.never()).markUsedIfUnused(any());
     }
 
     @Test

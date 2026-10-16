@@ -169,6 +169,25 @@ class ElectronicInvoicePayloadServiceTest {
         assertThat(request.totalAmount()).isNull();
     }
 
+    @Test
+    void propagatesLineAndDocumentDiscountsToTheRequest() {
+        when(salesDocumentRepository.findById(DOC_ID))
+                .thenReturn(Optional.of(discountedDocument(List.of(discountedSaleItem(PRODUCT_ID)))));
+        when(thirdPartyRepository.findById(CLIENT_ID)).thenReturn(Optional.of(client()));
+        when(productRepository.findById(PRODUCT_ID))
+                .thenReturn(Optional.of(product("P-001", "Producto Uno")));
+        when(companyConfigRepository.findConfig())
+                .thenReturn(Optional.of(companyConfig(List.of("O-13"), List.of())));
+        when(dianResolutionRepository.findActive())
+                .thenReturn(Optional.of(activeResolution("RES-2026", "PIN-RES")));
+
+        var request = service.build(DOC_ID, "FV-001");
+
+        assertThat(request.items()).hasSize(1);
+        assertThat(request.items().get(0).discountAmount()).isEqualByComparingTo("5000");
+        assertThat(request.discountTotal()).isEqualByComparingTo("5000");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private SaleItem saleItem(UUID productId) {
@@ -178,6 +197,16 @@ class ElectronicInvoicePayloadServiceTest {
                 "IVA_19", new BigDecimal("19"),
                 new BigDecimal("19000"), new BigDecimal("100000"),
                 1, null);
+    }
+
+    private SaleItem discountedSaleItem(UUID productId) {
+        return new SaleItem(
+                UUID.randomUUID(), DOC_ID, productId,
+                new BigDecimal("2"), new BigDecimal("50000"),
+                "IVA_19", new BigDecimal("19"),
+                new BigDecimal("19000"), new BigDecimal("100000"),
+                1, null,
+                SaleItem.DISCOUNT_AMOUNT, new BigDecimal("5000"), new BigDecimal("5000"), null);
     }
 
     private SalesDocument document(List<SaleItem> items) {
@@ -190,6 +219,20 @@ class ElectronicInvoicePayloadServiceTest {
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
                 items, null, false, null);
+    }
+
+    private SalesDocument discountedDocument(List<SaleItem> items) {
+        return new SalesDocument(
+                DOC_ID, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED,
+                "FV-001", CLIENT_ID, null, null, null, null,
+                new BigDecimal("95000"), new BigDecimal("1000"), BigDecimal.ZERO,
+                new BigDecimal("18050"), new BigDecimal("114050"),
+                null,
+                OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
+                OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
+                items, null, false, null,
+                new BigDecimal("5000"), new BigDecimal("5000"), SalesDocument.DISCOUNT_NONE,
+                BigDecimal.ZERO, null, null);
     }
 
     private ThirdParty client() {

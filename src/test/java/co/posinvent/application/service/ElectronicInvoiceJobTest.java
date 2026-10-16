@@ -148,7 +148,7 @@ class ElectronicInvoiceJobTest {
     private ElectronicInvoiceRequest request() {
         return new ElectronicInvoiceRequest(
                 DOCUMENT_NUMBER, "2026-10-01", "900123456", "Cliente Test",
-                List.of(), Map.of(), new BigDecimal("120500"), null);
+                List.of(), Map.of(), new BigDecimal("120500"), null, null);
     }
 
     private ElectronicInvoice savedInvoice(ElectronicInvoiceStatus status) {

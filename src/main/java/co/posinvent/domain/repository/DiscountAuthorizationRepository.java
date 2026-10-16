@@ -15,8 +15,12 @@ public interface DiscountAuthorizationRepository {
     Optional<DiscountAuthorization> findById(UUID id);
 
     /**
-     * Marks the token as consumed. Single use: after this call the token can no
-     * longer authorize another checkout.
+     * Atomically marks the token as consumed and reports whether this call won the flip.
+     * Single use: only the first caller observes {@code true}, so two concurrent checkouts
+     * cannot both consume the same authorization.
+     *
+     * @return {@code true} when this call flipped the token from unused to used,
+     *         {@code false} when it was already used (or no longer exists).
      */
-    void markUsed(UUID id);
+    boolean markUsedIfUnused(UUID id);
 }
