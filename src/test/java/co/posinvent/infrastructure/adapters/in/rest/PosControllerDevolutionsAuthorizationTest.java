@@ -70,6 +70,9 @@ class PosControllerDevolutionsAuthorizationTest {
     private ManageElectronicInvoiceUseCase manageElectronicInvoiceUseCase;
 
     @MockitoBean
+    private co.posinvent.application.usecase.AuthorizeDiscountUseCase authorizeDiscountUseCase;
+
+    @MockitoBean
     private JwtService jwtService;
 
     @MockitoBean

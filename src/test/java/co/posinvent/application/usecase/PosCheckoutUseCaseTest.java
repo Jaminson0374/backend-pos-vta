@@ -39,6 +39,7 @@ class PosCheckoutUseCaseTest {
     @Mock private DianNumberingService numberingService;
     @Mock private CompanyConfigRepository companyConfigRepo;
     @Mock private UserRepository userRepo;
+    @Mock private AuthorizeDiscountUseCase authorizeDiscountUseCase;
 
     private PosCheckoutUseCase useCase;
 
@@ -65,7 +66,8 @@ class PosCheckoutUseCaseTest {
                 documentRepo, salePaymentRepo, stockRepo, productRepo,
                 priceEngine, fefoPicker, recordMovement, costingService,
                 eventPublisher, concurrencyExecutor, numberingService,
-                new DiscountEngineService(productRepo, companyConfigRepo), userRepo
+                new DiscountEngineService(productRepo, companyConfigRepo), userRepo,
+                authorizeDiscountUseCase
         );
 
         // Numbering is delegated to the active DIAN resolution service; its own
