@@ -397,7 +397,7 @@ public class AccountingEventListener {
                     "Recibo " + event.receiptNumber()));
             lines.add(creditLine(clientAcct.id(), event.amount(),
                     "Abono cliente recibo " + event.receiptNumber()));
-            postEntryIfBalanced("PAYMENT", event.receiptId(), LocalDate.now(),
+            postEntryIfBalanced("PAYMENT", event.receiptId(), entryDate(event.entryDate()),
                     "Recibo de caja " + event.receiptNumber(), lines);
         } catch (Exception ex) {
             log.error("Accounting failed for cash receipt {}; the business operation is unaffected",
@@ -532,8 +532,68 @@ public class AccountingEventListener {
             }
         }
 
-        postEntryIfBalanced("PURCHASE", event.invoiceId(), LocalDate.now(),
+        postEntryIfBalanced("PURCHASE", event.invoiceId(), entryDate(event.entryDate()),
                 "Factura proveedor " + event.invoiceNumber(), lines);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // PAGO A PROVEEDOR
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the accounting for a supplier payment after its business transaction has committed
+     * (WU-34): debit the payable the purchase credited, credit cash. Runs {@code AFTER_COMMIT}
+     * in its own {@code REQUIRES_NEW} transaction and swallows any accounting failure so the
+     * already-committed payment is never rolled back. Best-effort posting.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onSupplierPayment(co.posinvent.domain.model.SupplierPaymentEvent event) {
+        try {
+            // Guard: skip if auto journal generation is disabled
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+
+            var payableAcct = resolvePayableAccount();
+            var cashAcct = resolveByCode("1105", "PAYMENT cash");
+            if (payableAcct == null || cashAcct == null) {
+                log.warn("Missing PUC account for supplier payment {}; skipping PAYMENT journal entry",
+                        event.paymentNumber());
+                return;
+            }
+
+            var lines = new ArrayList<JournalEntryLine>();
+            lines.add(debitLine(payableAcct.id(), event.amount(),
+                    "Pago proveedor " + event.paymentNumber()));
+            lines.add(creditLine(cashAcct.id(), event.amount(),
+                    "Salida caja pago " + event.paymentNumber()));
+            postEntryIfBalanced("PAYMENT", event.paymentId(), entryDate(event.entryDate()),
+                    "Pago a proveedor " + event.paymentNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for supplier payment {}; the business operation is unaffected",
+                    event.paymentNumber(), ex);
+        }
+    }
+
+    /**
+     * Resolves the payable account used by the payment, mirroring {@code onPurchase}: the
+     * PURCHASE template's {@code PURCHASE_PAYABLE} entry when present, else the hardcoded
+     * PUC code {@code 2205}. Returns {@code null} (warn+skip) when neither resolves.
+     */
+    private PucAccount resolvePayableAccount() {
+        var defaultTemplate = templateResolver.resolveDefault("PURCHASE");
+        if (defaultTemplate.isPresent()) {
+            for (var entry : defaultTemplate.get().entries()) {
+                if ("PURCHASE_PAYABLE".equals(entry.eventType())) {
+                    var account = resolveById(entry.accountId(), "PAYMENT payable");
+                    if (account != null) {
+                        return account;
+                    }
+                }
+            }
+        }
+        return resolveByCode("2205", "PAYMENT payable");
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -620,6 +680,14 @@ public class AccountingEventListener {
      */
     private LocalDate documentDate(OffsetDateTime createdAt) {
         return createdAt != null ? createdAt.toLocalDate() : LocalDate.now();
+    }
+
+    /**
+     * The accounting date carried by a business event (A5). Falls back to the current date when
+     * the event has no document date, preserving the previous behaviour for legacy publishers.
+     */
+    private LocalDate entryDate(LocalDate eventDate) {
+        return eventDate != null ? eventDate : LocalDate.now();
     }
 
     private JournalEntryLine debitLine(java.util.UUID accountId, BigDecimal amount, String description) {

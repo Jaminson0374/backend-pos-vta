@@ -5,11 +5,13 @@ import co.posinvent.application.dto.CustomerReceiptResponse;
 import co.posinvent.application.dto.PageResponse;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
+import co.posinvent.domain.model.CashReceiptEvent;
 import co.posinvent.domain.model.CustomerReceipt;
 import co.posinvent.domain.model.ReceiptApplication;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.repository.CustomerReceiptRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,15 +26,18 @@ public class CustomerReceiptUseCase {
     private final CustomerReceiptRepository receiptRepo;
     private final AccountsReceivableUseCase arUseCase;
     private final ThirdPartyRepository thirdPartyRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CustomerReceiptUseCase(
             CustomerReceiptRepository receiptRepo,
             AccountsReceivableUseCase arUseCase,
-            ThirdPartyRepository thirdPartyRepo
+            ThirdPartyRepository thirdPartyRepo,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.receiptRepo = receiptRepo;
         this.arUseCase = arUseCase;
         this.thirdPartyRepo = thirdPartyRepo;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -83,10 +88,22 @@ public class CustomerReceiptUseCase {
 
         var saved = receiptRepo.save(receipt);
 
+        // C3: publish the collection so the accounting listener posts cash/receivable after commit.
+        // The receipt carries no sequential number, so its reference is used when present, else its id.
+        eventPublisher.publishEvent(new CashReceiptEvent(
+                this, saved.id(), receiptNumber(saved), saved.amount(), saved.paymentDate()));
+
         // 6. Update ThirdParty.currentBalance: subtract total amount
         updateClientBalance(request.clientId(), request.amount().negate());
 
         return CustomerReceiptResponse.from(saved);
+    }
+
+    /** Human-readable identifier for the journal description: the user reference, else the receipt id. */
+    private String receiptNumber(CustomerReceipt receipt) {
+        return receipt.reference() != null && !receipt.reference().isBlank()
+                ? receipt.reference()
+                : receipt.id().toString();
     }
 
     @Transactional(readOnly = true)

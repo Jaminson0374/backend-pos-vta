@@ -145,7 +145,8 @@ public class SupplierInvoiceUseCase {
                 saved.ivaTotal(),
                 saved.total(),          // netPayable = total
                 saved.retentionTotal(), // retefuente
-                BigDecimal.ZERO         // ica (not yet tracked separately)
+                BigDecimal.ZERO,        // ica (not yet tracked separately)
+                saved.issueDate()       // accounting date = document date
         ));
 
         // Update ThirdParty.currentBalance
