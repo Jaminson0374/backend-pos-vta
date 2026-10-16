@@ -5,9 +5,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 interface JournalEntryJpaRepository extends JpaRepository<JournalEntryEntity, UUID> {
+
+    Optional<JournalEntryEntity> findBySourceTypeAndSourceId(String sourceType, UUID sourceId);
 
     @Query("SELECT j FROM JournalEntryEntity j WHERE " +
            "(:sourceType IS NULL OR j.sourceType = :sourceType) AND " +

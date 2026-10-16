@@ -13,10 +13,14 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,7 +40,7 @@ class CreateJournalEntryUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new CreateJournalEntryUseCase(repo);
-        when(repo.save(any(JournalEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(repo.save(any(JournalEntry.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -76,6 +80,64 @@ class CreateJournalEntryUseCaseTest {
         assertThat(entry.sourceType()).isEqualTo("SALE");
         assertThat(entry.sourceId()).isEqualTo(sourceId);
         verify(repo).nextEntrySequence();
+    }
+
+    @Test
+    void createAuto_returnsExistingEntryWhenSourceWasAlreadyPosted() {
+        UUID sourceId = UUID.randomUUID();
+        var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000001",
+                ENTRY_DATE, "existing", "SALE", sourceId, null, balancedLines());
+        when(repo.findBySourceTypeAndSourceId("SALE", sourceId)).thenReturn(Optional.of(existing));
+
+        JournalEntry result = useCase.createAuto("SALE", sourceId, ENTRY_DATE, "duplicate", balancedLines());
+
+        assertThat(result).isSameAs(existing);
+        verify(repo, never()).save(any(JournalEntry.class));
+        verify(repo, never()).nextEntrySequence();
+    }
+
+    @Test
+    void createAuto_postsOnceForSameSourceAcrossTwoCalls() {
+        UUID sourceId = UUID.randomUUID();
+        var existing = new JournalEntry(UUID.randomUUID(), "JE-" + DATE_PART + "-000100",
+                ENTRY_DATE, "first", "SALE", sourceId, null, balancedLines());
+        when(repo.nextEntrySequence()).thenReturn(100L);
+        when(repo.findBySourceTypeAndSourceId("SALE", sourceId))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existing));
+
+        JournalEntry first = useCase.createAuto("SALE", sourceId, ENTRY_DATE, "first", balancedLines());
+        JournalEntry second = useCase.createAuto("SALE", sourceId, ENTRY_DATE, "second", balancedLines());
+
+        assertThat(first.entryNumber()).isEqualTo("JE-" + DATE_PART + "-000100");
+        assertThat(second).isSameAs(existing);
+
+        // A single entry was persisted and a single numbering was consumed.
+        verify(repo, times(1)).save(any(JournalEntry.class));
+        verify(repo, times(1)).nextEntrySequence();
+    }
+
+    @Test
+    void createAuto_withoutSourceIdIsNeverGuarded() {
+        when(repo.nextEntrySequence()).thenReturn(5L);
+
+        JournalEntry entry = useCase.createAuto("MANUAL", null, ENTRY_DATE, "manual", balancedLines());
+
+        assertThat(entry.entryNumber()).isEqualTo("JE-" + DATE_PART + "-000005");
+        assertThat(entry.sourceId()).isNull();
+        verify(repo, never()).findBySourceTypeAndSourceId(anyString(), any());
+        verify(repo).save(any(JournalEntry.class));
+    }
+
+    @Test
+    void createManual_isNeverGuardedBySource() {
+        when(repo.nextEntrySequence()).thenReturn(1L, 2L);
+
+        useCase.createManual(ENTRY_DATE, "first", balancedLines());
+        useCase.createManual(ENTRY_DATE, "second", balancedLines());
+
+        verify(repo, times(2)).save(any(JournalEntry.class));
+        verify(repo, never()).findBySourceTypeAndSourceId(anyString(), any());
     }
 
     private List<JournalEntryLine> balancedLines() {
