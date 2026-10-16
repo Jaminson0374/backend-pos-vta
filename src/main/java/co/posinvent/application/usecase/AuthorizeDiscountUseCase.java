@@ -99,7 +99,11 @@ public class AuthorizeDiscountUseCase {
             throw new BusinessException(REQUIRED, REQUIRED_MESSAGE);
         }
 
-        authorizationRepo.markUsed(authorization.id());
+        // Atomic single-use flip: a concurrent checkout that already consumed the token
+        // makes this return false, so the race cannot authorize two invoices.
+        if (!authorizationRepo.markUsedIfUnused(authorization.id())) {
+            throw new BusinessException(REQUIRED, REQUIRED_MESSAGE);
+        }
         return authorization.authorizedBy();
     }
 }

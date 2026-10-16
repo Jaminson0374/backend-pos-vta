@@ -75,7 +75,8 @@ public class ElectronicInvoicePayloadService {
                 resolveItems(document),
                 resolveTaxTotals(document),
                 document != null ? document.totalAmount() : null,
-                resolveCompanyInfo()
+                resolveCompanyInfo(),
+                document != null ? document.discountTotal() : null
         );
     }
 
@@ -129,7 +130,8 @@ public class ElectronicInvoicePayloadService {
                 saleItem.taxType(),
                 saleItem.taxRate(),
                 saleItem.taxAmount(),
-                saleItem.subtotal()
+                saleItem.subtotal(),
+                saleItem.discountAmount()
         );
     }
 

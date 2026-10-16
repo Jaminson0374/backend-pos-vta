@@ -190,6 +190,11 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
     /**
      * Translates the domain request into the Siigo invoice body and translates Siigo responses
      * back into the domain response. Keep adjustments against the official Siigo docs here.
+     *
+     * <p>Discount mapping: the line discount is sent as {@code items[].discount} and the
+     * document-level discount as {@code discount}. {@code items[].price} keeps the LIST unit
+     * price, so the discount is carried separately and never baked into the price. Field
+     * names are validated against the real Siigo documentation before going live.</p>
      */
     static final class SiigoInvoiceMapper {
 
@@ -223,6 +228,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
                     customer,
                     items,
                     request.totalAmount(),
+                    request.discountTotal(),
                     company != null ? company.resolutionNumber() : null);
         }
 
@@ -236,6 +242,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
                     item.productName(),
                     item.quantity(),
                     item.unitPrice(),
+                    item.discountAmount(),
                     taxes);
         }
 
@@ -317,6 +324,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
             @JsonProperty("customer") SiigoCustomer customer,
             @JsonProperty("items") List<SiigoItem> items,
             @JsonProperty("total") BigDecimal total,
+            @JsonProperty("discount") BigDecimal discount,
             @JsonProperty("resolution_number") String resolutionNumber) {}
 
     private record SiigoDocument(
@@ -333,6 +341,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
             @JsonProperty("description") String description,
             @JsonProperty("quantity") BigDecimal quantity,
             @JsonProperty("price") BigDecimal price,
+            @JsonProperty("discount") BigDecimal discount,
             @JsonProperty("taxes") List<SiigoItemTax> taxes) {}
 
     private record SiigoItemTax(

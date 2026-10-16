@@ -34,7 +34,7 @@ class DiscountAuthorizationRepositoryAdapter implements DiscountAuthorizationRep
 
     @Override
     @Transactional
-    public void markUsed(UUID id) {
-        jpa.markUsedIfUnused(id);
+    public boolean markUsedIfUnused(UUID id) {
+        return jpa.markUsedIfUnused(id) > 0;
     }
 }

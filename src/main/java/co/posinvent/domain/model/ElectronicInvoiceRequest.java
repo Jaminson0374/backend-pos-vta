@@ -12,7 +12,8 @@ public record ElectronicInvoiceRequest(
     List<InvoiceItem> items,
     Map<String, BigDecimal> taxTotals,
     BigDecimal totalAmount,
-    CompanyInfo companyInfo
+    CompanyInfo companyInfo,
+    BigDecimal discountTotal
 ) {
     public record InvoiceItem(
         String productCode,
@@ -22,7 +23,8 @@ public record ElectronicInvoiceRequest(
         String taxType,
         BigDecimal taxRate,
         BigDecimal taxAmount,
-        BigDecimal subtotal
+        BigDecimal subtotal,
+        BigDecimal discountAmount
     ) {}
 
     public record CompanyInfo(

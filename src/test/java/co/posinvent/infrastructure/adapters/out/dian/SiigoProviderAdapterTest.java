@@ -19,6 +19,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -109,6 +110,22 @@ class SiigoProviderAdapterTest {
         server.verify();
     }
 
+    @Test
+    void sendsLineAndDocumentDiscountsInTheInvoiceBody() {
+        expectAuthOnce();
+        server.expect(requestTo(BASE_URL + "/v1/invoices"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.items[0].discount").value(100.00))
+                .andExpect(jsonPath("$.discount").value(100.00))
+                // price stays the LIST unit price; the discount is never baked into it.
+                .andExpect(jsonPath("$.items[0].price").value(1000.00))
+                .andRespond(withSuccess(INVOICE_JSON, MediaType.APPLICATION_JSON));
+
+        adapter.sendInvoice(sampleRequest());
+
+        server.verify();
+    }
+
     private void expectAuthOnce() {
         server.expect(ExpectedCount.once(), requestTo(BASE_URL + "/auth"))
                 .andExpect(method(HttpMethod.POST))
@@ -130,7 +147,8 @@ class SiigoProviderAdapterTest {
                         "IVA",
                         new BigDecimal("19.00"),
                         new BigDecimal("190.00"),
-                        new BigDecimal("1000.00"))),
+                        new BigDecimal("1000.00"),
+                        new BigDecimal("100.00"))),
                 Map.of("IVA", new BigDecimal("190.00")),
                 new BigDecimal("1190.00"),
                 new ElectronicInvoiceRequest.CompanyInfo(
@@ -142,6 +160,7 @@ class SiigoProviderAdapterTest {
                         "G",
                         "RESPONSABLE_IVA",
                         "RES-1",
-                        "PIN-1"));
+                        "PIN-1"),
+                new BigDecimal("100.00"));
     }
 }
