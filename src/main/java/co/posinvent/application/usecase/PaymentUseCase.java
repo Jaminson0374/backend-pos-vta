@@ -11,9 +11,11 @@ import co.posinvent.domain.model.InvoiceStatus;
 import co.posinvent.domain.model.Payment;
 import co.posinvent.domain.model.Payment.InvoicePayment;
 import co.posinvent.domain.model.SupplierInvoice;
+import co.posinvent.domain.model.SupplierPaymentEvent;
 import co.posinvent.domain.repository.PaymentRepository;
 import co.posinvent.domain.repository.SupplierInvoiceRepository;
 import co.posinvent.domain.service.PaymentDomainService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,16 +31,19 @@ public class PaymentUseCase {
     private final SupplierInvoiceRepository invoiceRepository;
     private final PaymentDomainService domainService;
     private final SupplierBalanceService supplierBalanceService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaymentUseCase(
             PaymentRepository paymentRepository,
             SupplierInvoiceRepository invoiceRepository,
-            SupplierBalanceService supplierBalanceService
+            SupplierBalanceService supplierBalanceService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.paymentRepository = paymentRepository;
         this.invoiceRepository = invoiceRepository;
         this.domainService = new PaymentDomainService();
         this.supplierBalanceService = supplierBalanceService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -104,6 +109,13 @@ public class PaymentUseCase {
 
         var savedPayment = paymentRepository.save(payment);
 
+        // C4: publish the payment so the accounting listener posts the payable/cash entry after
+        // commit. The payment carries no sequential number, so its reference is used when present,
+        // else its id.
+        eventPublisher.publishEvent(new SupplierPaymentEvent(
+                this, savedPayment.id(), paymentNumber(savedPayment),
+                savedPayment.amount(), savedPayment.paymentDate()));
+
         // 5. Update each SupplierInvoice status
         var invoiceByAppliedMap = request.invoicePayments().stream()
                 .collect(Collectors.toMap(
@@ -142,6 +154,13 @@ public class PaymentUseCase {
         supplierBalanceService.updateSupplierBalance(request.supplierId(), request.amount(), true);
 
         return PaymentResponse.from(savedPayment);
+    }
+
+    /** Human-readable identifier for the journal description: the user reference, else the payment id. */
+    private String paymentNumber(Payment payment) {
+        return payment.reference() != null && !payment.reference().isBlank()
+                ? payment.reference()
+                : payment.id().toString();
     }
 
     /**

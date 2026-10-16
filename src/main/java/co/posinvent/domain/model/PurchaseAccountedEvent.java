@@ -1,6 +1,7 @@
 package co.posinvent.domain.model;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public class PurchaseAccountedEvent {
@@ -11,14 +12,15 @@ public class PurchaseAccountedEvent {
     private final BigDecimal netPayable;
     private final BigDecimal retefuente;
     private final BigDecimal ica;
+    private final LocalDate entryDate;
     private final Object source;
 
     public PurchaseAccountedEvent(Object source, UUID invoiceId, String invoiceNumber,
                                     BigDecimal subtotal, BigDecimal ivaTotal, BigDecimal netPayable,
-                                    BigDecimal retefuente, BigDecimal ica) {
+                                    BigDecimal retefuente, BigDecimal ica, LocalDate entryDate) {
         this.source = source; this.invoiceId = invoiceId; this.invoiceNumber = invoiceNumber;
         this.subtotal = subtotal; this.ivaTotal = ivaTotal; this.netPayable = netPayable;
-        this.retefuente = retefuente; this.ica = ica;
+        this.retefuente = retefuente; this.ica = ica; this.entryDate = entryDate;
     }
     public Object getSource() { return source; }
     public UUID invoiceId() { return invoiceId; }
@@ -28,4 +30,5 @@ public class PurchaseAccountedEvent {
     public BigDecimal netPayable() { return netPayable; }
     public BigDecimal retefuente() { return retefuente; }
     public BigDecimal ica() { return ica; }
+    public LocalDate entryDate() { return entryDate; }
 }
