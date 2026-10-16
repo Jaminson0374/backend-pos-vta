@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -143,7 +142,7 @@ public class CreateGoodsReceiptUseCase {
                     input.warehouseId(),
                     receiptDate,
                     input.receivedQty(),
-                    input.actualCost(),
+                    input.receivedQty().multiply(input.actualCost()),
                     BatchStatus.OPEN,
                     "Recepción #" + receiptId + " vs OC #" + oc.id(),
                     input.expirationDate(),
@@ -167,8 +166,11 @@ public class CreateGoodsReceiptUseCase {
             var existingStock = stockRepository.findByProductBatchWarehouse(
                     input.productId(), batch.id(), input.warehouseId());
 
-            var unitCost = input.actualCost()
-                    .divide(input.receivedQty(), 6, RoundingMode.HALF_UP);
+            // `actualCost` arriving from the request is the UNIT cost (the frontend sends
+            // ocLine.unitCost). The stock row and the Kardex ENTRY movement value it per unit;
+            // the batch's purchase_cost above is the line TOTAL (receivedQty × actualCost),
+            // matching the system convention (see ManualDesposteUseCase / ProcessSlaughterUseCase).
+            var unitCost = input.actualCost();
 
             var previousQty = BigDecimal.ZERO;
             if (existingStock.isPresent()) {
