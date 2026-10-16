@@ -10,9 +10,11 @@ import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockAdjustmentRepository;
 import co.posinvent.domain.repository.StockRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Service
@@ -23,19 +25,22 @@ public class CreateAdjustmentUseCase implements CreateAdjustmentPort {
     private final ProductRepository productRepo;
     private final RecordMovementUseCase recordMovement;
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CreateAdjustmentUseCase(
             StockAdjustmentRepository adjustmentRepo,
             StockRepository stockRepo,
             ProductRepository productRepo,
             RecordMovementUseCase recordMovement,
-            OptimisticConcurrencyExecutor concurrencyExecutor
+            OptimisticConcurrencyExecutor concurrencyExecutor,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.adjustmentRepo = adjustmentRepo;
         this.stockRepo = stockRepo;
         this.productRepo = productRepo;
         this.recordMovement = recordMovement;
         this.concurrencyExecutor = concurrencyExecutor;
+        this.eventPublisher = eventPublisher;
     }
 
     @Auditable(entityType = "ADJUSTMENT", action = "CREATE")
@@ -113,6 +118,15 @@ public class CreateAdjustmentUseCase implements CreateAdjustmentPort {
 
             // Recalculate totalStock
             productRepo.recalculateTotalStock(request.productId());
+
+            // Publish the accounting event (WU-36c): the listener posts the inventory/loss entry
+            // dated with the adjustment. The event is published inside this transaction so the
+            // @TransactionalEventListener(AFTER_COMMIT) fires only once the adjustment is persisted.
+            LocalDate entryDate = saved.createdAt() != null
+                    ? saved.createdAt().toLocalDate()
+                    : LocalDate.now();
+            eventPublisher.publishEvent(new AdjustmentAppliedEvent(
+                    this, saved.id(), delta, request.reason(), entryDate));
 
             return AdjustmentResponse.from(saved);
         });

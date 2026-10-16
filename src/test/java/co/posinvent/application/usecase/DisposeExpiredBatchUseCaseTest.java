@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -40,6 +41,9 @@ class DisposeExpiredBatchUseCaseTest {
     @Mock
     private OptimisticConcurrencyExecutor concurrencyExecutor;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private DisposeExpiredBatchUseCase useCase;
 
     private static final UUID BATCH_ID = UUID.randomUUID();
@@ -50,7 +54,7 @@ class DisposeExpiredBatchUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new DisposeExpiredBatchUseCase(
-                stockRepository, batchRepository, recordMovement, concurrencyExecutor
+                stockRepository, batchRepository, recordMovement, concurrencyExecutor, eventPublisher
         );
         // Run the transactional unit of work inline.
         doAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get())

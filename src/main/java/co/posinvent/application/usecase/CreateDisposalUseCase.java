@@ -7,9 +7,11 @@ import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Service
@@ -20,13 +22,16 @@ public class CreateDisposalUseCase implements CreateDisposalPort {
     private final ProductRepository productRepo;
     private final RecordMovementUseCase recordMovement;
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CreateDisposalUseCase(WasteDisposalRepository disposalRepo, StockRepository stockRepo,
                                   ProductRepository productRepo, RecordMovementUseCase recordMovement,
-                                  OptimisticConcurrencyExecutor concurrencyExecutor) {
+                                  OptimisticConcurrencyExecutor concurrencyExecutor,
+                                  ApplicationEventPublisher eventPublisher) {
         this.disposalRepo = disposalRepo; this.stockRepo = stockRepo;
         this.productRepo = productRepo; this.recordMovement = recordMovement;
         this.concurrencyExecutor = concurrencyExecutor;
+        this.eventPublisher = eventPublisher;
     }
 
     public DisposalResponse execute(DisposalRequest request, UUID operatorId) {
@@ -57,6 +62,15 @@ public class CreateDisposalUseCase implements CreateDisposalPort {
                     stock.currentQuantity(), newQty, "DISPOSAL", disposal.id(), request.reason());
 
             productRepo.recalculateTotalStock(request.productId());
+
+            // Publish the accounting event (WU-36c): write off the disposed goods at their stock
+            // cost. Published inside the transaction so the AFTER_COMMIT listener posts once the
+            // disposal is persisted.
+            var totalCost = request.quantity().multiply(stock.unitCost());
+            var entryDate = request.disposalDate() != null ? request.disposalDate() : LocalDate.now();
+            eventPublisher.publishEvent(new DisposalAccountedEvent(
+                    this, disposal.id(), disposal.id().toString(), totalCost, entryDate));
+
             return DisposalResponse.from(disposal);
         });
     }
