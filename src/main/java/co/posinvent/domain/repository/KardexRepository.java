@@ -7,12 +7,20 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface KardexRepository {
 
     InventoryMovement save(InventoryMovement movement);
+
+    /**
+     * Finds every inventory movement tied to a business reference (e.g. all the
+     * EXIT movements recorded for a sale, keyed by {@code "SALE"} + the source
+     * document id). Used by the accounting layer to value COGS from the Kardex.
+     */
+    List<InventoryMovement> findByReference(String referenceType, UUID referenceId);
 
     Page<InventoryMovement> search(
             UUID productId,

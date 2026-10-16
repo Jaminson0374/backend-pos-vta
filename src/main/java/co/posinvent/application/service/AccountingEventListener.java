@@ -2,41 +2,55 @@ package co.posinvent.application.service;
 
 import co.posinvent.application.usecase.CreateJournalEntryUseCase;
 import co.posinvent.domain.model.AccountingTemplateEntry;
+import co.posinvent.domain.model.InventoryMovement;
 import co.posinvent.domain.model.InvoiceIssuedEvent;
 import co.posinvent.domain.model.JournalEntryLine;
+import co.posinvent.domain.model.MovementType;
 import co.posinvent.domain.model.PucAccount;
+import co.posinvent.domain.model.SalesDocument;
 import co.posinvent.domain.repository.CompanyConfigRepository;
+import co.posinvent.domain.repository.KardexRepository;
 import co.posinvent.domain.repository.PucAccountRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class AccountingEventListener {
+
+    private static final Logger log = LoggerFactory.getLogger(AccountingEventListener.class);
 
     private final CreateJournalEntryUseCase journalUseCase;
     private final PucAccountRepository pucRepo;
     private final TemplateResolverService templateResolver;
     private final CompanyConfigRepository companyConfigRepo;
     private final SalesDocumentRepository salesDocumentRepo;
+    private final KardexRepository kardexRepo;
 
     public AccountingEventListener(
             CreateJournalEntryUseCase journalUseCase,
             PucAccountRepository pucRepo,
             TemplateResolverService templateResolver,
             CompanyConfigRepository companyConfigRepo,
-            SalesDocumentRepository salesDocumentRepo) {
+            SalesDocumentRepository salesDocumentRepo,
+            KardexRepository kardexRepo) {
         this.journalUseCase = journalUseCase;
         this.pucRepo = pucRepo;
         this.templateResolver = templateResolver;
         this.companyConfigRepo = companyConfigRepo;
         this.salesDocumentRepo = salesDocumentRepo;
+        this.kardexRepo = kardexRepo;
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -92,9 +106,14 @@ public class AccountingEventListener {
                 }
             }
 
-            // 2. Per-item entries (COGS + inventory out) — iterate sale items
+            // 2. Per-item entries (COGS + inventory out) — iterate sale items.
+            //    The cost of goods sold MUST come from the Kardex (quantity × unitCost of
+            //    this sale's EXIT movements), never from the sale price. The POS sale
+            //    movements are keyed by the source ORDER id, which the invoice carries in
+            //    sourceDocumentId.
             var doc = salesDocumentRepo.findByIdWithItems(event.salesDocumentId());
             if (doc.isPresent() && doc.get().items() != null) {
+                var costByProduct = resolveCostByProduct(event, doc.get());
                 for (var item : doc.get().items()) {
                     var productTemplate = templateResolver.resolveForProduct(item.productId(), "SALE");
                     var effectiveEntries = productTemplate.isPresent()
@@ -106,8 +125,13 @@ public class AccountingEventListener {
                                 && !"SALE_INVENTORY_OUT".equals(entry.eventType())) {
                             continue;
                         }
-                        BigDecimal amount = item.subtotal();
-                        if (amount.compareTo(BigDecimal.ZERO) == 0) continue;
+                        BigDecimal amount = costByProduct.get(item.productId());
+                        if (amount == null || amount.compareTo(BigDecimal.ZERO) == 0) {
+                            log.warn("No Kardex cost found for product {} on sale {}; "
+                                            + "skipping {} entry",
+                                    item.productId(), event.invoiceNumber(), entry.eventType());
+                            continue;
+                        }
 
                         var account = pucRepo.findById(entry.accountId()).orElse(null);
                         if (account == null) continue;
@@ -279,6 +303,29 @@ public class AccountingEventListener {
     // ════════════════════════════════════════════════════════════════
     // Helpers
     // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Values the inventory cost of a sale from the Kardex: sums {@code quantity × unitCost}
+     * of the sale's EXIT movements, grouped by product. The movements are keyed by the
+     * source order id, which the invoice carries in {@code sourceDocumentId}.
+     */
+    private Map<UUID, BigDecimal> resolveCostByProduct(InvoiceIssuedEvent event, SalesDocument doc) {
+        UUID saleReferenceId = doc.sourceDocumentId() != null
+                ? doc.sourceDocumentId()
+                : event.salesDocumentId();
+
+        var costByProduct = new HashMap<UUID, BigDecimal>();
+        List<InventoryMovement> movements = kardexRepo.findByReference("SALE", saleReferenceId);
+        for (InventoryMovement movement : movements) {
+            if (movement.movementType() != MovementType.EXIT) {
+                continue;
+            }
+            BigDecimal quantity = movement.quantity() != null ? movement.quantity() : BigDecimal.ZERO;
+            BigDecimal unitCost = movement.unitCost() != null ? movement.unitCost() : BigDecimal.ZERO;
+            costByProduct.merge(movement.productId(), quantity.multiply(unitCost), BigDecimal::add);
+        }
+        return costByProduct;
+    }
 
     private boolean isJournalGenerationEnabled() {
         return companyConfigRepo.findConfig()

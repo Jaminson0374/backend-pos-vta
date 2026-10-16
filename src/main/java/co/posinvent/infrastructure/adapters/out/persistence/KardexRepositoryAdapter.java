@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,6 +40,13 @@ public class KardexRepositoryAdapter implements KardexRepository {
             entity = mapper.toEntity(movement);
         }
         return mapper.toDomain(jpa.save(entity));
+    }
+
+    @Override
+    public List<InventoryMovement> findByReference(String referenceType, UUID referenceId) {
+        return jpa.findByReferenceTypeAndReferenceId(referenceType, referenceId).stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 
     @Override

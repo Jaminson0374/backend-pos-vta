@@ -1,0 +1,184 @@
+package co.posinvent.application.service;
+
+import co.posinvent.application.usecase.CreateJournalEntryUseCase;
+import co.posinvent.domain.model.AccountingTemplate;
+import co.posinvent.domain.model.AccountingTemplateEntry;
+import co.posinvent.domain.model.InventoryMovement;
+import co.posinvent.domain.model.InvoiceIssuedEvent;
+import co.posinvent.domain.model.JournalEntryLine;
+import co.posinvent.domain.model.MovementType;
+import co.posinvent.domain.model.PucAccount;
+import co.posinvent.domain.model.SaleItem;
+import co.posinvent.domain.model.SalesDocument;
+import co.posinvent.domain.model.SalesDocumentStatus;
+import co.posinvent.domain.model.SalesDocumentType;
+import co.posinvent.domain.repository.CompanyConfigRepository;
+import co.posinvent.domain.repository.KardexRepository;
+import co.posinvent.domain.repository.PucAccountRepository;
+import co.posinvent.domain.repository.SalesDocumentRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Unit coverage for the COGS-from-Kardex mapping in {@link AccountingEventListener}.
+ *
+ * <p>Proves that SALE_COGS / SALE_INVENTORY_OUT are valued at the real Kardex cost
+ * (quantity × unitCost, aggregated per product across the sale's EXIT movements) and
+ * that a product absent from the Kardex is skipped rather than valued at its sale price.</p>
+ */
+@ExtendWith(MockitoExtension.class)
+class AccountingEventListenerTest {
+
+    private static final UUID INVOICE_ID = UUID.randomUUID();
+    private static final UUID ORDER_ID = UUID.randomUUID();
+    private static final UUID CLIENT_ID = UUID.randomUUID();
+    private static final UUID WAREHOUSE_ID = UUID.randomUUID();
+    private static final UUID USER_ID = UUID.randomUUID();
+    private static final UUID TEMPLATE_ID = UUID.randomUUID();
+
+    private static final UUID ACCT_RECEIVABLE = UUID.randomUUID();
+    private static final UUID ACCT_INCOME = UUID.randomUUID();
+    private static final UUID ACCT_COGS = UUID.randomUUID();
+    private static final UUID ACCT_INVENTORY = UUID.randomUUID();
+
+    private static final UUID PRODUCT_WITH_COST = UUID.randomUUID();
+    private static final UUID PRODUCT_WITHOUT_COST = UUID.randomUUID();
+
+    @Mock private CreateJournalEntryUseCase journalUseCase;
+    @Mock private PucAccountRepository pucRepo;
+    @Mock private TemplateResolverService templateResolver;
+    @Mock private CompanyConfigRepository companyConfigRepo;
+    @Mock private SalesDocumentRepository salesDocumentRepo;
+    @Mock private KardexRepository kardexRepo;
+
+    private AccountingEventListener listener;
+
+    @BeforeEach
+    void setUp() {
+        listener = new AccountingEventListener(
+                journalUseCase, pucRepo, templateResolver, companyConfigRepo, salesDocumentRepo, kardexRepo);
+
+        when(companyConfigRepo.findConfig()).thenReturn(Optional.empty()); // journal generation enabled
+        when(templateResolver.resolveDefault("SALE")).thenReturn(Optional.of(saleTemplate()));
+        when(templateResolver.resolveForProduct(any(), eq("SALE"))).thenReturn(Optional.empty());
+        when(pucRepo.findById(any())).thenAnswer(inv ->
+                Optional.of(new PucAccount(inv.getArgument(0), "0000", "Cuenta", 1, null, 1,
+                        "DEBITO", true, true, null, null)));
+    }
+
+    @Test
+    void valuesCogsAtKardexCostAndSkipsProductsWithoutCost() {
+        var doc = invoiceWithItems();
+        when(salesDocumentRepo.findByIdWithItems(INVOICE_ID)).thenReturn(Optional.of(doc));
+
+        // PRODUCT_WITH_COST is picked across two batches (1 + 1) → cost aggregated to 2 × 3,000 = 6,000.
+        // A non-EXIT movement must be ignored. PRODUCT_WITHOUT_COST has no movement.
+        when(kardexRepo.findByReference("SALE", ORDER_ID)).thenReturn(List.of(
+                exit(PRODUCT_WITH_COST, new BigDecimal("1"), new BigDecimal("3000.00")),
+                exit(PRODUCT_WITH_COST, new BigDecimal("1"), new BigDecimal("3000.00")),
+                entry(PRODUCT_WITH_COST, new BigDecimal("5"), new BigDecimal("3000.00"))
+        ));
+
+        listener.onInvoiceIssued(new InvoiceIssuedEvent(
+                this, INVOICE_ID, "FV-TEST-1",
+                new BigDecimal("25000.00"),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("25000.00")));
+
+        var lines = captureLines();
+
+        // COGS / inventory-out use the Kardex cost, not the sale price (PRODUCT_WITH_COST subtotal = 20,000).
+        assertThat(amountOn(lines, ACCT_COGS)).isEqualByComparingTo("6000.00");
+        assertThat(amountOn(lines, ACCT_INVENTORY)).isEqualByComparingTo("6000.00");
+
+        // One COGS line and one inventory line only: PRODUCT_WITHOUT_COST was skipped.
+        assertThat(lines).filteredOn(l -> ACCT_COGS.equals(l.accountId())).hasSize(1);
+        assertThat(lines).filteredOn(l -> ACCT_INVENTORY.equals(l.accountId())).hasSize(1);
+
+        // The entry stays balanced (debits == credits).
+        assertThat(totalDebit(lines)).isEqualByComparingTo(totalCredit(lines));
+
+        // The movements are looked up under the sale's source order id.
+        verify(kardexRepo).findByReference("SALE", ORDER_ID);
+    }
+
+    // ── fixtures ────────────────────────────────────────────────────────────
+
+    private List<JournalEntryLine> captureLines() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<JournalEntryLine>> captor = ArgumentCaptor.forClass(List.class);
+        verify(journalUseCase).createAuto(eq("SALE"), eq(INVOICE_ID), any(LocalDate.class), anyString(), captor.capture());
+        return captor.getValue();
+    }
+
+    private BigDecimal amountOn(List<JournalEntryLine> lines, UUID accountId) {
+        return lines.stream()
+                .filter(l -> accountId.equals(l.accountId()))
+                .map(l -> l.debit().compareTo(BigDecimal.ZERO) > 0 ? l.debit() : l.credit())
+                .findFirst().orElseThrow();
+    }
+
+    private BigDecimal totalDebit(List<JournalEntryLine> lines) {
+        return lines.stream().map(JournalEntryLine::debit).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal totalCredit(List<JournalEntryLine> lines) {
+        return lines.stream().map(JournalEntryLine::credit).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private AccountingTemplate saleTemplate() {
+        return new AccountingTemplate(TEMPLATE_ID, "DEFAULT_SALE", "Venta", null, "SALE", true, true,
+                List.of(
+                        new AccountingTemplateEntry(UUID.randomUUID(), TEMPLATE_ID, "SALE_RECEIVABLE", ACCT_RECEIVABLE, true, 1),
+                        new AccountingTemplateEntry(UUID.randomUUID(), TEMPLATE_ID, "SALE_INCOME", ACCT_INCOME, false, 2),
+                        new AccountingTemplateEntry(UUID.randomUUID(), TEMPLATE_ID, "SALE_COGS", ACCT_COGS, true, 3),
+                        new AccountingTemplateEntry(UUID.randomUUID(), TEMPLATE_ID, "SALE_INVENTORY_OUT", ACCT_INVENTORY, false, 4)
+                ), null, null);
+    }
+
+    private SalesDocument invoiceWithItems() {
+        var withCost = new SaleItem(null, INVOICE_ID, PRODUCT_WITH_COST, new BigDecimal("2"),
+                new BigDecimal("10000.00"), "EXENTO", BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("20000.00"), 1, UUID.randomUUID());
+        var withoutCost = new SaleItem(null, INVOICE_ID, PRODUCT_WITHOUT_COST, BigDecimal.ONE,
+                new BigDecimal("5000.00"), "EXENTO", BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("5000.00"), 2, UUID.randomUUID());
+
+        return new SalesDocument(
+                INVOICE_ID, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED, "FV-TEST-1",
+                CLIENT_ID, WAREHOUSE_ID, null, null, ORDER_ID,
+                new BigDecimal("25000.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("25000.00"), USER_ID, null, null,
+                List.of(withCost, withoutCost), null, false, null);
+    }
+
+    private InventoryMovement exit(UUID productId, BigDecimal quantity, BigDecimal unitCost) {
+        return new InventoryMovement(UUID.randomUUID(), productId, UUID.randomUUID(), WAREHOUSE_ID,
+                MovementType.EXIT, quantity, unitCost, BigDecimal.TEN, BigDecimal.TEN.subtract(quantity),
+                "SALE", ORDER_ID, null, "SYSTEM", OffsetDateTime.now());
+    }
+
+    private InventoryMovement entry(UUID productId, BigDecimal quantity, BigDecimal unitCost) {
+        return new InventoryMovement(UUID.randomUUID(), productId, UUID.randomUUID(), WAREHOUSE_ID,
+                MovementType.ENTRY, quantity, unitCost, BigDecimal.ZERO, quantity,
+                "SALE", ORDER_ID, null, "SYSTEM", OffsetDateTime.now());
+    }
+}
