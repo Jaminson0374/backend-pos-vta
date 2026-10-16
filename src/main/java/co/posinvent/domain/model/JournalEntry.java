@@ -14,6 +14,7 @@ public record JournalEntry(
     String sourceType,
     UUID sourceId,
     OffsetDateTime createdAt,
+    UUID createdBy,
     List<JournalEntryLine> lines
 ) {
     public BigDecimal totalDebit() {

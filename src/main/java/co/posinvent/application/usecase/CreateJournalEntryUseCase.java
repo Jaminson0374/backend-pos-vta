@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.domain.model.JournalEntry;
 import co.posinvent.domain.model.JournalEntryLine;
+import co.posinvent.domain.repository.CurrentUserProvider;
 import co.posinvent.domain.repository.JournalEntryRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -15,11 +16,20 @@ import java.util.UUID;
 @Service
 public class CreateJournalEntryUseCase {
     private final JournalEntryRepository repo;
+    private final AccountingPeriodUseCase accountingPeriodUseCase;
+    private final CurrentUserProvider currentUserProvider;
 
-    public CreateJournalEntryUseCase(JournalEntryRepository repo) { this.repo = repo; }
+    public CreateJournalEntryUseCase(JournalEntryRepository repo,
+                                     AccountingPeriodUseCase accountingPeriodUseCase,
+                                     CurrentUserProvider currentUserProvider) {
+        this.repo = repo;
+        this.accountingPeriodUseCase = accountingPeriodUseCase;
+        this.currentUserProvider = currentUserProvider;
+    }
 
     @Transactional
     public JournalEntry createManual(LocalDate entryDate, String description, List<JournalEntryLine> lines) {
+        accountingPeriodUseCase.assertOpen(entryDate);
         var entry = buildEntry(entryDate, description, "MANUAL", null, lines);
         entry.validate();
         return repo.save(entry);
@@ -46,6 +56,10 @@ public class CreateJournalEntryUseCase {
                 return existing.get();
             }
         }
+
+        // A5: a retried event for an already-posted document is a no-op above; a genuinely new
+        // entry must not land in an explicitly CLOSED accounting period.
+        accountingPeriodUseCase.assertOpen(entryDate);
 
         var entry = buildEntry(entryDate, description, sourceType, sourceId, lines);
         entry.validate();
@@ -77,6 +91,8 @@ public class CreateJournalEntryUseCase {
                                       List<JournalEntryLine> lines) {
         String datePart = date.format(DateTimeFormatter.BASIC_ISO_DATE);
         long seq = repo.nextEntrySequence();
-        return new JournalEntry(null, "JE-" + datePart + "-" + String.format("%06d", seq), date, description, sourceType, sourceId, null, lines);
+        UUID createdBy = currentUserProvider.currentUserId().orElse(null);
+        return new JournalEntry(null, "JE-" + datePart + "-" + String.format("%06d", seq), date, description,
+                sourceType, sourceId, null, createdBy, lines);
     }
 }

@@ -22,6 +22,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -87,7 +88,7 @@ public class AccountingEventListener {
 
             switch (doc.type()) {
                 case INVOICE -> postSaleEntry(event, doc);
-                case CREDIT_NOTE -> postCreditNoteReversal(event);
+                case CREDIT_NOTE -> postCreditNoteReversal(event, doc);
                 default -> log.debug("No accounting treatment for sales document type {} (id {}); skipping",
                         doc.type(), event.salesDocumentId());
             }
@@ -217,7 +218,7 @@ public class AccountingEventListener {
             });
         }
 
-        postEntryIfBalanced("SALE", event.salesDocumentId(),
+        postEntryIfBalanced("SALE", event.salesDocumentId(), documentDate(doc.createdAt()),
                 "Factura de venta " + event.invoiceNumber(), lines);
     }
 
@@ -239,7 +240,7 @@ public class AccountingEventListener {
      *   <li>{@code SALE_COGS} / {@code SALE_INVENTORY_OUT} → swapped at the returned Kardex cost.</li>
      * </ul>
      */
-    private void postCreditNoteReversal(InvoiceIssuedEvent event) {
+    private void postCreditNoteReversal(InvoiceIssuedEvent event, SalesDocument doc) {
         var lines = new ArrayList<JournalEntryLine>();
 
         // Keep the same template resolution as the sale (default → product-specific).
@@ -351,7 +352,7 @@ public class AccountingEventListener {
             });
         }
 
-        postEntryIfBalanced("SALE", event.salesDocumentId(),
+        postEntryIfBalanced("SALE", event.salesDocumentId(), documentDate(doc.createdAt()),
                 "Nota crédito " + event.invoiceNumber(), lines);
     }
 
@@ -396,7 +397,7 @@ public class AccountingEventListener {
                     "Recibo " + event.receiptNumber()));
             lines.add(creditLine(clientAcct.id(), event.amount(),
                     "Abono cliente recibo " + event.receiptNumber()));
-            postEntryIfBalanced("PAYMENT", event.receiptId(),
+            postEntryIfBalanced("PAYMENT", event.receiptId(), LocalDate.now(),
                     "Recibo de caja " + event.receiptNumber(), lines);
         } catch (Exception ex) {
             log.error("Accounting failed for cash receipt {}; the business operation is unaffected",
@@ -433,7 +434,7 @@ public class AccountingEventListener {
                 lines.add(creditLine(lossAcct.id(), event.delta(),
                         "Ingreso sobrante " + event.reason()));
             }
-            postEntryIfBalanced("INVENTORY", event.adjustmentId(),
+            postEntryIfBalanced("INVENTORY", event.adjustmentId(), LocalDate.now(),
                     "Ajuste inventario: " + event.reason(), lines);
         } catch (Exception ex) {
             log.error("Accounting failed for inventory adjustment '{}'; the business operation is unaffected",
@@ -531,7 +532,7 @@ public class AccountingEventListener {
             }
         }
 
-        postEntryIfBalanced("PURCHASE", event.invoiceId(),
+        postEntryIfBalanced("PURCHASE", event.invoiceId(), LocalDate.now(),
                 "Factura proveedor " + event.invoiceNumber(), lines);
     }
 
@@ -594,7 +595,7 @@ public class AccountingEventListener {
      * PUC account can leave the lines unbalanced; rather than throwing and marking the post-commit
      * transaction rollback-only, the entry is skipped with a warning.
      */
-    private void postEntryIfBalanced(String sourceType, java.util.UUID sourceId,
+    private void postEntryIfBalanced(String sourceType, java.util.UUID sourceId, LocalDate entryDate,
                                      String description, List<JournalEntryLine> lines) {
         if (lines.isEmpty()) {
             log.warn("No journal lines resolved for {} {}; skipping entry", sourceType, sourceId);
@@ -609,7 +610,16 @@ public class AccountingEventListener {
                     sourceType, sourceId, debit, credit);
             return;
         }
-        journalUseCase.createAuto(sourceType, sourceId, LocalDate.now(), description, lines);
+        journalUseCase.createAuto(sourceType, sourceId, entryDate, description, lines);
+    }
+
+    /**
+     * The accounting date of a document is its creation date (A5): a retroactive invoice is
+     * posted inside the period it belongs to, not the period where the event happened to run.
+     * Falls back to the current date when the document carries no timestamp.
+     */
+    private LocalDate documentDate(OffsetDateTime createdAt) {
+        return createdAt != null ? createdAt.toLocalDate() : LocalDate.now();
     }
 
     private JournalEntryLine debitLine(java.util.UUID accountId, BigDecimal amount, String description) {
