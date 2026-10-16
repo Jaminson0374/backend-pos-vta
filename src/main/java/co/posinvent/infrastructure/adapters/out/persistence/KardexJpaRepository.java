@@ -10,10 +10,13 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface KardexJpaRepository extends JpaRepository<InventoryMovementEntity, UUID> {
+
+    List<InventoryMovementEntity> findByReferenceTypeAndReferenceId(String referenceType, UUID referenceId);
 
     @Query("""
         SELECT m FROM InventoryMovementEntity m
