@@ -116,6 +116,7 @@ public class CompanyConfigUseCase {
                 request.legalRepresentativeEmail(),
                 request.autoGenerateJournalEntries() != null ? request.autoGenerateJournalEntries() : true,
                 request.purchaseRetefuenteRate(),
+                request.purchaseIcaRate(),
                 null,
                 null,
                 maxDiscountPct,

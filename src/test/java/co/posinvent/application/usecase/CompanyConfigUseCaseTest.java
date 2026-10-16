@@ -87,7 +87,7 @@ class CompanyConfigUseCaseTest {
                 1L, "Company", "NIT", null, null, null, null, null, null, false,
                 List.of(), List.of(), List.of(), null, "COP", null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null,
-                null, null, true, null, null, null,
+                null, null, true, null, null, null, null,
                 new BigDecimal(maxDiscountPct), new BigDecimal(cashierMaxDiscountPct));
     }
 
@@ -96,7 +96,7 @@ class CompanyConfigUseCaseTest {
                 "Company", "NIT", null, null, null, null, null, null, false,
                 List.of(), List.of(), List.of(), null, "COP", null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null,
-                null, null, null, true,
+                null, null, null, null, true,
                 maxDiscountPct == null ? null : new BigDecimal(maxDiscountPct),
                 cashierMaxDiscountPct == null ? null : new BigDecimal(cashierMaxDiscountPct));
     }
