@@ -1,6 +1,7 @@
 package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.ElectronicInvoiceResponse;
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.DianSyncQueueItem;
 import co.posinvent.domain.model.ElectronicInvoiceStatus;
 import co.posinvent.domain.model.SyncStatus;
@@ -42,8 +43,7 @@ public class ManageElectronicInvoiceUseCase {
     public ElectronicInvoiceResponse getBySalesDocument(UUID salesDocumentId) {
         return repository.findBySalesDocumentId(salesDocumentId)
                 .map(ElectronicInvoiceResponse::from)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Factura electrónica no encontrada para el documento: " + salesDocumentId));
+                .orElseThrow(() -> new ResourceNotFoundException("Factura electrónica", salesDocumentId));
     }
 
     @Transactional

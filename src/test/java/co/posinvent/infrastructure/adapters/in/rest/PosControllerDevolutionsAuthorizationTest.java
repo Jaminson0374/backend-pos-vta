@@ -1,6 +1,7 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.DevolutionResponse;
+import co.posinvent.application.usecase.ManageElectronicInvoiceUseCase;
 import co.posinvent.application.usecase.PosCheckoutUseCase;
 import co.posinvent.application.usecase.PosDevolutionUseCase;
 import co.posinvent.domain.repository.ProductRepository;
@@ -64,6 +65,9 @@ class PosControllerDevolutionsAuthorizationTest {
 
     @MockitoBean
     private SalesDocumentRepository salesDocumentRepository;
+
+    @MockitoBean
+    private ManageElectronicInvoiceUseCase manageElectronicInvoiceUseCase;
 
     @MockitoBean
     private JwtService jwtService;

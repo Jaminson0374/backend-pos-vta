@@ -2,10 +2,12 @@ package co.posinvent.infrastructure.adapters.in.rest;
 
 import co.posinvent.application.dto.DevolutionRequest;
 import co.posinvent.application.dto.DevolutionResponse;
+import co.posinvent.application.dto.ElectronicInvoiceResponse;
 import co.posinvent.application.dto.PageResponse;
 import co.posinvent.application.dto.ProductResponse;
 import co.posinvent.application.usecase.CheckoutRequest;
 import co.posinvent.application.usecase.CheckoutResponse;
+import co.posinvent.application.usecase.ManageElectronicInvoiceUseCase;
 import co.posinvent.application.usecase.PosCheckoutUseCase;
 import co.posinvent.application.usecase.PosDevolutionUseCase;
 import co.posinvent.domain.model.SalesDocument;
@@ -31,15 +33,18 @@ public class PosController {
     private final PosDevolutionUseCase devolutionUseCase;
     private final ProductRepository productRepo;
     private final SalesDocumentRepository salesDocumentRepo;
+    private final ManageElectronicInvoiceUseCase electronicInvoiceUseCase;
 
     public PosController(PosCheckoutUseCase checkoutUseCase,
                          PosDevolutionUseCase devolutionUseCase,
                          ProductRepository productRepo,
-                         SalesDocumentRepository salesDocumentRepo) {
+                         SalesDocumentRepository salesDocumentRepo,
+                         ManageElectronicInvoiceUseCase electronicInvoiceUseCase) {
         this.checkoutUseCase = checkoutUseCase;
         this.devolutionUseCase = devolutionUseCase;
         this.productRepo = productRepo;
         this.salesDocumentRepo = salesDocumentRepo;
+        this.electronicInvoiceUseCase = electronicInvoiceUseCase;
     }
 
     @PostMapping("/checkout")
@@ -78,5 +83,11 @@ public class PosController {
         var pageable = PageRequest.of(page, size);
         var result = productRepo.searchByName(q, pageable);
         return ResponseEntity.ok(PageResponse.from(result, ProductResponse::from));
+    }
+
+    @GetMapping("/invoices/{salesDocumentId}/dian")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
+    public ResponseEntity<ElectronicInvoiceResponse> getDianStatus(@PathVariable UUID salesDocumentId) {
+        return ResponseEntity.ok(electronicInvoiceUseCase.getBySalesDocument(salesDocumentId));
     }
 }
