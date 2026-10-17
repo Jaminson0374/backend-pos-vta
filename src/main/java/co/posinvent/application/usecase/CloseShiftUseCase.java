@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
@@ -101,8 +102,10 @@ public class CloseShiftUseCase {
         // match posts nothing. Published inside this transaction so the
         // @TransactionalEventListener(AFTER_COMMIT) fires only once the shift is persisted.
         if (difference.signum() != 0) {
+            // closing_time is TIMESTAMPTZ: a DB round-trip yields the OffsetDateTime in UTC, so pin the
+            // accounting date to the business zone (JVM default) instead of the value's raw offset.
             LocalDate entryDate = closed.closingTime() != null
-                    ? closed.closingTime().toLocalDate()
+                    ? closed.closingTime().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
                     : LocalDate.now();
             eventPublisher.publishEvent(new ShiftClosedAccountedEvent(
                     this, closed.id(), extractShortId(closed.id()), difference, entryDate));
