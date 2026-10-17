@@ -8,10 +8,13 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.CompanyConfig;
 import co.posinvent.domain.model.InvoiceStatus;
 import co.posinvent.domain.model.PurchaseAccountedEvent;
+import co.posinvent.domain.model.PurchaseOrderStatus;
 import co.posinvent.domain.model.PurchaseRetentionConfig;
 import co.posinvent.domain.model.SupplierInvoice;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.repository.CompanyConfigRepository;
+import co.posinvent.domain.repository.GoodsReceiptRepository;
+import co.posinvent.domain.repository.PurchaseOrderRepository;
 import co.posinvent.domain.repository.PurchaseRetentionConfigRepository;
 import co.posinvent.domain.repository.SupplierInvoiceRepository;
 import co.posinvent.domain.repository.ThirdPartyCategoryRepository;
@@ -34,6 +37,15 @@ public class SupplierInvoiceUseCase {
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
 
+    /**
+     * Amount-reconciliation tolerance (hallazgo A9): the invoice subtotal may exceed the value
+     * actually received ({@code Σ receivedQty × actualCost}) by at most 1% — unit prices may be
+     * slightly adjusted between the order and the supplier invoice — floored at 1.00 so rounding
+     * never blocks a small invoice. Anything above that is an {@code INV_AMOUNT_MISMATCH}.
+     */
+    private static final BigDecimal AMOUNT_TOLERANCE_RATE = new BigDecimal("0.01");
+    private static final BigDecimal MIN_AMOUNT_TOLERANCE = BigDecimal.ONE;
+
     /** Roles allowed to set a manual retention override (backend-owned retention policy, A2). */
     private static final Set<String> OVERRIDE_ROLES = Set.of("ADMIN", "CONTADOR");
 
@@ -45,6 +57,8 @@ public class SupplierInvoiceUseCase {
     private final PurchaseRetentionConfigRepository retentionConfigRepository;
     private final CompanyConfigRepository companyConfigRepository;
     private final UserRepository userRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+    private final GoodsReceiptRepository goodsReceiptRepository;
 
     public SupplierInvoiceUseCase(
             SupplierInvoiceRepository invoiceRepository,
@@ -54,7 +68,9 @@ public class SupplierInvoiceUseCase {
             AccountsPayableUseCase accountsPayableUseCase,
             PurchaseRetentionConfigRepository retentionConfigRepository,
             CompanyConfigRepository companyConfigRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            PurchaseOrderRepository purchaseOrderRepository,
+            GoodsReceiptRepository goodsReceiptRepository
     ) {
         this.invoiceRepository = invoiceRepository;
         this.thirdPartyRepository = thirdPartyRepository;
@@ -64,6 +80,8 @@ public class SupplierInvoiceUseCase {
         this.retentionConfigRepository = retentionConfigRepository;
         this.companyConfigRepository = companyConfigRepository;
         this.userRepository = userRepository;
+        this.purchaseOrderRepository = purchaseOrderRepository;
+        this.goodsReceiptRepository = goodsReceiptRepository;
     }
 
     @Transactional(readOnly = true)
@@ -311,6 +329,10 @@ public class SupplierInvoiceUseCase {
                     "Estado actual: " + existing.status());
         }
 
+        // A9: a supplier invoice may only be reconciled against a valid purchase order that has
+        // goods actually received for at least the invoiced amount (see validateReconciliation).
+        validateReconciliation(existing);
+
         var reconciled = new SupplierInvoice(
                 existing.id(),
                 existing.supplierId(),
@@ -336,6 +358,71 @@ public class SupplierInvoiceUseCase {
         accountsPayableUseCase.createFromInvoice(saved);
 
         return SupplierInvoiceResponse.from(saved);
+    }
+
+    /**
+     * Guards the reconciliation against orphan invoices and amount over-invoicing (A9).
+     *
+     * <ol>
+     *   <li><b>Purchase order present:</b> the invoice must reference at least one OC, otherwise
+     *       {@code INV_NO_PURCHASE_ORDER}.</li>
+     *   <li><b>Purchase order valid:</b> every referenced OC must exist ({@link ResourceNotFoundException}
+     *       otherwise) and must not be {@code CANCELLED}; a cancelled order is not receivable
+     *       ({@code INV_OC_NOT_RECEIVABLE}). {@code PENDING}/{@code PARTIAL}/{@code RECEIVED} pass and
+     *       are then gated by the receipt requirement below.</li>
+     *   <li><b>Receipt present (anti-orphan):</b> every referenced OC must have at least one
+     *       {@code GoodsReceipt}, otherwise {@code INV_NO_RECEIPT}.</li>
+     *   <li><b>Amount match:</b> the invoice subtotal may exceed the value actually received
+     *       ({@code Σ receivedQty × actualCost} across the OCs' receipts) by at most
+     *       {@link #AMOUNT_TOLERANCE_RATE} (floored at {@link #MIN_AMOUNT_TOLERANCE}); above that it
+     *       is {@code INV_AMOUNT_MISMATCH}.</li>
+     * </ol>
+     */
+    private void validateReconciliation(SupplierInvoice invoice) {
+        var ocIds = invoice.ocIds();
+        if (ocIds == null || ocIds.isEmpty()) {
+            throw new BusinessException("INV_NO_PURCHASE_ORDER",
+                    "La factura no tiene orden de compra asociada");
+        }
+
+        var receivedValue = BigDecimal.ZERO;
+        for (var ocId : ocIds) {
+            var oc = purchaseOrderRepository.findById(ocId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Orden de compra", ocId));
+            var label = oc.documentNumber() != null && !oc.documentNumber().isBlank()
+                    ? oc.documentNumber()
+                    : ocId.toString();
+
+            if (oc.status() == PurchaseOrderStatus.CANCELLED) {
+                throw new BusinessException("INV_OC_NOT_RECEIVABLE",
+                        "La orden de compra " + label +
+                        " está cancelada y no es recibible");
+            }
+
+            var receipts = goodsReceiptRepository.findByOcId(ocId);
+            if (receipts.isEmpty()) {
+                throw new BusinessException("INV_NO_RECEIPT",
+                        "La orden de compra " + label +
+                        " no tiene recepción; no se puede conciliar");
+            }
+
+            for (var receipt : receipts) {
+                for (var line : receipt.lines()) {
+                    receivedValue = receivedValue.add(
+                            line.receivedQty().multiply(line.actualCost()));
+                }
+            }
+        }
+
+        var tolerance = receivedValue.multiply(AMOUNT_TOLERANCE_RATE)
+                .max(MIN_AMOUNT_TOLERANCE);
+        var excess = invoice.subtotal().subtract(receivedValue);
+        if (excess.compareTo(tolerance) > 0) {
+            throw new BusinessException("INV_AMOUNT_MISMATCH",
+                    "El subtotal de la factura (" + invoice.subtotal() +
+                    ") excede el valor recibido (" + receivedValue +
+                    ") por encima de la tolerancia (" + tolerance + ")");
+        }
     }
 
     @Transactional

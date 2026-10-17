@@ -1,15 +1,23 @@
 package co.posinvent.integration;
 
+import co.posinvent.application.dto.GoodsReceiptRequest;
 import co.posinvent.application.dto.PaymentRequest;
 import co.posinvent.application.dto.SupplierInvoiceRequest;
 import co.posinvent.application.usecase.AccountsPayableUseCase;
+import co.posinvent.application.usecase.CreateGoodsReceiptUseCase;
 import co.posinvent.application.usecase.PaymentUseCase;
 import co.posinvent.application.usecase.SupplierInvoiceUseCase;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.AccountsPayable;
 import co.posinvent.domain.model.InvoiceStatus;
+import co.posinvent.domain.model.PurchaseLineItem;
+import co.posinvent.domain.model.PurchaseOrder;
+import co.posinvent.domain.model.PurchaseOrderStatus;
 import co.posinvent.domain.model.ThirdParty;
+import co.posinvent.domain.model.Warehouse;
 import co.posinvent.domain.repository.AccountsPayableRepository;
+import co.posinvent.domain.repository.PurchaseOrderRepository;
+import co.posinvent.infrastructure.adapters.out.persistence.TestDataFactory;
 import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,13 +51,22 @@ class PaymentReducesAccountsPayableIntegrationTest extends AbstractIntegrationTe
     @Autowired private PaymentUseCase paymentUseCase;
     @Autowired private AccountsPayableUseCase accountsPayableUseCase;
     @Autowired private AccountsPayableRepository accountsPayableRepository;
+    @Autowired private CreateGoodsReceiptUseCase createGoodsReceiptUseCase;
+    @Autowired private PurchaseOrderRepository purchaseOrderRepository;
 
     private UUID supplierId;
+    private UUID warehouseId;
+    private UUID productId;
 
     @BeforeEach
     void setUp() {
-        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                supplierId = createSupplier());
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            supplierId = createSupplier();
+            warehouseId = TestDataFactory.createWarehouse(
+                    em, "CxP Payment WH", Warehouse.WarehouseType.CORTES);
+            productId = TestDataFactory.createProduct(
+                    em, "CXP", "Producto pago CxP", false, true);
+        });
     }
 
     @Test
@@ -139,14 +156,39 @@ class PaymentReducesAccountsPayableIntegrationTest extends AbstractIntegrationTe
     }
 
     private UUID reconciledInvoice(BigDecimal total) {
+        // A9: reconcile now requires an OC with goods actually received for at least the invoiced
+        // amount, so each fixture invoice is backed by its own fully received OC of value == total.
+        var ocId = receivedPurchaseOrder(total);
         var created = supplierInvoiceUseCase.create(new SupplierInvoiceRequest(
                 supplierId,
                 "FAC-CXP-" + UUID.randomUUID().toString().substring(0, 8),
                 LocalDate.now(), LocalDate.now().plusDays(30),
                 total, BigDecimal.ZERO, BigDecimal.ZERO, total,
-                null, List.of()), TEST_USER_ID);
+                null, List.of(ocId)), TEST_USER_ID);
         supplierInvoiceUseCase.reconcile(created.id());
         return created.id();
+    }
+
+    /** Creates a fully received OC whose received value ({@code receivedQty × actualCost}) equals {@code value}. */
+    private UUID receivedPurchaseOrder(BigDecimal value) {
+        var holder = new PurchaseOrder[1];
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var line = new PurchaseLineItem(
+                    null, null, productId, warehouseId,
+                    value, BigDecimal.ZERO, BigDecimal.ONE,
+                    BigDecimal.ZERO, "EXENTO", 1);
+            holder[0] = purchaseOrderRepository.save(new PurchaseOrder(
+                    null, supplierId, PurchaseOrderStatus.PENDING, LocalDate.now(),
+                    "OC-CXP-" + UUID.randomUUID().toString().substring(0, 6),
+                    null, null, null, null, null, null, "COP",
+                    TEST_USER_ID, null, null, null, List.of(line)));
+        });
+        createGoodsReceiptUseCase.process(new GoodsReceiptRequest(
+                holder[0].id(),
+                List.of(new GoodsReceiptRequest.ReceiptLine(
+                        productId, warehouseId, value, BigDecimal.ONE, null))),
+                TEST_USER_ID);
+        return holder[0].id();
     }
 
     private void pay(UUID invoiceId, String amount) {

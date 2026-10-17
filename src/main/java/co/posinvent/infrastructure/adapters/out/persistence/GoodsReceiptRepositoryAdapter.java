@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -66,5 +67,11 @@ class GoodsReceiptRepositoryAdapter implements GoodsReceiptRepository {
     @Transactional(readOnly = true)
     public Page<GoodsReceipt> findByOcId(UUID ocId, Pageable pageable) {
         return jpa.findByOcId(ocId, pageable).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GoodsReceipt> findByOcId(UUID ocId) {
+        return jpa.findByOcId(ocId).stream().map(mapper::toDomain).toList();
     }
 }
