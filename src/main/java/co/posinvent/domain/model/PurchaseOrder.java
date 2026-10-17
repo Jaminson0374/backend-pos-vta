@@ -28,8 +28,4 @@ public record PurchaseOrder(
         if (lines == null) lines = List.of();
         if (currency == null || currency.isBlank()) currency = "COP";
     }
-
-    public boolean isMutable() {
-        return status == PurchaseOrderStatus.PENDING;
-    }
 }
