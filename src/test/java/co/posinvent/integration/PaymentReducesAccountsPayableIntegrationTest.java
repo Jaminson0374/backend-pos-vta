@@ -2,7 +2,9 @@ package co.posinvent.integration;
 
 import co.posinvent.application.dto.GoodsReceiptRequest;
 import co.posinvent.application.dto.PaymentRequest;
+import co.posinvent.application.dto.PaymentResponse;
 import co.posinvent.application.dto.SupplierInvoiceRequest;
+import co.posinvent.application.dto.SupplierInvoiceResponse;
 import co.posinvent.application.usecase.AccountsPayableUseCase;
 import co.posinvent.application.usecase.CreateGoodsReceiptUseCase;
 import co.posinvent.application.usecase.PaymentUseCase;
@@ -22,6 +24,7 @@ import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -46,6 +49,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * transactions so the AFTER_COMMIT accounting listener runs exactly like in production.</p>
  */
 class PaymentReducesAccountsPayableIntegrationTest extends AbstractIntegrationTest {
+
+    private static final String SUPPLIER_NAME = "Supplier CxP Payment";
 
     @Autowired private SupplierInvoiceUseCase supplierInvoiceUseCase;
     @Autowired private PaymentUseCase paymentUseCase;
@@ -121,6 +126,31 @@ class PaymentReducesAccountsPayableIntegrationTest extends AbstractIntegrationTe
     }
 
     @Test
+    void invoiceAndPaymentResponsesExposeTheRealSupplierName() {
+        var total = new BigDecimal("1000.00");
+        var created = supplierInvoiceUseCase.create(new SupplierInvoiceRequest(
+                supplierId,
+                "FAC-NAME-" + UUID.randomUUID().toString().substring(0, 8),
+                LocalDate.now(), LocalDate.now().plusDays(30),
+                total, BigDecimal.ZERO, BigDecimal.ZERO, total,
+                null, List.of()), TEST_USER_ID);
+
+        assertThat(created.supplierName()).isEqualTo(SUPPLIER_NAME);
+        assertThat(supplierInvoiceUseCase.getById(created.id()).supplierName()).isEqualTo(SUPPLIER_NAME);
+        assertThat(supplierInvoiceUseCase.findBySupplier(supplierId, PageRequest.of(0, 20)).content())
+                .extracting(SupplierInvoiceResponse::supplierName)
+                .containsOnly(SUPPLIER_NAME);
+
+        var payment = pay(reconciledInvoice(total), "1000.00");
+
+        assertThat(payment.supplierName()).isEqualTo(SUPPLIER_NAME);
+        assertThat(paymentUseCase.getById(payment.id()).supplierName()).isEqualTo(SUPPLIER_NAME);
+        assertThat(paymentUseCase.findBySupplier(supplierId, PageRequest.of(0, 20)).content())
+                .extracting(PaymentResponse::supplierName)
+                .containsOnly(SUPPLIER_NAME);
+    }
+
+    @Test
     void multiInvoicePaymentReducesBothAccountsPayable() {
         var invoiceA = reconciledInvoice(new BigDecimal("600.00"));
         var invoiceB = reconciledInvoice(new BigDecimal("400.00"));
@@ -191,8 +221,8 @@ class PaymentReducesAccountsPayableIntegrationTest extends AbstractIntegrationTe
         return holder[0].id();
     }
 
-    private void pay(UUID invoiceId, String amount) {
-        paymentUseCase.create(new PaymentRequest(
+    private PaymentResponse pay(UUID invoiceId, String amount) {
+        return paymentUseCase.create(new PaymentRequest(
                 supplierId, new BigDecimal(amount), LocalDate.now(), "TRANSFERENCIA",
                 "PAG-CXP-" + UUID.randomUUID().toString().substring(0, 6), null,
                 List.of(new PaymentRequest.InvoicePaymentInput(invoiceId, new BigDecimal(amount)))),

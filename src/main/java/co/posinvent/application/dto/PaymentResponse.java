@@ -28,10 +28,14 @@ public record PaymentResponse(
     ) {}
 
     public static PaymentResponse from(Payment payment) {
+        return from(payment, null);
+    }
+
+    public static PaymentResponse from(Payment payment, String supplierName) {
         return new PaymentResponse(
                 payment.id(),
                 payment.supplierId(),
-                null,
+                supplierName,
                 payment.amount(),
                 payment.paymentDate(),
                 payment.method(),

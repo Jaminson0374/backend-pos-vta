@@ -27,10 +27,14 @@ public record SupplierInvoiceResponse(
         List<UUID> ocIds
 ) {
     public static SupplierInvoiceResponse from(SupplierInvoice invoice) {
+        return from(invoice, null);
+    }
+
+    public static SupplierInvoiceResponse from(SupplierInvoice invoice, String supplierName) {
         return new SupplierInvoiceResponse(
                 invoice.id(),
                 invoice.supplierId(),
-                null,
+                supplierName,
                 invoice.invoiceNumber(),
                 invoice.issueDate(),
                 invoice.dueDate(),
