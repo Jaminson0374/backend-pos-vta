@@ -9,7 +9,6 @@ import co.posinvent.domain.repository.AccountsReceivableRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
-import co.posinvent.domain.repository.ThirdPartyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +36,6 @@ class PosDevolutionUseCaseTest {
     @Mock private ProductRepository productRepo;
     @Mock private RecordMovementUseCase recordMovement;
     @Mock private AccountsReceivableRepository arRepo;
-    @Mock private ThirdPartyRepository thirdPartyRepo;
     @Mock private ApplicationEventPublisher eventPublisher;
 
     private PosDevolutionUseCase useCase;
@@ -63,7 +61,7 @@ class PosDevolutionUseCaseTest {
     void setUp() {
         useCase = new PosDevolutionUseCase(
                 documentRepo, stockRepo, productRepo,
-                recordMovement, arRepo, thirdPartyRepo, eventPublisher);
+                recordMovement, arRepo, eventPublisher);
     }
 
     // ── Scenario 1: Invoice not found → ResourceNotFoundException ──────────
@@ -323,17 +321,15 @@ class PosDevolutionUseCaseTest {
         assertThat(response.reversedItems()).isEqualTo(1);
         assertThat(response.arAdjustment()).isEqualByComparingTo("0.00");
 
-        // Verify NO AR/ThirdParty interactions (cash sale)
+        // Verify NO AR interactions (cash sale)
         verify(arRepo, never()).findByDocumentId(any());
         verify(arRepo, never()).save(any(AccountsReceivable.class));
-        verify(thirdPartyRepo, never()).findById(any());
-        verify(thirdPartyRepo, never()).save(any(ThirdParty.class));
     }
 
     // ── Scenario 9: Credit sale devolution reduces AR ───────────────────────
 
     @Test
-    void creditSaleDevolution_reducesARAndThirdPartyBalance() {
+    void creditSaleDevolution_reducesArOutstandingWithoutStaticBalanceWrite() {
         var invoice = document(SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED, true,
                 List.of(invoiceItem(PRODUCT_A_ID, QTY_5, PRICE_10000)));
         when(documentRepo.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
@@ -375,11 +371,6 @@ class PosDevolutionUseCaseTest {
         // AR save
         when(arRepo.save(any(AccountsReceivable.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // ThirdParty with currentBalance = 59,500
-        var tp = thirdPartyWithBalance(new BigDecimal("59500.00"));
-        when(thirdPartyRepo.findById(CLIENT_ID)).thenReturn(Optional.of(tp));
-        when(thirdPartyRepo.save(any(ThirdParty.class))).thenAnswer(inv -> inv.getArgument(0));
-
         // Full devolution of item A (qty=5, unitPrice=10,000)
         var request = new DevolutionRequest(INVOICE_ID,
                 List.of(item(PRODUCT_A_ID, QTY_5)), "Devolución crédito");
@@ -394,10 +385,7 @@ class PosDevolutionUseCaseTest {
         verify(arRepo).save(arCaptor.capture());
         assertThat(arCaptor.getValue().outstanding()).isEqualByComparingTo("9500.00");
 
-        // Verify ThirdParty.currentBalance reduced: 59500 - 50000 = 9500
-        var tpCaptor = ArgumentCaptor.forClass(ThirdParty.class);
-        verify(thirdPartyRepo).save(tpCaptor.capture());
-        assertThat(tpCaptor.getValue().currentBalance()).isEqualByComparingTo("9500.00");
+        // The static balance writer is gone: the AR ledger is the only source of truth.
     }
 
     // ── Scenario 10: Discounted invoice → refund reverts the NET PAID ───────
@@ -558,16 +546,5 @@ class PosDevolutionUseCaseTest {
                 quantity, unitPrice,
                 "IVA_19", TAX_RATE_19, taxAmount, subtotal,
                 1, BATCH_ID);
-    }
-
-    private ThirdParty thirdPartyWithBalance(BigDecimal balance) {
-        return new ThirdParty(
-                CLIENT_ID, "123", "Cliente Test", ThirdParty.ThirdPartyType.CLIENT,
-                null, BigDecimal.ZERO, balance,
-                ThirdParty.PersonType.NATURAL, ThirdParty.TaxRegime.ORDINARIO,
-                List.of(), "001", null, true, null, null,
-                null, null, null, null, null, null, null, null, null, null,
-                null, null, 0, null, null, null, null, null, null, null,
-                null, false, false, false, false, false, null);
     }
 }

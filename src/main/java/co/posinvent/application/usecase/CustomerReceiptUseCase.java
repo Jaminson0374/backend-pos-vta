@@ -93,9 +93,6 @@ public class CustomerReceiptUseCase {
         eventPublisher.publishEvent(new CashReceiptEvent(
                 this, saved.id(), receiptNumber(saved), saved.amount(), saved.paymentDate()));
 
-        // 6. Update ThirdParty.currentBalance: subtract total amount
-        updateClientBalance(request.clientId(), request.amount().negate());
-
         return CustomerReceiptResponse.from(saved);
     }
 
@@ -128,62 +125,6 @@ public class CustomerReceiptUseCase {
                 .map(CustomerReceiptResponse::from)
                 .map(this::enrich)
                 .orElseThrow(() -> new ResourceNotFoundException("Recibo", id));
-    }
-
-    private void updateClientBalance(UUID clientId, BigDecimal delta) {
-        var client = thirdPartyRepo.findById(clientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cliente", clientId));
-
-        var newBalance = client.currentBalance() != null
-                ? client.currentBalance().add(delta)
-                : delta;
-
-        var updated = new ThirdParty(
-                client.id(),
-                client.numIdentification(),
-                client.name(),
-                client.type(),
-                client.priceListId(),
-                client.creditLimit(),
-                newBalance,
-                client.personType(),
-                client.taxRegime(),
-                client.taxResponsibilities(),
-                client.cityCode(),
-                client.dianClassification(),
-                client.active(),
-                client.createdAt(),
-                null,
-                client.thirdPartyCategoryId(),
-                client.identificationTypeId(),
-                client.dv(),
-                client.lastName(),
-                client.commonName(),
-                client.phone(),
-                client.address(),
-                client.departmentId(),
-                client.cityId(),
-                client.email(),
-                client.website(),
-                client.entryDate(),
-                client.creditDays(),
-                client.contactName(),
-                client.contactPhone(),
-                client.contactAddress(),
-                client.contactEmail(),
-                client.taxContactFirstName(),
-                client.taxContactLastName(),
-                client.taxEmail(),
-                client.billingPhone(),
-                client.isGranContribuyente(),
-                client.isAutoretenedor(),
-                client.isAgenteRetencionIva(),
-                client.isRegimenSimple(),
-                client.otherTaxResp(),
-                client.employeeData()
-        );
-
-        thirdPartyRepo.save(updated);
     }
 
     private CustomerReceiptResponse enrich(CustomerReceiptResponse r) {

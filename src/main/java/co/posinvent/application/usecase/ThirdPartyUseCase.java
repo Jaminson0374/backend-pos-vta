@@ -148,7 +148,7 @@ public class ThirdPartyUseCase {
                 resolveType(request),
                 request.priceListId(),
                 request.creditLimit(),
-                existing.currentBalance(),
+                BigDecimal.ZERO,
                 request.personType(),
                 request.taxRegime(),
                 request.taxResponsibilities(),
