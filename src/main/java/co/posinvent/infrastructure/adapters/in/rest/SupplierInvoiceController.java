@@ -59,7 +59,7 @@ public class SupplierInvoiceController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<SupplierInvoiceResponse> create(
             @Valid @RequestBody SupplierInvoiceRequest request,
             @AuthenticationPrincipal PosUserDetails principal
@@ -69,13 +69,13 @@ public class SupplierInvoiceController {
     }
 
     @PatchMapping("/{id}/reconcile")
-    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<SupplierInvoiceResponse> reconcile(@PathVariable UUID id) {
         return ResponseEntity.ok(supplierInvoiceUseCase.reconcile(id));
     }
 
     @PatchMapping("/{id}/dispute")
-    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<SupplierInvoiceResponse> dispute(
             @PathVariable UUID id,
             @RequestBody Map<String, String> body

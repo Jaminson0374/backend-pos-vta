@@ -27,7 +27,7 @@ public class PaymentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<PageResponse<PaymentResponse>> list(
             @RequestParam(required = false) UUID supplierId,
             @RequestParam(defaultValue = "0") int page,
@@ -46,7 +46,7 @@ public class PaymentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<PaymentResponse> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(paymentUseCase.getById(id));
     }

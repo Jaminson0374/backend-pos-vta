@@ -57,7 +57,7 @@ public class PurchaseOrderController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR')")
     public ResponseEntity<PurchaseOrderResponse> create(
             @Valid @RequestBody PurchaseOrderRequest request,
             @AuthenticationPrincipal PosUserDetails principal
@@ -67,7 +67,7 @@ public class PurchaseOrderController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR')")
     public ResponseEntity<PurchaseOrderResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody PurchaseOrderRequest request
@@ -76,7 +76,7 @@ public class PurchaseOrderController {
     }
 
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR')")
     public ResponseEntity<PurchaseOrderResponse> cancel(@PathVariable UUID id) {
         return ResponseEntity.ok(purchaseOrderUseCase.cancel(id));
     }
