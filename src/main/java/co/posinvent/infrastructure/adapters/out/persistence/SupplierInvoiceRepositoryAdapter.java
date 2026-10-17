@@ -6,6 +6,7 @@ import co.posinvent.domain.repository.SupplierInvoiceRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,7 @@ class SupplierInvoiceRepositoryAdapter implements SupplierInvoiceRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<SupplierInvoice> findById(UUID id) {
         return jpa.findById(id).map(mapper::toDomain);
     }
