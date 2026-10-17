@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,5 +51,10 @@ class PaymentRepositoryAdapter implements PaymentRepository {
     @Override
     public Page<Payment> findByIsAdvanceTrueAndSupplierId(UUID supplierId, Pageable pageable) {
         return jpa.findByIsAdvanceTrueAndSupplierId(supplierId, pageable).map(mapper::toDomain);
+    }
+
+    @Override
+    public BigDecimal sumRemainingAdvanceBySupplierId(UUID supplierId) {
+        return jpa.sumRemainingAdvanceBySupplierId(supplierId);
     }
 }
