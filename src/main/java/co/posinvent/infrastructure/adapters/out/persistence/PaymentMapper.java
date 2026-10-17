@@ -12,7 +12,6 @@ interface PaymentMapper {
 
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "version", ignore = true)
     @Mapping(target = "advance", source = "isAdvance")
     PaymentEntity toEntity(Payment domain);
 }
