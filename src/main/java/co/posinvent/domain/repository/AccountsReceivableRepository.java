@@ -4,6 +4,7 @@ import co.posinvent.domain.model.AccountsReceivable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -37,4 +38,11 @@ public interface AccountsReceivableRepository {
     List<AccountsReceivable> findByStatusAndOutstandingGreaterThan(AccountsReceivable.ArStatus status, java.math.BigDecimal minOutstanding, LocalDate dueDateBefore);
 
     Page<AccountsReceivable> findAll(Pageable pageable);
+
+    /**
+     * Sum of {@code outstanding} over every AR row of the client. This is the single source of
+     * truth for the customer balance, replacing the static {@code third_parties.current_balance}
+     * field on the receivable side.
+     */
+    BigDecimal sumOutstandingByClientId(UUID clientId);
 }

@@ -84,4 +84,9 @@ public class AccountsReceivableRepositoryAdapter implements AccountsReceivableRe
     public Page<AccountsReceivable> findAll(Pageable pageable) {
         return jpa.findAll(pageable).map(mapper::toDomain);
     }
+
+    @Override
+    public java.math.BigDecimal sumOutstandingByClientId(UUID clientId) {
+        return jpa.sumOutstandingByClientId(clientId);
+    }
 }

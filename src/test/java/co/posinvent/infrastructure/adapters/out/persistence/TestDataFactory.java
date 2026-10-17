@@ -110,6 +110,12 @@ public final class TestDataFactory {
      * back to the product sale price (Tier 3). Used by POS checkout tests.
      */
     public static UUID createClientThirdParty(EntityManager em, String numIdentification, String name) {
+        return createClientThirdParty(em, numIdentification, name, BigDecimal.ZERO, BigDecimal.ZERO);
+    }
+
+    /** Creates a CLIENT third-party with the given credit limit and static balance. */
+    public static UUID createClientThirdParty(EntityManager em, String numIdentification, String name,
+                                              BigDecimal creditLimit, BigDecimal currentBalance) {
         var t = new ThirdPartyEntity();
         t.setNumIdentification(numIdentification);
         t.setName(name);
@@ -118,10 +124,42 @@ public final class TestDataFactory {
         t.setTaxRegime(ThirdParty.TaxRegime.ORDINARIO);
         t.setTaxResponsibilities(List.of());
         t.setActive(true);
-        t.setCreditLimit(BigDecimal.ZERO);
-        t.setCurrentBalance(BigDecimal.ZERO);
+        t.setCreditLimit(creditLimit);
+        t.setCurrentBalance(currentBalance);
         em.persist(t);
         return t.getId();
+    }
+
+    /**
+     * Persists a sales-document anchor and the AR row that references it. The anchor only satisfies
+     * the {@code accounts_receivable.document_id} foreign key; the AR row is what the derived
+     * customer balance sums.
+     */
+    public static UUID createAccountsReceivable(EntityManager em, UUID clientId, UUID warehouseId,
+                                                 String documentNumber, BigDecimal outstanding) {
+        var doc = new SalesDocumentEntity();
+        doc.setType(SalesDocumentType.ORDER);
+        doc.setStatus(SalesDocumentStatus.CONFIRMED);
+        doc.setDocumentNumber(documentNumber);
+        doc.setClientId(clientId);
+        doc.setWarehouseId(warehouseId);
+        doc.setTotalNet(BigDecimal.ZERO);
+        doc.setTotalTax0(BigDecimal.ZERO);
+        doc.setTotalTax5(BigDecimal.ZERO);
+        doc.setTotalTax19(BigDecimal.ZERO);
+        doc.setTotalAmount(BigDecimal.ZERO);
+        em.persist(doc);
+
+        var ar = new AccountsReceivableEntity();
+        ar.setClientId(clientId);
+        ar.setDocumentId(doc.getId());
+        ar.setTotalAmount(outstanding);
+        ar.setPaidAmount(BigDecimal.ZERO);
+        ar.setOutstanding(outstanding);
+        ar.setDueDate(LocalDate.now().plusDays(30));
+        ar.setStatus("OPEN");
+        em.persist(ar);
+        return ar.getId();
     }
 
     /**
