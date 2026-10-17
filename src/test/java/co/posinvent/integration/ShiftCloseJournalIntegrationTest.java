@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -99,7 +100,10 @@ class ShiftCloseJournalIntegrationTest extends AbstractIntegrationTest {
             assertThat(entry.getSourceId()).isEqualTo(response.id());
 
             var persisted = shiftRepository.findById(response.id()).orElseThrow();
-            assertThat(entry.getEntryDate()).isEqualTo(persisted.closingTime().toLocalDate());
+            // closing_time is TIMESTAMPTZ and Hibernate reads OffsetDateTime back in UTC, while the
+            // entry is dated on the business-local date; convert the persisted instant before comparing.
+            var expectedDate = persisted.closingTime().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate();
+            assertThat(entry.getEntryDate()).isEqualTo(expectedDate);
 
             assertThat(totalDebit(entry)).isEqualByComparingTo(totalCredit(entry));
             assertThat(totalDebit(entry)).isEqualByComparingTo("10000");
