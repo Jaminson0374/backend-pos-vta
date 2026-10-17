@@ -88,7 +88,7 @@ public class SupplierInvoiceUseCase {
     public PageResponse<SupplierInvoiceResponse> list(Pageable pageable) {
         return PageResponse.from(
                 invoiceRepository.findAll(pageable),
-                SupplierInvoiceResponse::from
+                this::toResponse
         );
     }
 
@@ -96,7 +96,7 @@ public class SupplierInvoiceUseCase {
     public PageResponse<SupplierInvoiceResponse> findBySupplier(UUID supplierId, Pageable pageable) {
         return PageResponse.from(
                 invoiceRepository.findBySupplierId(supplierId, pageable),
-                SupplierInvoiceResponse::from
+                this::toResponse
         );
     }
 
@@ -104,7 +104,7 @@ public class SupplierInvoiceUseCase {
     public PageResponse<SupplierInvoiceResponse> findByStatus(InvoiceStatus status, Pageable pageable) {
         return PageResponse.from(
                 invoiceRepository.findByStatus(status, pageable),
-                SupplierInvoiceResponse::from
+                this::toResponse
         );
     }
 
@@ -113,15 +113,25 @@ public class SupplierInvoiceUseCase {
             UUID supplierId, InvoiceStatus status, Pageable pageable) {
         return PageResponse.from(
                 invoiceRepository.findBySupplierIdAndStatus(supplierId, status, pageable),
-                SupplierInvoiceResponse::from
+                this::toResponse
         );
     }
 
     @Transactional(readOnly = true)
     public SupplierInvoiceResponse getById(UUID id) {
         return invoiceRepository.findById(id)
-                .map(SupplierInvoiceResponse::from)
+                .map(this::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Factura de proveedor", id));
+    }
+
+    /** Maps an invoice to its response, resolving the supplier display name (M7). */
+    private SupplierInvoiceResponse toResponse(SupplierInvoice invoice) {
+        var supplierName = invoice.supplierId() == null
+                ? null
+                : thirdPartyRepository.findById(invoice.supplierId())
+                        .map(ThirdParty::name)
+                        .orElse(null);
+        return SupplierInvoiceResponse.from(invoice, supplierName);
     }
 
     @Transactional
@@ -217,7 +227,7 @@ public class SupplierInvoiceUseCase {
         // No static supplier balance write here: the payable side is sourced exclusively from the
         // AccountsPayable opened on reconcile (hallazgo C2 double-book fix). The invoice total is
         // not added to third_parties.current_balance anymore.
-        return SupplierInvoiceResponse.from(saved);
+        return SupplierInvoiceResponse.from(saved, supplier.name());
     }
 
     /**
@@ -357,7 +367,7 @@ public class SupplierInvoiceUseCase {
         // Create AccountsPayable record for this reconciled invoice
         accountsPayableUseCase.createFromInvoice(saved);
 
-        return SupplierInvoiceResponse.from(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -459,7 +469,7 @@ public class SupplierInvoiceUseCase {
                 existing.ocIds()
         );
 
-        return SupplierInvoiceResponse.from(invoiceRepository.save(disputed));
+        return toResponse(invoiceRepository.save(disputed));
     }
 
     private boolean isSupplier(ThirdParty tp) {

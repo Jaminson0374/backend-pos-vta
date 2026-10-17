@@ -14,8 +14,10 @@ import co.posinvent.domain.model.Payment;
 import co.posinvent.domain.model.Payment.InvoicePayment;
 import co.posinvent.domain.model.SupplierInvoice;
 import co.posinvent.domain.model.SupplierPaymentEvent;
+import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.repository.PaymentRepository;
 import co.posinvent.domain.repository.SupplierInvoiceRepository;
+import co.posinvent.domain.repository.ThirdPartyRepository;
 import co.posinvent.domain.service.PaymentDomainService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
@@ -33,6 +35,7 @@ public class PaymentUseCase {
 
     private final PaymentRepository paymentRepository;
     private final SupplierInvoiceRepository invoiceRepository;
+    private final ThirdPartyRepository thirdPartyRepository;
     private final AccountsPayableUseCase accountsPayableUseCase;
     private final PaymentDomainService domainService;
     private final ApplicationEventPublisher eventPublisher;
@@ -40,11 +43,13 @@ public class PaymentUseCase {
     public PaymentUseCase(
             PaymentRepository paymentRepository,
             SupplierInvoiceRepository invoiceRepository,
+            ThirdPartyRepository thirdPartyRepository,
             AccountsPayableUseCase accountsPayableUseCase,
             ApplicationEventPublisher eventPublisher
     ) {
         this.paymentRepository = paymentRepository;
         this.invoiceRepository = invoiceRepository;
+        this.thirdPartyRepository = thirdPartyRepository;
         this.accountsPayableUseCase = accountsPayableUseCase;
         this.domainService = new PaymentDomainService();
         this.eventPublisher = eventPublisher;
@@ -54,7 +59,7 @@ public class PaymentUseCase {
     public PageResponse<PaymentResponse> list(Pageable pageable) {
         return PageResponse.from(
                 paymentRepository.findAll(pageable),
-                PaymentResponse::from
+                this::toResponse
         );
     }
 
@@ -62,15 +67,25 @@ public class PaymentUseCase {
     public PageResponse<PaymentResponse> findBySupplier(UUID supplierId, Pageable pageable) {
         return PageResponse.from(
                 paymentRepository.findBySupplierId(supplierId, pageable),
-                PaymentResponse::from
+                this::toResponse
         );
     }
 
     @Transactional(readOnly = true)
     public PaymentResponse getById(UUID id) {
         return paymentRepository.findById(id)
-                .map(PaymentResponse::from)
+                .map(this::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Pago", id));
+    }
+
+    /** Maps a payment to its response, resolving the supplier display name (M7). */
+    private PaymentResponse toResponse(Payment payment) {
+        var supplierName = payment.supplierId() == null
+                ? null
+                : thirdPartyRepository.findById(payment.supplierId())
+                        .map(ThirdParty::name)
+                        .orElse(null);
+        return PaymentResponse.from(payment, supplierName);
     }
 
     @Transactional
@@ -165,7 +180,7 @@ public class PaymentUseCase {
             invoiceRepository.save(withStatus(invoice, newStatus));
         }
 
-        return PaymentResponse.from(savedPayment);
+        return toResponse(savedPayment);
     }
 
     /** Returns a copy of the invoice with a new status (used to keep the invoice coherent with the CxP). */
