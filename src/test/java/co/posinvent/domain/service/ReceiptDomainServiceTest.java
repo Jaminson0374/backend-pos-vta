@@ -30,6 +30,45 @@ class ReceiptDomainServiceTest {
     }
 
     @Test
+    void shouldRejectDuplicateReceiptLineForSameProduct() {
+        var oc = new PurchaseOrder(
+                OC_ID,
+                SUPPLIER_ID,
+                PurchaseOrderStatus.PENDING,
+                LocalDate.now(),
+                "OC-001",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0L,
+                List.of(new PurchaseLineItem(
+                        null, OC_ID, PRODUCT_ID, WAREHOUSE_ID,
+                        new BigDecimal("10"), BigDecimal.ZERO,
+                        new BigDecimal("100"), null, null, 1
+                ))
+        );
+
+        var receiptLine = new ReceiptLineItemInput(
+                PRODUCT_ID,
+                WAREHOUSE_ID,
+                new BigDecimal("5"),
+                new BigDecimal("500"),
+                null
+        );
+
+        assertThatThrownBy(() -> service.validateLines(oc, List.of(receiptLine, receiptLine)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "DUPLICATE_RECEIPT_LINE");
+    }
+
+    @Test
     void shouldRejectExpirationDateInPast() {
         var oc = new PurchaseOrder(
                 OC_ID,

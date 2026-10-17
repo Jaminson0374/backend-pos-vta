@@ -2,6 +2,7 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.GoodsReceiptRequest;
 import co.posinvent.application.dto.GoodsReceiptResponse;
+import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.model.Batch.BatchStatus;
@@ -31,6 +32,7 @@ public class CreateGoodsReceiptUseCase {
     private final BatchRepository batchRepository;
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
+    private final WarehouseRepository warehouseRepository;
     private final RecordMovementUseCase recordMovement;
     private final ReceiptDomainService domainService;
     private final PurchaseOrderDomainService purchaseOrderDomainService;
@@ -42,6 +44,7 @@ public class CreateGoodsReceiptUseCase {
             BatchRepository batchRepository,
             StockRepository stockRepository,
             ProductRepository productRepository,
+            WarehouseRepository warehouseRepository,
             RecordMovementUseCase recordMovement,
             ReceiptDomainService domainService,
             ApplicationEventPublisher eventPublisher
@@ -51,6 +54,7 @@ public class CreateGoodsReceiptUseCase {
         this.batchRepository = batchRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
+        this.warehouseRepository = warehouseRepository;
         this.recordMovement = recordMovement;
         this.domainService = domainService;
         this.purchaseOrderDomainService = new PurchaseOrderDomainService();
@@ -95,6 +99,23 @@ public class CreateGoodsReceiptUseCase {
                         line.receivedQty(), line.actualCost(),
                         line.expirationDate()))
                 .toList();
+
+        // 2b. M5b — every referenced warehouse and product must exist BEFORE any state is written.
+        //     Kept in the application layer (infra repositories) so ReceiptDomainService stays pure.
+        for (var input : receiptInputs) {
+            if (warehouseRepository.findById(input.warehouseId()).isEmpty()) {
+                throw new BusinessException(
+                        "WAREHOUSE_NOT_FOUND",
+                        "La bodega " + input.warehouseId() + " no existe"
+                );
+            }
+            if (productRepository.findById(input.productId()).isEmpty()) {
+                throw new BusinessException(
+                        "PRODUCT_NOT_FOUND",
+                        "El producto " + input.productId() + " no existe"
+                );
+            }
+        }
 
         // 3. Validate lines against OC
         domainService.validateLines(oc, receiptInputs);
@@ -200,10 +221,9 @@ public class CreateGoodsReceiptUseCase {
             batchIds.add(batch.id());
             expirationDates.add(input.expirationDate());
 
-            // 6b. Upsert stock: find existing or create new stock entry
-            var existingStock = stockRepository.findByProductBatchWarehouse(
-                    input.productId(), batch.id(), input.warehouseId());
-
+            // 6b. Stock for the freshly minted lot: the batch above is brand new, so no stock row
+            //     can pre-exist for its id — always INSERT one (mirrors ProcessSlaughterUseCase).
+            //     A new lot starts the Kardex ENTRY at previousQty = 0.
             // `actualCost` arriving from the request is the UNIT cost (the frontend sends
             // ocLine.unitCost). The stock row and the Kardex ENTRY movement value it per unit;
             // the batch's purchase_cost above is the line TOTAL (receivedQty × actualCost),
@@ -211,33 +231,17 @@ public class CreateGoodsReceiptUseCase {
             var unitCost = input.actualCost();
 
             var previousQty = BigDecimal.ZERO;
-            if (existingStock.isPresent()) {
-                var stock = existingStock.get();
-                previousQty = stock.currentQuantity();
-                stockRepository.save(new InventoryStock(
-                        stock.id(),
-                        stock.productId(),
-                        stock.batchId(),
-                        stock.warehouseId(),
-                        input.receivedQty(),
-                        BigDecimal.ZERO,
-                        unitCost,
-                        stock.createdAt(),
-                        null
-                ));
-            } else {
-                stockRepository.save(new InventoryStock(
-                        null,
-                        input.productId(),
-                        batch.id(),
-                        input.warehouseId(),
-                        input.receivedQty(),
-                        BigDecimal.ZERO,
-                        unitCost,
-                        null,
-                        null
-                ));
-            }
+            stockRepository.save(new InventoryStock(
+                    null,
+                    input.productId(),
+                    batch.id(),
+                    input.warehouseId(),
+                    input.receivedQty(),
+                    BigDecimal.ZERO,
+                    unitCost,
+                    null,
+                    null
+            ));
             productRepository.recalculateTotalStock(input.productId());
             recordMovement.record(
                     input.productId(), batch.id(), input.warehouseId(),
