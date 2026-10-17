@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,6 +55,20 @@ public final class ReceiptDomainService {
                     "EMPTY_RECEIPT_LINES",
                     "La recepción debe tener al menos una línea"
             );
+        }
+
+        // M6 — no puede haber dos líneas de recepción para el mismo producto: el stock y la OC
+        // asumen (receipt_id, product_id) único. Se detecta en dominio (fail-fast) en vez de
+        // depender de la restricción UNIQUE de la base en el flush.
+        var seenProducts = new HashSet<UUID>();
+        for (var receiptLine : receiptLines) {
+            if (!seenProducts.add(receiptLine.productId())) {
+                throw new BusinessException(
+                        "DUPLICATE_RECEIPT_LINE",
+                        "El producto " + receiptLine.productId()
+                                + " aparece más de una vez en la recepción"
+                );
+            }
         }
 
         var ocLineByProduct = oc.lines().stream()
