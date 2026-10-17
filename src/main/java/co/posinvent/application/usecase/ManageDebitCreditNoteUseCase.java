@@ -4,7 +4,6 @@ import co.posinvent.application.annotation.Auditable;
 import co.posinvent.application.dto.DebitCreditNoteRequest;
 import co.posinvent.application.dto.DebitCreditNoteResponse;
 import co.posinvent.application.dto.PageResponse;
-import co.posinvent.application.service.SupplierBalanceService;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.DebitCreditNote;
@@ -31,7 +30,6 @@ public class ManageDebitCreditNoteUseCase {
     private final DebitCreditNoteRepository repository;
     private final ThirdPartyRepository thirdPartyRepository;
     private final SupplierInvoiceRepository supplierInvoiceRepository;
-    private final SupplierBalanceService supplierBalanceService;
     private final AccountsPayableUseCase accountsPayableUseCase;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -39,14 +37,12 @@ public class ManageDebitCreditNoteUseCase {
             DebitCreditNoteRepository repository,
             ThirdPartyRepository thirdPartyRepository,
             SupplierInvoiceRepository supplierInvoiceRepository,
-            SupplierBalanceService supplierBalanceService,
             AccountsPayableUseCase accountsPayableUseCase,
             ApplicationEventPublisher eventPublisher
     ) {
         this.repository = repository;
         this.thirdPartyRepository = thirdPartyRepository;
         this.supplierInvoiceRepository = supplierInvoiceRepository;
-        this.supplierBalanceService = supplierBalanceService;
         this.accountsPayableUseCase = accountsPayableUseCase;
         this.eventPublisher = eventPublisher;
     }
@@ -111,16 +107,11 @@ public class ManageDebitCreditNoteUseCase {
                 saved.createdAt() != null ? saved.createdAt().toLocalDate() : LocalDate.now()
         ));
 
-        // Update AccountsPayable for the linked invoice
+        // Update AccountsPayable for the linked invoice. The CxP is the single source of truth for
+        // the payable side, so notes no longer write the static third_parties.current_balance.
         if (saved.supplierInvoiceId() != null) {
             accountsPayableUseCase.applyDebitNote(saved);
         }
-
-        // Adjust supplier balance:
-        // DEBIT_NOTE → increases debt → isCredit=false
-        // CREDIT_NOTE → reduces debt → isCredit=true
-        boolean isCredit = "CREDIT_NOTE".equals(saved.type());
-        supplierBalanceService.updateSupplierBalance(saved.supplierId(), saved.amount(), isCredit);
 
         var supplier = thirdPartyRepository.findById(saved.supplierId()).orElse(null);
         return DebitCreditNoteResponse.from(saved, supplier != null ? supplier.name() : null);
@@ -139,13 +130,11 @@ public class ManageDebitCreditNoteUseCase {
             validateInvoiceExists(request.supplierInvoiceId());
         }
 
-        // Reverse the old balance effect
-        boolean oldIsCredit = "CREDIT_NOTE".equals(existing.type());
-        supplierBalanceService.updateSupplierBalance(existing.supplierId(), existing.amount(), !oldIsCredit);
-
-        // Apply the new balance effect
-        boolean newIsCredit = "CREDIT_NOTE".equals(request.type());
-        supplierBalanceService.updateSupplierBalance(request.supplierId(), request.amount(), newIsCredit);
+        // M2: reverse the OLD note's AP effect before applying the NEW one, so an edit never
+        // double-counts (a lost reversal) nor stacks both notes on the payable.
+        if (existing.supplierInvoiceId() != null) {
+            accountsPayableUseCase.reverseDebitNote(existing);
+        }
 
         var documentNumber = request.documentNumber() != null && !request.documentNumber().isBlank()
                 ? request.documentNumber()
@@ -168,7 +157,7 @@ public class ManageDebitCreditNoteUseCase {
 
         var saved = repository.save(updated);
 
-        // Update AccountsPayable for the linked invoice
+        // Update AccountsPayable for the linked invoice (the new note's effect).
         if (saved.supplierInvoiceId() != null) {
             accountsPayableUseCase.applyDebitNote(saved);
         }
@@ -183,11 +172,11 @@ public class ManageDebitCreditNoteUseCase {
         var existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Nota débito/crédito", id));
 
-        // Reverse the balance effect:
-        // DEBIT_NOTE had increased debt → undo with isCredit=true (reduces debt back)
-        // CREDIT_NOTE had reduced debt → undo with isCredit=false (adds debt back)
-        boolean isCredit = "CREDIT_NOTE".equals(existing.type());
-        supplierBalanceService.updateSupplierBalance(existing.supplierId(), existing.amount(), !isCredit);
+        // M2: deleting a note must reverse its AP effect on the CxP, not only the static
+        // third_parties.current_balance (which is no longer written by this use case).
+        if (existing.supplierInvoiceId() != null) {
+            accountsPayableUseCase.reverseDebitNote(existing);
+        }
 
         repository.delete(id);
     }

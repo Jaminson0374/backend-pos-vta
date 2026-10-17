@@ -156,6 +156,49 @@ public class AccountsPayableUseCase {
         return enrich(AccountsPayableResponse.from(saved));
     }
 
+    /**
+     * Reverses the CxP effect previously applied by {@link #applyDebitNote(DebitCreditNote)}. Used
+     * when a note is edited (reverse the OLD effect before applying the NEW one) or deleted, so the
+     * payable never double-counts a note or loses its reversal.
+     *
+     * <p>It is the exact inverse of {@code applyDebitNote}: a DEBIT_NOTE had increased the payable
+     * total, so reversing it subtracts the amount; a CREDIT_NOTE had decreased it, so reversing it
+     * adds the amount back.</p>
+     *
+     * @param note the note whose previously applied AP effect must be undone
+     * @throws BusinessException when the reversal would drive the payable total below zero
+     */
+    @Transactional
+    public AccountsPayableResponse reverseDebitNote(DebitCreditNote note) {
+        var ap = apRepo.findByDocumentId(note.supplierInvoiceId())
+                .orElseThrow(() -> new ResourceNotFoundException("CxP para factura", note.supplierInvoiceId()));
+
+        var newTotal = ap.totalAmount();
+        if (note.isDebitNote()) {
+            newTotal = newTotal.subtract(note.amount());
+            if (newTotal.compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException("AP_NEGATIVE_TOTAL",
+                        "La reversión de la nota débito (" + note.amount()
+                        + ") excede el saldo total de la CxP (" + ap.totalAmount() + ")");
+            }
+        } else if (note.isCreditNote()) {
+            newTotal = newTotal.add(note.amount());
+        }
+
+        var newOutstanding = AccountsPayable.computeOutstanding(newTotal, ap.paidAmount());
+        var newStatus = AccountsPayable.computeStatus(newTotal, ap.paidAmount());
+
+        var updated = new AccountsPayable(
+                ap.id(), ap.supplierId(), ap.documentId(),
+                null,
+                newTotal, ap.paidAmount(), newOutstanding,
+                ap.dueDate(), newStatus,
+                ap.createdAt(), null
+        );
+        var saved = apRepo.save(updated);
+        return enrich(AccountsPayableResponse.from(saved));
+    }
+
     // ── Mark Overdue ───────────────────────────────────────────────────────
 
     @Transactional

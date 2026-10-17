@@ -2,9 +2,9 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.ApplyAdvanceRequest;
 import co.posinvent.application.dto.AdvanceResponse;
-import co.posinvent.application.service.SupplierBalanceService;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
+import co.posinvent.domain.model.AccountsPayable;
 import co.posinvent.domain.model.AdvanceApplication;
 import co.posinvent.domain.model.InvoiceStatus;
 import co.posinvent.domain.model.Payment;
@@ -25,15 +25,18 @@ public class ApplyAdvanceUseCase {
     private final PaymentRepository paymentRepository;
     private final SupplierInvoiceRepository invoiceRepository;
     private final AdvanceApplicationRepository advanceApplicationRepository;
+    private final AccountsPayableUseCase accountsPayableUseCase;
 
     public ApplyAdvanceUseCase(
             PaymentRepository paymentRepository,
             SupplierInvoiceRepository invoiceRepository,
-            AdvanceApplicationRepository advanceApplicationRepository
+            AdvanceApplicationRepository advanceApplicationRepository,
+            AccountsPayableUseCase accountsPayableUseCase
     ) {
         this.paymentRepository = paymentRepository;
         this.invoiceRepository = invoiceRepository;
         this.advanceApplicationRepository = advanceApplicationRepository;
+        this.accountsPayableUseCase = accountsPayableUseCase;
     }
 
     @Transactional
@@ -113,45 +116,47 @@ public class ApplyAdvanceUseCase {
         );
         paymentRepository.save(updatedAdvance);
 
-        // 6. Update invoice status if total is now covered
-        updateInvoiceStatusIfCovered(invoice);
+        // 6. Keep the CxP consistent (M3): an applied advance is a real payment against the
+        //    invoice's payable. Ensure the payable exists, apply the amount to it and mirror the
+        //    resulting status back on the invoice (PAID when fully settled, RECONCILED otherwise).
+        if (accountsPayableUseCase.findByDocumentId(invoice.id()).isEmpty()) {
+            accountsPayableUseCase.createFromInvoice(invoice);
+        }
+        var updatedAp = accountsPayableUseCase.applyPayment(invoice.id(), request.appliedAmount());
+        var newStatus = AccountsPayable.ApStatus.valueOf(updatedAp.status()) == AccountsPayable.ApStatus.PAID
+                ? InvoiceStatus.PAID
+                : InvoiceStatus.RECONCILED;
+        updateInvoiceStatus(invoice, newStatus);
 
         return AdvanceResponse.from(updatedAdvance);
     }
 
     /**
-     * Checks if the invoice total is fully covered by payments and advances,
-     * updating its status to PAID if so.
+     * Mirrors the CxP-derived status onto the invoice: PAID when the payable is fully settled,
+     * RECONCILED while it still has outstanding.
      */
-    private void updateInvoiceStatusIfCovered(SupplierInvoice invoice) {
-        // If already PAID, nothing to do
-        if (invoice.status() == InvoiceStatus.PAID) return;
-
-        // For now, advance application transitions invoice to RECONCILED at minimum.
-        // Full payment checking would require summing up all invoice_payments + advance_applications
-        // which is a separate concern. We transition to RECONCILED since at least partial payment
-        // has been applied via advance.
-
-        if (invoice.status() == InvoiceStatus.PENDING) {
-            var updatedInvoice = new SupplierInvoice(
-                    invoice.id(),
-                    invoice.supplierId(),
-                    invoice.invoiceNumber(),
-                    invoice.issueDate(),
-                    invoice.dueDate(),
-                    invoice.subtotal(),
-                    invoice.ivaTotal(),
-                    invoice.retentionTotal(),
-                    invoice.total(),
-                    InvoiceStatus.RECONCILED,
-                    invoice.notes(),
-                    invoice.createdBy(),
-                    invoice.createdAt(),
-                    null,
-                    invoice.version(),
-                    invoice.ocIds()
-            );
-            invoiceRepository.save(updatedInvoice);
+    private void updateInvoiceStatus(SupplierInvoice invoice, InvoiceStatus status) {
+        if (invoice.status() == status) {
+            return;
         }
+        var updatedInvoice = new SupplierInvoice(
+                invoice.id(),
+                invoice.supplierId(),
+                invoice.invoiceNumber(),
+                invoice.issueDate(),
+                invoice.dueDate(),
+                invoice.subtotal(),
+                invoice.ivaTotal(),
+                invoice.retentionTotal(),
+                invoice.total(),
+                status,
+                invoice.notes(),
+                invoice.createdBy(),
+                invoice.createdAt(),
+                null,
+                invoice.version(),
+                invoice.ocIds()
+        );
+        invoiceRepository.save(updatedInvoice);
     }
 }
