@@ -24,7 +24,7 @@ public class AccountsPayableController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<PageResponse<AccountsPayableResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -36,13 +36,13 @@ public class AccountsPayableController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<AccountsPayableResponse> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(apUseCase.getById(id));
     }
 
     @GetMapping("/aging")
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<ApAgingResponse> getAging(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf
     ) {

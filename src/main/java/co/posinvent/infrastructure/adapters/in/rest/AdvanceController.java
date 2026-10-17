@@ -34,7 +34,7 @@ public class AdvanceController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<AdvanceResponse> create(
             @Valid @RequestBody AdvanceRequest request,
             @AuthenticationPrincipal PosUserDetails principal
@@ -44,7 +44,7 @@ public class AdvanceController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public ResponseEntity<PageResponse<AdvanceResponse>> list(
             @RequestParam(required = false) UUID supplierId,
             @RequestParam(defaultValue = "0") int page,
@@ -55,7 +55,7 @@ public class AdvanceController {
     }
 
     @PostMapping("/{id}/apply")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<AdvanceResponse> apply(
             @PathVariable UUID id,
             @Valid @RequestBody ApplyAdvanceRequest request,

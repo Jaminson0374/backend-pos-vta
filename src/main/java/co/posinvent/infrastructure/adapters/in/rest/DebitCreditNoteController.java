@@ -23,7 +23,7 @@ public class DebitCreditNoteController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public PageResponse<DebitCreditNoteResponse> list(
             @RequestParam(required = false) String type,
             @RequestParam(required = false) UUID supplierId,
@@ -34,20 +34,20 @@ public class DebitCreditNoteController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','CONTADOR')")
     public DebitCreditNoteResponse getById(@PathVariable UUID id) {
         return useCase.getById(id);
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public DebitCreditNoteResponse create(@Valid @RequestBody DebitCreditNoteRequest request) {
         return useCase.create(request);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<DebitCreditNoteResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody DebitCreditNoteRequest request
@@ -56,7 +56,7 @@ public class DebitCreditNoteController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         useCase.delete(id);
         return ResponseEntity.noContent().build();
