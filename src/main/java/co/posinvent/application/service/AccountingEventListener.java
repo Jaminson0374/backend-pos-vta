@@ -13,6 +13,8 @@ import co.posinvent.domain.model.ProductionAccountedEvent;
 import co.posinvent.domain.model.PucAccount;
 import co.posinvent.domain.model.SalesDocument;
 import co.posinvent.domain.model.ShiftClosedAccountedEvent;
+import co.posinvent.domain.model.SupplierAdvanceAppliedEvent;
+import co.posinvent.domain.model.SupplierAdvanceCreatedEvent;
 import co.posinvent.domain.model.SupplierNoteAccountedEvent;
 import co.posinvent.domain.repository.CompanyConfigRepository;
 import co.posinvent.domain.repository.KardexRepository;
@@ -60,6 +62,8 @@ public class AccountingEventListener {
     private static final String CASH_SURPLUS_ACCOUNT_CODE = "429515";
     /** Caja. */
     private static final String CASH_ACCOUNT_CODE = "1105";
+    /** Anticipos a proveedores — activo que se cruza contra la CxP al aplicar (S3b). */
+    private static final String ADVANCE_ACCOUNT_CODE = "133005";
 
     private final CreateJournalEntryUseCase journalUseCase;
     private final PucAccountRepository pucRepo;
@@ -871,6 +875,80 @@ public class AccountingEventListener {
         } catch (Exception ex) {
             log.error("Accounting failed for supplier payment {}; the business operation is unaffected",
                     event.paymentNumber(), ex);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // ANTICIPOS A PROVEEDORES (S3b)
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * Posts the accounting for a committed unapplied supplier advance: the cash leaving the
+     * company becomes an asset, so debit anticipos a proveedores {@code 133005} / credit caja
+     * {@code 1105}. Best-effort {@code AFTER_COMMIT} in its own transaction, dated with the
+     * advance; failures never roll back the already-committed payment.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onSupplierAdvanceCreated(SupplierAdvanceCreatedEvent event) {
+        try {
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+
+            var assetAcct = resolveByCode(ADVANCE_ACCOUNT_CODE, "ADVANCE asset");
+            var cashAcct = resolveByCode(CASH_ACCOUNT_CODE, "ADVANCE cash");
+            if (assetAcct == null || cashAcct == null) {
+                log.warn("Missing PUC account for supplier advance {}; skipping ADVANCE journal entry",
+                        event.paymentNumber());
+                return;
+            }
+
+            var lines = new ArrayList<JournalEntryLine>();
+            lines.add(debitLine(assetAcct.id(), event.amount(),
+                    "Anticipo a proveedor " + event.paymentNumber()));
+            lines.add(creditLine(cashAcct.id(), event.amount(),
+                    "Salida caja anticipo " + event.paymentNumber()));
+            postEntryIfBalanced("ADVANCE", event.paymentId(), entryDate(event.entryDate()),
+                    "Anticipo a proveedor " + event.paymentNumber(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for supplier advance {}; the business operation is unaffected",
+                    event.paymentNumber(), ex);
+        }
+    }
+
+    /**
+     * Posts the accounting for a committed advance application: the asset is consumed against the
+     * invoice payable, so debit proveedores {@code 2205} / credit anticipos a proveedores
+     * {@code 133005}. Best-effort {@code AFTER_COMMIT} in its own transaction, dated with the
+     * application.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onSupplierAdvanceApplied(SupplierAdvanceAppliedEvent event) {
+        try {
+            if (!isJournalGenerationEnabled()) {
+                return;
+            }
+
+            var payableAcct = resolvePayableAccount();
+            var assetAcct = resolveByCode(ADVANCE_ACCOUNT_CODE, "ADVANCE_APPLICATION asset");
+            if (payableAcct == null || assetAcct == null) {
+                log.warn("Missing PUC account for advance application {}; skipping ADVANCE_APPLICATION journal entry",
+                        event.applicationId());
+                return;
+            }
+
+            var lines = new ArrayList<JournalEntryLine>();
+            lines.add(debitLine(payableAcct.id(), event.amount(),
+                    "Aplicación anticipo a factura " + event.invoiceId()));
+            lines.add(creditLine(assetAcct.id(), event.amount(),
+                    "Cruce anticipo factura " + event.invoiceId()));
+            postEntryIfBalanced("ADVANCE_APPLICATION", event.applicationId(), entryDate(event.entryDate()),
+                    "Aplicación de anticipo a factura " + event.invoiceId(), lines);
+        } catch (Exception ex) {
+            log.error("Accounting failed for advance application {}; the business operation is unaffected",
+                    event.applicationId(), ex);
         }
     }
 
