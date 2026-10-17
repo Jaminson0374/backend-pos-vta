@@ -35,18 +35,23 @@ class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
 
     private static final BigDecimal STATIC_BALANCE = new BigDecimal("987654.32");
     private static final BigDecimal CREDIT_LIMIT = new BigDecimal("1000.00");
+    private static final BigDecimal SECOND_CLIENT_CREDIT_LIMIT = new BigDecimal("1000.00");
+    private static final BigDecimal NO_AR_CLIENT_CREDIT_LIMIT = new BigDecimal("500.00");
 
     @Autowired private CustomerBalanceUseCase customerBalanceUseCase;
     @Autowired private ThirdPartyRepository thirdPartyRepository;
 
     private UUID clientId;
+    private UUID secondClientId;
+    private UUID noArClientId;
     private UUID supplierId;
 
     @BeforeEach
     void setUp() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var warehouseId = TestDataFactory.createWarehouse(
-                    em, "Derived AR WH", Warehouse.WarehouseType.CORTES);
+                    em, "Derived AR WH " + UUID.randomUUID().toString().substring(0, 8),
+                    Warehouse.WarehouseType.CORTES);
 
             clientId = TestDataFactory.createClientThirdParty(
                     em,
@@ -62,6 +67,24 @@ class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
                     em, clientId, warehouseId,
                     "AR-DERIVED-B-" + UUID.randomUUID().toString().substring(0, 6),
                     new BigDecimal("250.00"));
+
+            // A second client with its own AR ledger: the balance must still be filtered by clientId.
+            secondClientId = TestDataFactory.createClientThirdParty(
+                    em,
+                    "CLI-DERIVED-2-" + UUID.randomUUID().toString().substring(0, 8),
+                    "Second Client Derived Balance",
+                    SECOND_CLIENT_CREDIT_LIMIT, BigDecimal.ZERO);
+            TestDataFactory.createAccountsReceivable(
+                    em, secondClientId, warehouseId,
+                    "AR-DERIVED-C-" + UUID.randomUUID().toString().substring(0, 6),
+                    new BigDecimal("900.00"));
+
+            // A client with no AR rows at all: coalesce must yield 0 outstanding.
+            noArClientId = TestDataFactory.createClientThirdParty(
+                    em,
+                    "CLI-DERIVED-3-" + UUID.randomUUID().toString().substring(0, 8),
+                    "Client Without AR",
+                    NO_AR_CLIENT_CREDIT_LIMIT, BigDecimal.ZERO);
 
             var supplier = new ThirdPartyEntity();
             supplier.setNumIdentification("SUP-DERIVED-" + UUID.randomUUID().toString().substring(0, 8));
@@ -91,6 +114,30 @@ class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
         assertThat(balance.creditLimit()).isEqualByComparingTo("1000.00");
         assertThat(balance.availableCredit()).isEqualByComparingTo("400.00");
         assertThat(balance.outstanding()).isNotEqualByComparingTo(STATIC_BALANCE);
+    }
+
+    @Test
+    void balanceIsScopedToTheRequestedClient() {
+        var second = customerBalanceUseCase.getBalance(secondClientId);
+
+        assertThat(second.clientId()).isEqualTo(secondClientId);
+        assertThat(second.outstanding()).isEqualByComparingTo("900.00");
+        assertThat(second.creditLimit()).isEqualByComparingTo("1000.00");
+        assertThat(second.availableCredit()).isEqualByComparingTo("100.00");
+
+        // The second client's AR rows do not leak into the first client's balance.
+        assertThat(customerBalanceUseCase.getBalance(clientId).outstanding())
+                .isEqualByComparingTo("600.00");
+    }
+
+    @Test
+    void clientWithoutArRowsHasZeroOutstandingAndFullCreditLimit() {
+        var balance = customerBalanceUseCase.getBalance(noArClientId);
+
+        assertThat(balance.clientId()).isEqualTo(noArClientId);
+        assertThat(balance.outstanding()).isEqualByComparingTo("0.00");
+        assertThat(balance.creditLimit()).isEqualByComparingTo("500.00");
+        assertThat(balance.availableCredit()).isEqualByComparingTo("500.00");
     }
 
     @Test

@@ -1,6 +1,8 @@
 package co.posinvent.integration;
 
+import co.posinvent.application.dto.CustomerBalanceResponse;
 import co.posinvent.application.usecase.CustomerBalanceUseCase;
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.infrastructure.adapters.in.rest.CustomerBalanceController;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import co.posinvent.infrastructure.config.JwtAuthFilter;
@@ -23,13 +25,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -44,6 +49,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CustomerBalanceControllerSecurityTest {
 
     private static final UUID CLIENT_ID = UUID.fromString("88888888-8888-8888-8888-888888888888");
+    private static final CustomerBalanceResponse BALANCE = new CustomerBalanceResponse(
+            CLIENT_ID,
+            new BigDecimal("600.00"),
+            new BigDecimal("1000.00"),
+            new BigDecimal("400.00"));
 
     @Autowired
     private MockMvc mockMvc;
@@ -80,8 +90,14 @@ class CustomerBalanceControllerSecurityTest {
     @Test
     @DisplayName("ADMIN can read the customer balance (GET /{id}/balance -> 200)")
     void adminCanReadBalance() throws Exception {
+        given(customerBalanceUseCase.getBalance(CLIENT_ID)).willReturn(BALANCE);
+
         mockMvc.perform(get("/api/v1/clients/{id}/balance", CLIENT_ID).with(asRole("ADMIN")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clientId").value(CLIENT_ID.toString()))
+                .andExpect(jsonPath("$.outstanding").value(600.00))
+                .andExpect(jsonPath("$.creditLimit").value(1000.00))
+                .andExpect(jsonPath("$.availableCredit").value(400.00));
 
         then(customerBalanceUseCase).should().getBalance(any());
     }
@@ -89,8 +105,14 @@ class CustomerBalanceControllerSecurityTest {
     @Test
     @DisplayName("AUXILIAR can read the customer balance (GET /{id}/balance -> 200)")
     void auxiliarCanReadBalance() throws Exception {
+        given(customerBalanceUseCase.getBalance(CLIENT_ID)).willReturn(BALANCE);
+
         mockMvc.perform(get("/api/v1/clients/{id}/balance", CLIENT_ID).with(asRole("AUXILIAR")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clientId").value(CLIENT_ID.toString()))
+                .andExpect(jsonPath("$.outstanding").value(600.00))
+                .andExpect(jsonPath("$.creditLimit").value(1000.00))
+                .andExpect(jsonPath("$.availableCredit").value(400.00));
 
         then(customerBalanceUseCase).should().getBalance(any());
     }
@@ -98,8 +120,27 @@ class CustomerBalanceControllerSecurityTest {
     @Test
     @DisplayName("CONTADOR can read the customer balance (GET /{id}/balance -> 200)")
     void contadorCanReadBalance() throws Exception {
+        given(customerBalanceUseCase.getBalance(CLIENT_ID)).willReturn(BALANCE);
+
         mockMvc.perform(get("/api/v1/clients/{id}/balance", CLIENT_ID).with(asRole("CONTADOR")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clientId").value(CLIENT_ID.toString()))
+                .andExpect(jsonPath("$.outstanding").value(600.00))
+                .andExpect(jsonPath("$.creditLimit").value(1000.00))
+                .andExpect(jsonPath("$.availableCredit").value(400.00));
+
+        then(customerBalanceUseCase).should().getBalance(any());
+    }
+
+    @Test
+    @DisplayName("unknown client maps the use case failure to 404 NOT_FOUND")
+    void missingClientReturnsNotFound() throws Exception {
+        given(customerBalanceUseCase.getBalance(CLIENT_ID))
+                .willThrow(new ResourceNotFoundException("Cliente", CLIENT_ID));
+
+        mockMvc.perform(get("/api/v1/clients/{id}/balance", CLIENT_ID).with(asRole("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("NOT_FOUND"));
 
         then(customerBalanceUseCase).should().getBalance(any());
     }
