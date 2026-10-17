@@ -12,6 +12,7 @@ import co.posinvent.domain.model.AccountsPayable;
 import co.posinvent.domain.model.InvoiceStatus;
 import co.posinvent.domain.model.Payment;
 import co.posinvent.domain.model.Payment.InvoicePayment;
+import co.posinvent.domain.model.SupplierAdvanceCreatedEvent;
 import co.posinvent.domain.model.SupplierInvoice;
 import co.posinvent.domain.model.SupplierPaymentEvent;
 import co.posinvent.domain.model.ThirdParty;
@@ -241,9 +242,15 @@ public class PaymentUseCase {
 
         var savedPayment = paymentRepository.save(payment);
 
-        // The supplier balance is now derived from the CxP (SUM(outstanding)); an advance is not
-        // yet represented there, so it no longer mutates the static third_parties.current_balance.
-        // Modelling advances against the payable (e.g. as a negative outstanding) is pending work.
+        // S3b: an unapplied advance is cash out that becomes an asset (debit 133005 / credit 1105).
+        // Publish after the save so the listener posts the entry once the transaction commits.
+        eventPublisher.publishEvent(new SupplierAdvanceCreatedEvent(
+                this, savedPayment.id(), paymentNumber(savedPayment),
+                savedPayment.amount(), savedPayment.paymentDate()));
+
+        // The supplier balance is derived from the CxP (SUM(outstanding)). The unapplied advance
+        // is an asset (PUC 133005), not a payable; applying it crosses the asset against the AP.
+        // It never mutates the AR-only third_parties.current_balance.
         return AdvanceResponse.from(savedPayment);
     }
 

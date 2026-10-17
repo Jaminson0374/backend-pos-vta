@@ -8,10 +8,12 @@ import co.posinvent.domain.model.AccountsPayable;
 import co.posinvent.domain.model.AdvanceApplication;
 import co.posinvent.domain.model.InvoiceStatus;
 import co.posinvent.domain.model.Payment;
+import co.posinvent.domain.model.SupplierAdvanceAppliedEvent;
 import co.posinvent.domain.model.SupplierInvoice;
 import co.posinvent.domain.repository.AdvanceApplicationRepository;
 import co.posinvent.domain.repository.PaymentRepository;
 import co.posinvent.domain.repository.SupplierInvoiceRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,17 +28,20 @@ public class ApplyAdvanceUseCase {
     private final SupplierInvoiceRepository invoiceRepository;
     private final AdvanceApplicationRepository advanceApplicationRepository;
     private final AccountsPayableUseCase accountsPayableUseCase;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ApplyAdvanceUseCase(
             PaymentRepository paymentRepository,
             SupplierInvoiceRepository invoiceRepository,
             AdvanceApplicationRepository advanceApplicationRepository,
-            AccountsPayableUseCase accountsPayableUseCase
+            AccountsPayableUseCase accountsPayableUseCase,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.paymentRepository = paymentRepository;
         this.invoiceRepository = invoiceRepository;
         this.advanceApplicationRepository = advanceApplicationRepository;
         this.accountsPayableUseCase = accountsPayableUseCase;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -93,7 +98,11 @@ public class ApplyAdvanceUseCase {
                 operatorId,
                 null
         );
-        advanceApplicationRepository.save(application);
+        var savedApplication = advanceApplicationRepository.save(application);
+        if (savedApplication.id() == null) {
+            // Defensive: the adapter normally returns the generated id; re-load when it does not.
+            savedApplication = reloadApplication(application);
+        }
 
         // 5. Decrement remainingAdvance
         var newRemaining = remaining.subtract(request.appliedAmount());
@@ -128,7 +137,26 @@ public class ApplyAdvanceUseCase {
                 : InvoiceStatus.RECONCILED;
         updateInvoiceStatus(invoice, newStatus);
 
+        // S3b: the applied advance crosses the asset against the invoice payable
+        // (debit 2205 / credit 133005). Publish only after every write has completed.
+        eventPublisher.publishEvent(new SupplierAdvanceAppliedEvent(
+                this, savedApplication.id(), savedApplication.advancePaymentId(),
+                savedApplication.invoiceId(), savedApplication.appliedAmount(),
+                savedApplication.applicationDate()));
+
         return AdvanceResponse.from(updatedAdvance);
+    }
+
+    /** Re-loads the persisted application when the repository save does not return its id. */
+    private AdvanceApplication reloadApplication(AdvanceApplication application) {
+        return advanceApplicationRepository.findByAdvancePaymentId(application.advancePaymentId())
+                .stream()
+                .filter(a -> application.invoiceId().equals(a.invoiceId())
+                        && a.appliedAmount().compareTo(application.appliedAmount()) == 0)
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new BusinessException(
+                        "ADVANCE_APPLICATION_NOT_PERSISTED",
+                        "No se pudo recuperar la aplicación del anticipo."));
     }
 
     /**
