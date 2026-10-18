@@ -35,11 +35,12 @@ public class JwtService {
         this.expirationMs = props.expirationMs();
     }
 
-    public String generateToken(UUID userId, String username, String role, UUID employeeId) {
+    public String generateToken(UUID userId, String username, String role, UUID employeeId, long tokenVersion) {
         var builder = Jwts.builder()
                 .subject(username)
                 .claim("uid", userId.toString())
                 .claim("role", role)
+                .claim("token_version", tokenVersion)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationMs));
 

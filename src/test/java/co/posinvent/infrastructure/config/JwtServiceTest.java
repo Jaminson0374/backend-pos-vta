@@ -45,10 +45,12 @@ class JwtServiceTest {
         var username = "admin@posinvent.co";
         var role = "ADMIN";
 
-        var token = service.generateToken(userId, username, role, null);
+        var token = service.generateToken(userId, username, role, null, 7L);
 
         assertThat(token).isNotBlank();
         assertThat(service.extractUsername(token)).isEqualTo(username);
         assertThat(service.isTokenValid(token)).isTrue();
+        assertThat(((Number) service.extractAllClaims(token).get("token_version")).longValue())
+                .isEqualTo(7L);
     }
 }

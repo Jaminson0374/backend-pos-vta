@@ -43,7 +43,8 @@ public class AuthenticateUserUseCase {
                 user.getId(),
                 user.getUsername(),
                 user.getRole().getName(),
-                user.getEmployee() != null ? user.getEmployee().getId() : null
+                user.getEmployee() != null ? user.getEmployee().getId() : null,
+                user.getTokenVersion()
         );
 
         return new LoginResponse(

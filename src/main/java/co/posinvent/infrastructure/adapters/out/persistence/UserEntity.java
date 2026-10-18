@@ -36,6 +36,9 @@ public class UserEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id")
     private ThirdPartyEntity employee;
