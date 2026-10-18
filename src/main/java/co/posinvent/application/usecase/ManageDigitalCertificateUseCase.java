@@ -2,12 +2,15 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.application.dto.DigitalCertificateResponse;
 import co.posinvent.application.service.CertificateCipherService;
+import co.posinvent.domain.exception.InvalidUploadException;
 import co.posinvent.domain.model.DigitalCertificate;
 import co.posinvent.domain.repository.DigitalCertificateRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -76,8 +79,12 @@ public class ManageDigitalCertificateUseCase {
 
     /**
      * Reads the PKCS12 once and returns every metadata value the API exposes.
-     * A malformed keystore or wrong password falls back to a one-year validity
-     * and unknown issuer/subject so uploads are never silently rejected.
+     *
+     * <p>Uploads are rejected with {@code INVALID_CERTIFICATE} when the keystore
+     * cannot be opened (wrong password, malformed bytes, or a parse/cast failure)
+     * or when it holds no X509 certificate. There is no silent fallback: storing a
+     * certificate with fabricated validity or unknown issuer/subject would make
+     * the admin surface lie about the real certificate.</p>
      */
     private CertificateMetadata extractMetadata(byte[] fileBytes, String password) {
         try (var inputStream = new ByteArrayInputStream(fileBytes)) {
@@ -87,8 +94,7 @@ public class ManageDigitalCertificateUseCase {
             var aliases = keyStore.aliases();
             while (aliases.hasMoreElements()) {
                 var alias = aliases.nextElement();
-                var certificate = (X509Certificate) keyStore.getCertificate(alias);
-                if (certificate != null) {
+                if (keyStore.getCertificate(alias) instanceof X509Certificate certificate) {
                     var validUntil = Instant.ofEpochMilli(certificate.getNotAfter().getTime())
                             .atZone(ZoneId.systemDefault())
                             .toLocalDate();
@@ -99,10 +105,16 @@ public class ManageDigitalCertificateUseCase {
                     );
                 }
             }
-        } catch (Exception e) {
-            // Fall through to the safe defaults below.
+        } catch (IOException | GeneralSecurityException | ClassCastException e) {
+            throw invalidCertificate();
         }
-        return new CertificateMetadata(LocalDate.now().plusYears(1), null, null);
+        throw invalidCertificate();
+    }
+
+    private static InvalidUploadException invalidCertificate() {
+        return new InvalidUploadException(
+                "INVALID_CERTIFICATE",
+                "El archivo no es un PKCS12 válido o la contraseña es incorrecta.");
     }
 
     private record CertificateMetadata(LocalDate validUntil, String issuer, String subject) {}

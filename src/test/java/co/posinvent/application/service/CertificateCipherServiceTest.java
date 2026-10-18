@@ -84,4 +84,20 @@ class CertificateCipherServiceTest {
         assertThatThrownBy(() -> serviceWith(KEY_BASE64).decrypt("plain-text"))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void rejectsInvalidBase64BodyAfterPrefix() {
+        assertThatThrownBy(() -> serviceWith(KEY_BASE64).decrypt("v1:not-base64!"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not valid Base64");
+    }
+
+    @Test
+    void rejectsPayloadAtOrBelowIvLength() {
+        var ivOnlyPayload = Base64.getEncoder().encodeToString(new byte[12]);
+
+        assertThatThrownBy(() -> serviceWith(KEY_BASE64).decrypt("v1:" + ivOnlyPayload))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("too short");
+    }
 }

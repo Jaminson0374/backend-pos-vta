@@ -3,6 +3,7 @@ package co.posinvent.integration;
 import co.posinvent.application.dto.DigitalCertificateResponse;
 import co.posinvent.application.service.CertificateCipherService;
 import co.posinvent.application.usecase.ManageDigitalCertificateUseCase;
+import co.posinvent.domain.exception.InvalidUploadException;
 import co.posinvent.domain.repository.DigitalCertificateRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import java.time.LocalDate;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * S3: the admin certificate surface must never leak the PKCS12 bytes or the
@@ -41,7 +43,7 @@ class DigitalCertificateSecurityIntegrationTest extends AbstractIntegrationTest 
             assertThat(response.alias()).isEqualTo("Test Cert");
             assertThat(response.issuer()).contains("PosInVent");
             assertThat(response.subject()).contains("Test Certificate");
-            assertThat(response.expirationDate()).isNotNull().isAfter(LocalDate.now());
+            assertThat(response.expirationDate()).isNotNull().isAfter(LocalDate.now().plusYears(5));
             assertThat(response.status()).isEqualTo("ACTIVE");
             assertThat(response.uploadedAt()).isNotNull();
 
@@ -59,6 +61,26 @@ class DigitalCertificateSecurityIntegrationTest extends AbstractIntegrationTest 
         } finally {
             manageDigitalCertificateUseCase.delete(response.id());
         }
+    }
+
+    @Test
+    void wrongKeystorePasswordIsRejected() throws Exception {
+        assertInvalidUploadIsRejected(readFixture(), "wrong-password", "Bad Cert");
+    }
+
+    @Test
+    void corruptFileIsRejected() {
+        assertInvalidUploadIsRejected(new byte[]{1, 2, 3, 4}, KEYSTORE_PASSWORD, "Corrupt");
+    }
+
+    private void assertInvalidUploadIsRejected(byte[] fileBytes, String password, String alias) {
+        assertThatThrownBy(() -> manageDigitalCertificateUseCase.upload(fileBytes, password, alias))
+                .isInstanceOf(InvalidUploadException.class)
+                .satisfies(error -> assertThat(((InvalidUploadException) error).getErrorCode())
+                        .isEqualTo("INVALID_CERTIFICATE"));
+
+        assertThat(repository.findAll())
+                .noneMatch(certificate -> alias.equals(certificate.name()));
     }
 
     private void assertResponseExposesNoSensitiveFields() {
