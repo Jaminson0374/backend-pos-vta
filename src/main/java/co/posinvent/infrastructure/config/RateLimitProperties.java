@@ -21,5 +21,7 @@ public record RateLimitProperties(
         @DefaultValue("5") @Min(1)
         int setPasswordCapacity,
         @DefaultValue("60") @Min(1)
-        int setPasswordWindowSeconds
+        int setPasswordWindowSeconds,
+        @DefaultValue("10000") @Min(1)
+        int maxBuckets
 ) {}

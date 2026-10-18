@@ -75,6 +75,10 @@ public class PasswordResetUseCase {
      */
     @Transactional
     public void setPassword(SetPasswordRequest request) {
+        if (request.token() == null || request.token().isBlank()) {
+            throw new BusinessException("INVALID_TOKEN", "El enlace no es válido o ya fue usado.");
+        }
+
         var tokenEntity = tokenJpaRepository.findByTokenHashAndUsedFalse(sha256Hex(request.token()))
                 .orElseThrow(() -> new BusinessException("INVALID_TOKEN",
                         "El enlace no es válido o ya fue usado."));

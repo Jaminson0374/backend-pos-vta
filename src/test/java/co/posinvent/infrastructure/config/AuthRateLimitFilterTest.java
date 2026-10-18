@@ -17,8 +17,12 @@ class AuthRateLimitFilterTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AuthRateLimitFilter filter(boolean trustForwardedHeaders) {
+        return filter(trustForwardedHeaders, 10_000);
+    }
+
+    private AuthRateLimitFilter filter(boolean trustForwardedHeaders, int maxBuckets) {
         return new AuthRateLimitFilter(
-                new RateLimitProperties(trustForwardedHeaders, 2, 60, 2, 60, 2, 60),
+                new RateLimitProperties(trustForwardedHeaders, 2, 60, 2, 60, 2, 60, maxBuckets),
                 objectMapper);
     }
 
@@ -67,6 +71,22 @@ class AuthRateLimitFilterTest {
         assertThat(attempt(filter, "POST", LOGIN, "10.0.0.1").getStatus()).isEqualTo(429);
 
         assertThat(attempt(filter, "POST", LOGIN, "10.0.0.2").getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void bucketMapIsBoundedAndEvictsLeastRecentlyUsed() throws Exception {
+        var filter = filter(false, 2);
+
+        assertThat(attempt(filter, "POST", LOGIN, "10.0.0.1").getStatus()).isEqualTo(200);
+        assertThat(attempt(filter, "POST", LOGIN, "10.0.0.1").getStatus()).isEqualTo(200);
+        assertThat(attempt(filter, "POST", LOGIN, "10.0.0.1").getStatus()).isEqualTo(429);
+
+        // Two new IPs push the map over capacity, evicting the least recently used bucket.
+        assertThat(attempt(filter, "POST", LOGIN, "10.0.0.2").getStatus()).isEqualTo(200);
+        assertThat(attempt(filter, "POST", LOGIN, "10.0.0.3").getStatus()).isEqualTo(200);
+
+        // 10.0.0.1 was evicted, so its bucket is recreated full and the request is allowed.
+        assertThat(attempt(filter, "POST", LOGIN, "10.0.0.1").getStatus()).isEqualTo(200);
     }
 
     @Test

@@ -63,4 +63,23 @@ class EmailServiceTest {
         assertThat(messages).noneMatch(message -> message.contains("/auth/set-password?token="));
         assertThat(messages).anyMatch(message -> message.contains(userId.toString()));
     }
+
+    @Test
+    void setPasswordInvitationFailureAlsoNeverLeaksTheTokenOrLink() {
+        doThrow(new MailSendException("smtp down"))
+                .when(mailSender).send(any(SimpleMailMessage.class));
+
+        var service = new EmailService(mailSender, "http://localhost:4200");
+        var userId = UUID.randomUUID();
+
+        service.sendSetPasswordInvitation(userId, "user@example.com", "User", RAW_TOKEN);
+
+        List<String> messages = appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+
+        assertThat(messages).noneMatch(message -> message.contains(RAW_TOKEN));
+        assertThat(messages).noneMatch(message -> message.contains("/auth/set-password?token="));
+        assertThat(messages).anyMatch(message -> message.contains(userId.toString()));
+    }
 }

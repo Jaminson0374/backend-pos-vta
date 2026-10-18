@@ -16,10 +16,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * In-memory token-bucket rate limiter for the unauthenticated auth endpoints.
@@ -37,7 +37,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitProperties properties;
     private final ObjectMapper objectMapper;
-    private final ConcurrentHashMap<String, TokenBucket> buckets = new ConcurrentHashMap<>();
+    private final Map<String, TokenBucket> buckets;
 
     @Autowired
     public AuthRateLimitFilter(RateLimitProperties properties) {
@@ -49,6 +49,20 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     public AuthRateLimitFilter(RateLimitProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.buckets = boundedBuckets(properties.maxBuckets());
+    }
+
+    /**
+     * Access-order map: reads move an entry to the end, and the eldest entry (least recently
+     * used) is dropped once the configured bound is exceeded.
+     */
+    private static Map<String, TokenBucket> boundedBuckets(int maxBuckets) {
+        return Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, TokenBucket> eldest) {
+                return size() > maxBuckets;
+            }
+        });
     }
 
     @Override
@@ -67,10 +81,14 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         }
 
         var key = request.getRequestURI() + "|" + resolveClientIp(request);
-        var bucket = buckets.computeIfAbsent(key,
-                ignored -> new TokenBucket(rule.capacity(), rule.windowSeconds() * NANOS_PER_SECOND));
 
-        long retryAfterSeconds = bucket.tryConsume();
+        long retryAfterSeconds;
+        synchronized (buckets) {
+            var bucket = buckets.computeIfAbsent(key,
+                    ignored -> new TokenBucket(rule.capacity(), rule.windowSeconds() * NANOS_PER_SECOND));
+            retryAfterSeconds = bucket.tryConsume();
+        }
+
         if (retryAfterSeconds > 0) {
             writeRateLimited(response, retryAfterSeconds);
             return;
@@ -81,7 +99,10 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
     @Scheduled(fixedDelay = 600_000)
     public void evictIdleBuckets() {
-        buckets.entrySet().removeIf(entry -> entry.getValue().canEvict());
+        // Iterating a synchronized map (even through entrySet) requires external locking.
+        synchronized (buckets) {
+            buckets.entrySet().removeIf(entry -> entry.getValue().canEvict());
+        }
     }
 
     private EndpointRule ruleFor(String uri) {

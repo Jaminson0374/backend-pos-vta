@@ -164,6 +164,23 @@ class PasswordResetUseCaseTest {
         verify(userJpaRepository, never()).save(any());
     }
 
+    @Test
+    void setPasswordRejectsNullAndBlankTokenWithoutTouchingRepositories() {
+        assertThatThrownBy(() -> useCase.setPassword(
+                new SetPasswordRequest(null, "NewSecret123!")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo("INVALID_TOKEN");
+
+        assertThatThrownBy(() -> useCase.setPassword(
+                new SetPasswordRequest("   ", "NewSecret123!")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo("INVALID_TOKEN");
+
+        verifyNoInteractions(tokenJpaRepository, passwordEncoder, userJpaRepository, emailService);
+    }
+
     private UserEntity user(UUID id, boolean active) {
         var user = new UserEntity();
         user.setId(id);
