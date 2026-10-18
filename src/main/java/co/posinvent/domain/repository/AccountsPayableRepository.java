@@ -21,7 +21,7 @@ public interface AccountsPayableRepository {
     /**
      * Derived supplier balance: the sum of the outstanding balance of every CxP row for the
      * supplier. This is the single source of truth for what is owed to the supplier, replacing
-     * the static {@code third_parties.current_balance} field on the payable side.
+     * the legacy static balance field on the payable side (column removed in A6).
      */
     BigDecimal sumOutstandingBySupplierId(UUID supplierId);
 

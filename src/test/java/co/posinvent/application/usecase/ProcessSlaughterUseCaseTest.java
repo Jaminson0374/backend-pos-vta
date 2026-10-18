@@ -236,7 +236,7 @@ class ProcessSlaughterUseCaseTest {
         return new ThirdParty(
                 INSPECTOR_ID, "000000000-0", "INSPECTOR",
                 ThirdParty.ThirdPartyType.EMPLOYEE, null,
-                BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 ThirdParty.PersonType.JURIDICA, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), null, null, true,
                 OffsetDateTime.now(), OffsetDateTime.now(),

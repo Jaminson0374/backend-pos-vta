@@ -110,12 +110,12 @@ public final class TestDataFactory {
      * back to the product sale price (Tier 3). Used by POS checkout tests.
      */
     public static UUID createClientThirdParty(EntityManager em, String numIdentification, String name) {
-        return createClientThirdParty(em, numIdentification, name, BigDecimal.ZERO, BigDecimal.ZERO);
+        return createClientThirdParty(em, numIdentification, name, BigDecimal.ZERO);
     }
 
-    /** Creates a CLIENT third-party with the given credit limit and static balance. */
+    /** Creates a CLIENT third-party with the given credit limit. */
     public static UUID createClientThirdParty(EntityManager em, String numIdentification, String name,
-                                              BigDecimal creditLimit, BigDecimal currentBalance) {
+                                              BigDecimal creditLimit) {
         var t = new ThirdPartyEntity();
         t.setNumIdentification(numIdentification);
         t.setName(name);
@@ -125,7 +125,6 @@ public final class TestDataFactory {
         t.setTaxResponsibilities(List.of());
         t.setActive(true);
         t.setCreditLimit(creditLimit);
-        t.setCurrentBalance(currentBalance);
         em.persist(t);
         return t.getId();
     }

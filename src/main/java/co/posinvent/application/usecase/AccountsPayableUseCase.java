@@ -267,14 +267,8 @@ public class AccountsPayableUseCase {
 
     /**
      * Derived supplier balance: {@code SUM(outstanding)} over the supplier's CxP rows. This is the
-     * single source of truth for the payable side, replacing the static
-     * {@code third_parties.current_balance} field.
-     *
-     * <p>Known pending work (out of this WU's edit surface): the client/CxC side still uses
-     * {@code current_balance}, and {@code ThirdPartyUseCase} still exposes that static field for
-     * suppliers in its responses. Debit/credit notes ({@code ManageDebitCreditNoteUseCase}) also
-     * still write the static supplier balance. Those readers/writers must be migrated to this
-     * derived balance before the {@code current_balance} column can be dropped.</p>
+     * single source of truth for the payable side, replacing the legacy static balance field that
+     * was removed from the third-party table in A6.
      */
     @Transactional(readOnly = true)
     public BigDecimal supplierOutstanding(UUID supplierId) {

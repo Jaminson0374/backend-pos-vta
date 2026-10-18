@@ -4,7 +4,6 @@ import co.posinvent.application.usecase.CustomerBalanceUseCase;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.model.Warehouse;
-import co.posinvent.domain.repository.ThirdPartyRepository;
 import co.posinvent.infrastructure.adapters.out.persistence.TestDataFactory;
 import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyEntity;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,25 +20,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Guards that the customer balance is derived exclusively from
- * {@code SUM(accounts_receivable.outstanding)} and never from the static
- * {@code third_parties.current_balance} column.
+ * {@code SUM(accounts_receivable.outstanding)}.
  *
- * <p>Seeds a client whose static balance is deliberately large and non-zero, with a credit limit of
- * 1000.00 and two AR rows whose outstanding adds up to 600.00. If any reader still mixed in the
- * static field, the derived balance would not match the AR sum.</p>
+ * <p>Seeds a client with a credit limit of 1000.00 and two AR rows whose outstanding adds up to
+ * 600.00. The balance is derived from the AR ledger; the legacy static balance column was removed
+ * in A6.</p>
  *
  * <p>Deliberately NOT {@code @Transactional}: the fixtures commit their own transactions so the
  * rows are visible to the use case exactly as in production.</p>
  */
 class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
 
-    private static final BigDecimal STATIC_BALANCE = new BigDecimal("987654.32");
     private static final BigDecimal CREDIT_LIMIT = new BigDecimal("1000.00");
     private static final BigDecimal SECOND_CLIENT_CREDIT_LIMIT = new BigDecimal("1000.00");
     private static final BigDecimal NO_AR_CLIENT_CREDIT_LIMIT = new BigDecimal("500.00");
 
     @Autowired private CustomerBalanceUseCase customerBalanceUseCase;
-    @Autowired private ThirdPartyRepository thirdPartyRepository;
 
     private UUID clientId;
     private UUID secondClientId;
@@ -57,7 +53,7 @@ class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
                     em,
                     "CLI-DERIVED-" + UUID.randomUUID().toString().substring(0, 8),
                     "Client Derived Balance",
-                    CREDIT_LIMIT, STATIC_BALANCE);
+                    CREDIT_LIMIT);
 
             TestDataFactory.createAccountsReceivable(
                     em, clientId, warehouseId,
@@ -73,7 +69,7 @@ class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
                     em,
                     "CLI-DERIVED-2-" + UUID.randomUUID().toString().substring(0, 8),
                     "Second Client Derived Balance",
-                    SECOND_CLIENT_CREDIT_LIMIT, BigDecimal.ZERO);
+                    SECOND_CLIENT_CREDIT_LIMIT);
             TestDataFactory.createAccountsReceivable(
                     em, secondClientId, warehouseId,
                     "AR-DERIVED-C-" + UUID.randomUUID().toString().substring(0, 6),
@@ -84,7 +80,7 @@ class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
                     em,
                     "CLI-DERIVED-3-" + UUID.randomUUID().toString().substring(0, 8),
                     "Client Without AR",
-                    NO_AR_CLIENT_CREDIT_LIMIT, BigDecimal.ZERO);
+                    NO_AR_CLIENT_CREDIT_LIMIT);
 
             var supplier = new ThirdPartyEntity();
             supplier.setNumIdentification("SUP-DERIVED-" + UUID.randomUUID().toString().substring(0, 8));
@@ -95,25 +91,19 @@ class CustomerBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
             supplier.setTaxResponsibilities(List.of());
             supplier.setActive(true);
             supplier.setCreditLimit(BigDecimal.ZERO);
-            supplier.setCurrentBalance(BigDecimal.ZERO);
             em.persist(supplier);
             supplierId = supplier.getId();
         });
     }
 
     @Test
-    void outstandingComesFromTheArRowsAndIgnoresTheStaticCurrentBalance() {
-        // Sanity: the static column really holds the large seeded value at assertion time.
-        assertThat(thirdPartyRepository.findById(clientId).orElseThrow().currentBalance())
-                .isEqualByComparingTo(STATIC_BALANCE);
-
+    void outstandingComesFromTheArRows() {
         var balance = customerBalanceUseCase.getBalance(clientId);
 
         assertThat(balance.clientId()).isEqualTo(clientId);
         assertThat(balance.outstanding()).isEqualByComparingTo("600.00");
         assertThat(balance.creditLimit()).isEqualByComparingTo("1000.00");
         assertThat(balance.availableCredit()).isEqualByComparingTo("400.00");
-        assertThat(balance.outstanding()).isNotEqualByComparingTo(STATIC_BALANCE);
     }
 
     @Test

@@ -20,8 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Guards that the third-party API exposes the derived receivable balance
- * ({@code SUM(accounts_receivable.outstanding)}) as {@code outstanding} instead of the frozen
- * {@code third_parties.current_balance}.
+ * ({@code SUM(accounts_receivable.outstanding)}) as {@code outstanding}. The legacy static
+ * balance column was removed in A6.
  *
  * <p>Covers the single-read path ({@code getById}), the batch aggregate used by the clients list
  * and search ({@code listByTypeAndActive}, {@code search}), and the non-client rule where
@@ -49,14 +49,14 @@ class ThirdPartyOutstandingResponseIntegrationTest extends AbstractIntegrationTe
                     em, "ZZ Outstanding WH " + suffix, Warehouse.WarehouseType.CORTES);
 
             clientAId = TestDataFactory.createClientThirdParty(
-                    em, "ZZ-OUT-A-" + suffix, SEARCH_PREFIX + " Client A", CREDIT_LIMIT, BigDecimal.ZERO);
+                    em, "ZZ-OUT-A-" + suffix, SEARCH_PREFIX + " Client A", CREDIT_LIMIT);
             TestDataFactory.createAccountsReceivable(
                     em, clientAId, warehouseId, "ZZ-OUT-AR-A-" + suffix, new BigDecimal("350.00"));
             TestDataFactory.createAccountsReceivable(
                     em, clientAId, warehouseId, "ZZ-OUT-AR-B-" + suffix, new BigDecimal("250.00"));
 
             clientBId = TestDataFactory.createClientThirdParty(
-                    em, "ZZ-OUT-B-" + suffix, SEARCH_PREFIX + " Client B", CREDIT_LIMIT, BigDecimal.ZERO);
+                    em, "ZZ-OUT-B-" + suffix, SEARCH_PREFIX + " Client B", CREDIT_LIMIT);
 
             var supplier = new ThirdPartyEntity();
             supplier.setNumIdentification("ZZ-OUT-SUP-" + suffix);
@@ -67,7 +67,6 @@ class ThirdPartyOutstandingResponseIntegrationTest extends AbstractIntegrationTe
             supplier.setTaxResponsibilities(List.of());
             supplier.setActive(true);
             supplier.setCreditLimit(BigDecimal.ZERO);
-            supplier.setCurrentBalance(BigDecimal.ZERO);
             em.persist(supplier);
             supplierId = supplier.getId();
         });

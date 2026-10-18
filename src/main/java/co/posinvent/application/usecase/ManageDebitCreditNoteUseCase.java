@@ -108,7 +108,7 @@ public class ManageDebitCreditNoteUseCase {
         ));
 
         // Update AccountsPayable for the linked invoice. The CxP is the single source of truth for
-        // the payable side, so notes no longer write the static third_parties.current_balance.
+        // the payable side, so notes no longer write a static balance column (removed in A6).
         if (saved.supplierInvoiceId() != null) {
             accountsPayableUseCase.applyDebitNote(saved);
         }
@@ -172,8 +172,8 @@ public class ManageDebitCreditNoteUseCase {
         var existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Nota débito/crédito", id));
 
-        // M2: deleting a note must reverse its AP effect on the CxP, not only the static
-        // third_parties.current_balance (which is no longer written by this use case).
+        // M2: deleting a note must reverse its AP effect on the CxP, not only the legacy static
+        // balance column (removed in A6, and no longer written by this use case).
         if (existing.supplierInvoiceId() != null) {
             accountsPayableUseCase.reverseDebitNote(existing);
         }

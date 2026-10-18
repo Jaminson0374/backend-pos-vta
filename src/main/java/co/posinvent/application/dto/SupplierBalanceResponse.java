@@ -13,7 +13,7 @@ import java.util.UUID;
  * supplier has credit in our favor: the unapplied advances (an asset, PUC
  * {@code 133005 — Anticipos a proveedores}) exceed the outstanding accounts payable. This read
  * model is derived from the CxP and the payment advances; it deliberately does not use
- * {@code third_parties.current_balance}, which is AR-only for customers.</p>
+ * the legacy third-party balance column, which was AR-only for customers and was removed in A6.</p>
  *
  * @param supplierId         the supplier whose position is reported
  * @param payableOutstanding the outstanding accounts payable ({@code SUM(outstanding)}), never null

@@ -28,15 +28,14 @@ import static org.mockito.Mockito.when;
  * {@code outstanding = SUM(accounts_receivable.outstanding)},
  * {@code availableCredit = creditLimit - outstanding}.
  *
- * <p>The static {@code third_parties.current_balance} column must not participate in the result.
- * A client may be over the limit, so {@code availableCredit} is allowed to be negative and is never
- * clamped.</p>
+ * <p>The balance is derived only from the AR ledger; the legacy static balance column was removed
+ * in A6. A client may be over the limit, so {@code availableCredit} is allowed to be negative and
+ * is never clamped.</p>
  */
 @ExtendWith(MockitoExtension.class)
 class CustomerBalanceUseCaseTest {
 
     private static final UUID CLIENT_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final BigDecimal STATIC_BALANCE = new BigDecimal("987654.32");
 
     @Mock
     private ThirdPartyRepository thirdPartyRepository;
@@ -52,11 +51,11 @@ class CustomerBalanceUseCaseTest {
     }
 
     @Test
-    @DisplayName("outstanding comes from the AR sum and ignores the static current_balance")
+    @DisplayName("outstanding comes from the AR sum")
     void derivesOutstandingFromArSum() {
         when(thirdPartyRepository.findById(CLIENT_ID))
                 .thenReturn(Optional.of(thirdParty(ThirdParty.ThirdPartyType.CLIENT,
-                        new BigDecimal("1000.00"), STATIC_BALANCE)));
+                        new BigDecimal("1000.00"))));
         when(accountsReceivableRepository.sumOutstandingByClientId(CLIENT_ID))
                 .thenReturn(new BigDecimal("600.00"));
 
@@ -73,7 +72,7 @@ class CustomerBalanceUseCaseTest {
     void bothTypeIsAccepted() {
         when(thirdPartyRepository.findById(CLIENT_ID))
                 .thenReturn(Optional.of(thirdParty(ThirdParty.ThirdPartyType.BOTH,
-                        new BigDecimal("1000.00"), BigDecimal.ZERO)));
+                        new BigDecimal("1000.00"))));
         when(accountsReceivableRepository.sumOutstandingByClientId(CLIENT_ID))
                 .thenReturn(new BigDecimal("250.00"));
 
@@ -87,7 +86,7 @@ class CustomerBalanceUseCaseTest {
     @DisplayName("a null AR sum and a null credit limit are normalized to zero")
     void nullSumAndNullCreditLimitBecomeZero() {
         when(thirdPartyRepository.findById(CLIENT_ID))
-                .thenReturn(Optional.of(thirdParty(ThirdParty.ThirdPartyType.CLIENT, null, null)));
+                .thenReturn(Optional.of(thirdParty(ThirdParty.ThirdPartyType.CLIENT, null)));
         when(accountsReceivableRepository.sumOutstandingByClientId(CLIENT_ID)).thenReturn(null);
 
         var response = useCase.getBalance(CLIENT_ID);
@@ -102,7 +101,7 @@ class CustomerBalanceUseCaseTest {
     void availableCreditCanBeNegative() {
         when(thirdPartyRepository.findById(CLIENT_ID))
                 .thenReturn(Optional.of(thirdParty(ThirdParty.ThirdPartyType.CLIENT,
-                        new BigDecimal("1000.00"), BigDecimal.ZERO)));
+                        new BigDecimal("1000.00"))));
         when(accountsReceivableRepository.sumOutstandingByClientId(CLIENT_ID))
                 .thenReturn(new BigDecimal("1500.00"));
 
@@ -129,7 +128,7 @@ class CustomerBalanceUseCaseTest {
     void supplierTypeThrowsResourceNotFoundException() {
         when(thirdPartyRepository.findById(CLIENT_ID))
                 .thenReturn(Optional.of(thirdParty(ThirdParty.ThirdPartyType.SUPPLIER,
-                        new BigDecimal("1000.00"), BigDecimal.ZERO)));
+                        new BigDecimal("1000.00"))));
 
         assertThatThrownBy(() -> useCase.getBalance(CLIENT_ID))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -139,10 +138,10 @@ class CustomerBalanceUseCaseTest {
     }
 
     private ThirdParty thirdParty(ThirdParty.ThirdPartyType type,
-                                  BigDecimal creditLimit, BigDecimal currentBalance) {
+                                  BigDecimal creditLimit) {
         return new ThirdParty(
                 CLIENT_ID, "900123456", "Tercero Test", type,
-                null, creditLimit, currentBalance,
+                null, creditLimit,
                 ThirdParty.PersonType.JURIDICA, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), "001", null, true, null, null,
                 null, null, null, null, null, null, null, null, null, null,

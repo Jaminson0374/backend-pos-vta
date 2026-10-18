@@ -226,7 +226,7 @@ public class SupplierInvoiceUseCase {
 
         // No static supplier balance write here: the payable side is sourced exclusively from the
         // AccountsPayable opened on reconcile (hallazgo C2 double-book fix). The invoice total is
-        // not added to third_parties.current_balance anymore.
+        // not added to a static balance column anymore (the column was removed in A6).
         return SupplierInvoiceResponse.from(saved, supplier.name());
     }
 
