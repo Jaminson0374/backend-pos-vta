@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
 public class DashboardController {
 
     private final JdbcTemplate jdbc;

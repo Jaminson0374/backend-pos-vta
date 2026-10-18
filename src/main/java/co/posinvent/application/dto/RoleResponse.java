@@ -8,10 +8,9 @@ import java.util.UUID;
 public record RoleResponse(
     UUID id,
     String name,
-    String permissions,
     OffsetDateTime createdAt
 ) {
     public static RoleResponse from(Role r) {
-        return new RoleResponse(r.id(), r.name(), r.permissions(), r.createdAt());
+        return new RoleResponse(r.id(), r.name(), r.createdAt());
     }
 }

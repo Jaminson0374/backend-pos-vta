@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
 public class DashboardDianController {
 
     private final ElectronicInvoiceRepository electronicInvoiceRepository;
