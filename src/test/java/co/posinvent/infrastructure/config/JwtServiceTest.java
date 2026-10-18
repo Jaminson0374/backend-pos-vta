@@ -45,10 +45,26 @@ class JwtServiceTest {
         var username = "admin@posinvent.co";
         var role = "ADMIN";
 
-        var token = service.generateToken(userId, username, role, null);
+        var token = service.generateToken(userId, username, role, null, 7L);
 
         assertThat(token).isNotBlank();
         assertThat(service.extractUsername(token)).isEqualTo(username);
         assertThat(service.isTokenValid(token)).isTrue();
+        assertThat(((Number) service.extractAllClaims(token).get("token_version")).longValue())
+                .isEqualTo(7L);
+        assertThat(service.extractAllClaims(token).getId()).isNotBlank();
+    }
+
+    @Test
+    void eachTokenGetsADistinctJti() {
+        var service = serviceWithSecret("a-valid-random-jwt-secret-with-more-than-sixty-four-characters-1234");
+        var userId = UUID.randomUUID();
+
+        var first = service.generateToken(userId, "admin@posinvent.co", "ADMIN", null, 0L);
+        var second = service.generateToken(userId, "admin@posinvent.co", "ADMIN", null, 0L);
+
+        assertThat(service.extractAllClaims(first).getId())
+                .isNotBlank()
+                .isNotEqualTo(service.extractAllClaims(second).getId());
     }
 }

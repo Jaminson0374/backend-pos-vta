@@ -5,8 +5,10 @@ import co.posinvent.application.dto.LoginRequest;
 import co.posinvent.application.dto.LoginResponse;
 import co.posinvent.application.dto.SetPasswordRequest;
 import co.posinvent.application.usecase.AuthenticateUserUseCase;
+import co.posinvent.application.usecase.LogoutUseCase;
 import co.posinvent.application.usecase.PasswordResetUseCase;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,12 +20,15 @@ public class AuthController {
 
     private final AuthenticateUserUseCase authenticateUser;
     private final PasswordResetUseCase passwordResetUseCase;
+    private final LogoutUseCase logoutUseCase;
 
     public AuthController(
             AuthenticateUserUseCase authenticateUser,
-            PasswordResetUseCase passwordResetUseCase) {
+            PasswordResetUseCase passwordResetUseCase,
+            LogoutUseCase logoutUseCase) {
         this.authenticateUser = authenticateUser;
         this.passwordResetUseCase = passwordResetUseCase;
+        this.logoutUseCase = logoutUseCase;
     }
 
     @PostMapping("/login")
@@ -42,5 +47,21 @@ public class AuthController {
         passwordResetUseCase.forgotPassword(request);
         return ResponseEntity.ok(Map.of("message",
                 "Si el email está registrado, recibirás un enlace para restablecer tu contraseña."));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        var token = authorization.substring(7);
+        if (token.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        logoutUseCase.logout(token);
+        return ResponseEntity.noContent().build();
     }
 }

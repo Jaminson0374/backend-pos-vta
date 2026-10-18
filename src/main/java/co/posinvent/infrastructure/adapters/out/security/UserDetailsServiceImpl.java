@@ -29,7 +29,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 entity.getUsername(),
                 entity.getPasswordHash(),
                 List.of(new SimpleGrantedAuthority("ROLE_" + entity.getRole().getName())),
-                entity.getEmployee() != null ? entity.getEmployee().getId() : null
+                entity.getEmployee() != null ? entity.getEmployee().getId() : null,
+                entity.getTokenVersion()
         );
     }
 }

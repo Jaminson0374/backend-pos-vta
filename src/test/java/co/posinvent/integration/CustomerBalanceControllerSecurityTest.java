@@ -6,6 +6,7 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.infrastructure.adapters.in.rest.CustomerBalanceController;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import co.posinvent.infrastructure.config.JwtAuthFilter;
+import co.posinvent.application.service.JwtBlacklistService;
 import co.posinvent.infrastructure.config.JwtService;
 import co.posinvent.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.DisplayName;
@@ -67,11 +68,15 @@ class CustomerBalanceControllerSecurityTest {
     @MockitoBean
     private UserDetailsService userDetailsService;
 
+    @MockitoBean
+    private JwtBlacklistService jwtBlacklistService;
+
     @TestConfiguration
     static class JwtFilterTestConfig {
         @Bean
-        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService) {
-            return new JwtAuthFilter(jwtService, userDetailsService);
+        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService,
+                                    JwtBlacklistService jwtBlacklistService) {
+            return new JwtAuthFilter(jwtService, userDetailsService, jwtBlacklistService);
         }
     }
 
@@ -81,7 +86,8 @@ class CustomerBalanceControllerSecurityTest {
                 "user-" + role.toLowerCase(),
                 "irrelevant-hash",
                 List.of(new SimpleGrantedAuthority("ROLE_" + role)),
-                null
+                null,
+                0L
         );
         return authentication(new UsernamePasswordAuthenticationToken(
                 principal, null, principal.getAuthorities()));

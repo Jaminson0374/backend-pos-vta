@@ -17,6 +17,9 @@ public class JwtService {
     private final SecretKey key;
     private final long expirationMs;
 
+    public static final String CLAIM_UID = "uid";
+    public static final String CLAIM_TOKEN_VERSION = "token_version";
+
     private static final String LEGACY_DEV_SECRET_PREFIX = "posinvent-dev-jwt-secret-key";
 
     public JwtService(JwtProperties props) {
@@ -35,11 +38,13 @@ public class JwtService {
         this.expirationMs = props.expirationMs();
     }
 
-    public String generateToken(UUID userId, String username, String role, UUID employeeId) {
+    public String generateToken(UUID userId, String username, String role, UUID employeeId, long tokenVersion) {
         var builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(username)
-                .claim("uid", userId.toString())
+                .claim(CLAIM_UID, userId.toString())
                 .claim("role", role)
+                .claim(CLAIM_TOKEN_VERSION, tokenVersion)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationMs));
 

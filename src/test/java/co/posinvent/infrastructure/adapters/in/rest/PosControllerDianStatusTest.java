@@ -10,6 +10,7 @@ import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import co.posinvent.infrastructure.config.JwtAuthFilter;
+import co.posinvent.application.service.JwtBlacklistService;
 import co.posinvent.infrastructure.config.JwtService;
 import co.posinvent.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.DisplayName;
@@ -79,6 +80,9 @@ class PosControllerDianStatusTest {
     @MockitoBean
     private UserDetailsService userDetailsService;
 
+    @MockitoBean
+    private JwtBlacklistService jwtBlacklistService;
+
     /**
      * Registers the real {@link JwtAuthFilter} with mocked collaborators so the security filter
      * chain from {@link SecurityConfig} can be wired without a running database.
@@ -86,8 +90,9 @@ class PosControllerDianStatusTest {
     @TestConfiguration
     static class JwtFilterTestConfig {
         @Bean
-        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService) {
-            return new JwtAuthFilter(jwtService, userDetailsService);
+        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService,
+                                    JwtBlacklistService jwtBlacklistService) {
+            return new JwtAuthFilter(jwtService, userDetailsService, jwtBlacklistService);
         }
     }
 
@@ -97,7 +102,8 @@ class PosControllerDianStatusTest {
                 "user-" + role.toLowerCase(),
                 "irrelevant-hash",
                 List.of(new SimpleGrantedAuthority("ROLE_" + role)),
-                null
+                null,
+                0L
         );
         return authentication(new UsernamePasswordAuthenticationToken(
                 principal, null, principal.getAuthorities()));

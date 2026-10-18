@@ -79,6 +79,8 @@ public class PasswordResetUseCase {
 
         var user = tokenEntity.getUser();
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        // Invalidate every JWT issued before this password reset.
+        user.setTokenVersion(user.getTokenVersion() + 1);
         userJpaRepository.save(user);
 
         tokenEntity.setUsed(true);

@@ -12,7 +12,8 @@ public record PosUserDetails(
         String username,
         String passwordHash,
         List<GrantedAuthority> authorities,
-        UUID employeeId
+        UUID employeeId,
+        long tokenVersion
 ) implements UserDetails {
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }

@@ -159,7 +159,7 @@ class PurchaseOrderHardeningIntegrationTest extends AbstractIntegrationTest {
     private static void authenticateWorker() {
         var principal = new PosUserDetails(
                 TEST_USER_ID, "test-user", "n/a",
-                List.of(new SimpleGrantedAuthority("ROLE_ADMIN")), null);
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN")), null, 0L);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
     }

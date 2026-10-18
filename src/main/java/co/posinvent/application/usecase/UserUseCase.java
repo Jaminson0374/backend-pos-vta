@@ -144,6 +144,9 @@ public class UserUseCase {
         var entity = userJpaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", id));
 
+        // Captured before any mutation: only an active -> inactive transition revokes tokens.
+        var wasActive = entity.isActive();
+
         var newRole = roleJpaRepository.findById(request.roleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Rol", request.roleId()));
 
@@ -208,6 +211,10 @@ public class UserUseCase {
         entity.setRole(newRole);
         entity.setActive(request.isActive());
         entity.setEmployee(newEmployee);
+        if (wasActive && !request.isActive()) {
+            // Deactivation invalidates every JWT issued while the user was active.
+            entity.setTokenVersion(entity.getTokenVersion() + 1);
+        }
         entity.setUpdatedAt(OffsetDateTime.now());
 
         var saved = userJpaRepository.save(entity);
