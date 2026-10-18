@@ -11,9 +11,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -51,14 +55,17 @@ public class PasswordResetUseCase {
         var tokenStr = generateRandomToken();
         var now = OffsetDateTime.now();
 
+        // One live token per account: invalidate any previous unused token.
+        tokenJpaRepository.deleteByUser_IdAndUsedFalse(user.getId());
+
         var entity = new PasswordResetTokenEntity();
         entity.setUser(user);
-        entity.setToken(tokenStr);
+        entity.setTokenHash(sha256Hex(tokenStr));
         entity.setExpiresAt(now.plusHours(TOKEN_EXPIRY_HOURS));
         entity.setUsed(false);
         tokenJpaRepository.save(entity);
 
-        emailService.sendSetPasswordInvitation(user.getEmail(), user.getFullName(), tokenStr);
+        emailService.sendSetPasswordInvitation(user.getId(), user.getEmail(), user.getFullName(), tokenStr);
 
         return tokenStr;
     }
@@ -68,7 +75,7 @@ public class PasswordResetUseCase {
      */
     @Transactional
     public void setPassword(SetPasswordRequest request) {
-        var tokenEntity = tokenJpaRepository.findByTokenAndUsedFalse(request.token())
+        var tokenEntity = tokenJpaRepository.findByTokenHashAndUsedFalse(sha256Hex(request.token()))
                 .orElseThrow(() -> new BusinessException("INVALID_TOKEN",
                         "El enlace no es válido o ya fue usado."));
 
@@ -108,19 +115,32 @@ public class PasswordResetUseCase {
         var tokenStr = generateRandomToken();
         var now = OffsetDateTime.now();
 
+        // One live token per account: invalidate any previous unused token.
+        tokenJpaRepository.deleteByUser_IdAndUsedFalse(user.getId());
+
         var entity = new PasswordResetTokenEntity();
         entity.setUser(user);
-        entity.setToken(tokenStr);
+        entity.setTokenHash(sha256Hex(tokenStr));
         entity.setExpiresAt(now.plusHours(FORGOT_TOKEN_EXPIRY_HOURS));
         entity.setUsed(false);
         tokenJpaRepository.save(entity);
 
-        emailService.sendPasswordReset(user.getEmail(), user.getFullName(), tokenStr);
+        emailService.sendPasswordReset(user.getId(), user.getEmail(), user.getFullName(), tokenStr);
     }
 
     private String generateRandomToken() {
         byte[] bytes = new byte[48];
         RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
     }
 }

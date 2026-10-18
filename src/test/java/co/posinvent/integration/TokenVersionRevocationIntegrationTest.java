@@ -20,7 +20,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.OffsetDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -68,7 +71,7 @@ class TokenVersionRevocationIntegrationTest extends AbstractIntegrationTest {
 
             var resetToken = new PasswordResetTokenEntity();
             resetToken.setUser(user);
-            resetToken.setToken(tokenValue);
+            resetToken.setTokenHash(sha256Hex(tokenValue));
             resetToken.setExpiresAt(OffsetDateTime.now().plusHours(1));
             resetToken.setUsed(false);
             tokenJpaRepository.save(resetToken);
@@ -174,5 +177,15 @@ class TokenVersionRevocationIntegrationTest extends AbstractIntegrationTest {
                 .filter(role -> name.equals(role.getName()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Missing seeded role " + name));
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

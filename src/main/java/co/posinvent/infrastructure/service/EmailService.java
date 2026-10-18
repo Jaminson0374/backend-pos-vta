@@ -7,6 +7,8 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 @Service
 public class EmailService {
 
@@ -26,7 +28,7 @@ public class EmailService {
     /**
      * Sends a set-password invitation to a newly created user.
      */
-    public void sendSetPasswordInvitation(String toEmail, String fullName, String token) {
+    public void sendSetPasswordInvitation(UUID userId, String toEmail, String fullName, String token) {
         var link = frontendUrl + "/auth/set-password?token=" + token;
 
         var msg = new SimpleMailMessage();
@@ -47,10 +49,9 @@ public class EmailService {
 
         try {
             mailSender.send(msg);
-            log.info("Set-password invitation sent to {}", toEmail);
+            log.info("Set-password invitation sent to user {}", userId);
         } catch (Exception e) {
-            log.error("Failed to send set-password email to {}: {}", toEmail, e.getMessage());
-            log.info("Set-password link for {} (DEV fallback): {}", toEmail, link);
+            log.error("Error sending set-password email to user ID {}: {}", userId, e.getMessage());
             // Don't throw — email is non-critical, user creation must succeed
         }
     }
@@ -58,7 +59,7 @@ public class EmailService {
     /**
      * Sends a password reset link for "forgot password" flow.
      */
-    public void sendPasswordReset(String toEmail, String fullName, String token) {
+    public void sendPasswordReset(UUID userId, String toEmail, String fullName, String token) {
         var link = frontendUrl + "/auth/set-password?token=" + token;
 
         var msg = new SimpleMailMessage();
@@ -79,10 +80,9 @@ public class EmailService {
 
         try {
             mailSender.send(msg);
-            log.info("Password reset email sent to {}", toEmail);
+            log.info("Password reset email sent to user {}", userId);
         } catch (Exception e) {
-            log.error("Failed to send password reset email to {}: {}", toEmail, e.getMessage());
-            log.info("Password reset link for {} (DEV fallback): {}", toEmail, link);
+            log.error("Error sending password reset email to user ID {}: {}", userId, e.getMessage());
             // Don't throw — non-critical
         }
     }
