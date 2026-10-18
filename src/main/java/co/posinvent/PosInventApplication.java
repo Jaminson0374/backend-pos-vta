@@ -1,5 +1,6 @@
 package co.posinvent;
 
+import co.posinvent.infrastructure.config.CertificateCryptoProperties;
 import co.posinvent.infrastructure.config.DianSiigoProperties;
 import co.posinvent.infrastructure.config.JwtProperties;
 import co.posinvent.infrastructure.config.MediaProperties;
@@ -17,7 +18,7 @@ import org.springframework.web.client.RestClient;
 @EnableAsync
 @EnableScheduling
 @EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)
-@EnableConfigurationProperties({JwtProperties.class, MediaProperties.class, DianSiigoProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, MediaProperties.class, DianSiigoProperties.class, CertificateCryptoProperties.class})
 public class PosInventApplication {
 
 	public static void main(String[] args) {

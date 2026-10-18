@@ -7,6 +7,8 @@ import java.util.UUID;
 public record DigitalCertificate(
     UUID id,
     String name,
+    String issuer,
+    String subject,
     byte[] certificateData,
     String passwordEncrypted,
     LocalDate validUntil,

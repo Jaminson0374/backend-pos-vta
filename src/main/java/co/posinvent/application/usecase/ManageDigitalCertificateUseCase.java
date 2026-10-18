@@ -1,17 +1,21 @@
 package co.posinvent.application.usecase;
 
-import co.posinvent.application.dto.UploadCertificateRequest;
+import co.posinvent.application.dto.DigitalCertificateResponse;
+import co.posinvent.application.service.CertificateCipherService;
+import co.posinvent.domain.exception.InvalidUploadException;
 import co.posinvent.domain.model.DigitalCertificate;
 import co.posinvent.domain.repository.DigitalCertificateRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,38 +23,45 @@ import java.util.UUID;
 public class ManageDigitalCertificateUseCase {
 
     private final DigitalCertificateRepository repository;
+    private final CertificateCipherService cipherService;
 
-    public ManageDigitalCertificateUseCase(DigitalCertificateRepository repository) {
+    public ManageDigitalCertificateUseCase(
+            DigitalCertificateRepository repository,
+            CertificateCipherService cipherService) {
         this.repository = repository;
+        this.cipherService = cipherService;
     }
 
     @Transactional(readOnly = true)
-    public List<DigitalCertificate> listAll() {
-        return repository.findAll();
+    public List<DigitalCertificateResponse> listAll() {
+        return repository.findAll().stream()
+                .map(DigitalCertificateResponse::from)
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public DigitalCertificate getById(UUID id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new co.posinvent.domain.exception.ResourceNotFoundException("Certificado", id));
+    public DigitalCertificateResponse getById(UUID id) {
+        return DigitalCertificateResponse.from(findOrThrow(id));
     }
 
     @Transactional
-    public DigitalCertificate upload(byte[] fileBytes, String password, String fileName) {
-        var validUntil = extractValidUntil(fileBytes, password);
-        var encodedPassword = password != null ? Base64.getEncoder().encodeToString(password.getBytes()) : null;
+    public DigitalCertificateResponse upload(byte[] fileBytes, String password, String fileName) {
+        var metadata = extractMetadata(fileBytes, password);
+        var encryptedPassword = password != null ? cipherService.encrypt(password) : null;
 
         var certificate = new DigitalCertificate(
                 null,
                 fileName != null ? fileName : "certificate",
+                metadata.issuer(),
+                metadata.subject(),
                 fileBytes,
-                encodedPassword,
-                validUntil,
+                encryptedPassword,
+                metadata.validUntil(),
                 true,
                 null
         );
 
-        return repository.save(certificate);
+        return DigitalCertificateResponse.from(repository.save(certificate));
     }
 
     @Transactional
@@ -61,25 +72,50 @@ public class ManageDigitalCertificateUseCase {
         repository.deleteById(id);
     }
 
-    private LocalDate extractValidUntil(byte[] fileBytes, String password) {
-        try {
-            var ks = KeyStore.getInstance("PKCS12");
-            var inputStream = new java.io.ByteArrayInputStream(fileBytes);
-            ks.load(inputStream, password != null ? password.toCharArray() : new char[0]);
+    private DigitalCertificate findOrThrow(UUID id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new co.posinvent.domain.exception.ResourceNotFoundException("Certificado", id));
+    }
 
-            var aliases = ks.aliases();
-            if (aliases.hasMoreElements()) {
+    /**
+     * Reads the PKCS12 once and returns every metadata value the API exposes.
+     *
+     * <p>Uploads are rejected with {@code INVALID_CERTIFICATE} when the keystore
+     * cannot be opened (wrong password, malformed bytes, or a parse/cast failure)
+     * or when it holds no X509 certificate. There is no silent fallback: storing a
+     * certificate with fabricated validity or unknown issuer/subject would make
+     * the admin surface lie about the real certificate.</p>
+     */
+    private CertificateMetadata extractMetadata(byte[] fileBytes, String password) {
+        try (var inputStream = new ByteArrayInputStream(fileBytes)) {
+            var keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(inputStream, password != null ? password.toCharArray() : new char[0]);
+
+            var aliases = keyStore.aliases();
+            while (aliases.hasMoreElements()) {
                 var alias = aliases.nextElement();
-                var cert = (X509Certificate) ks.getCertificate(alias);
-                if (cert != null) {
-                    return Instant.ofEpochMilli(cert.getNotAfter().getTime())
+                if (keyStore.getCertificate(alias) instanceof X509Certificate certificate) {
+                    var validUntil = Instant.ofEpochMilli(certificate.getNotAfter().getTime())
                             .atZone(ZoneId.systemDefault())
                             .toLocalDate();
+                    return new CertificateMetadata(
+                            validUntil,
+                            certificate.getIssuerX500Principal().getName(),
+                            certificate.getSubjectX500Principal().getName()
+                    );
                 }
             }
-        } catch (Exception e) {
-            // If we can't extract the date, default to 1 year from now
+        } catch (IOException | GeneralSecurityException | ClassCastException e) {
+            throw invalidCertificate();
         }
-        return LocalDate.now().plusYears(1);
+        throw invalidCertificate();
     }
+
+    private static InvalidUploadException invalidCertificate() {
+        return new InvalidUploadException(
+                "INVALID_CERTIFICATE",
+                "El archivo no es un PKCS12 válido o la contraseña es incorrecta.");
+    }
+
+    private record CertificateMetadata(LocalDate validUntil, String issuer, String subject) {}
 }

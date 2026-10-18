@@ -21,6 +21,12 @@ public class DigitalCertificateEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(name = "issuer")
+    private String issuer;
+
+    @Column(name = "subject")
+    private String subject;
+
     @Column(name = "certificate_data", nullable = false, columnDefinition = "BYTEA")
     private byte[] certificateData;
 
