@@ -52,10 +52,12 @@ class DevolutionReceivableInvariantIntegrationTest extends AbstractIntegrationTe
     void setUp() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var warehouseId = TestDataFactory.createWarehouse(
-                    em, "AR INV WU34", Warehouse.WarehouseType.CORTES);
+                    em, "AR INV WU34 " + UUID.randomUUID().toString().substring(0, 8),
+                    Warehouse.WarehouseType.CORTES);
 
             productId = TestDataFactory.createProduct(
-                    em, "TEST-ARINV", "AR Invariant Product", false, true);
+                    em, "TEST-ARINV-" + UUID.randomUUID().toString().substring(0, 8),
+                    "AR Invariant Product", false, true);
             em.flush();
             TestDataFactory.setSalePriceAndTaxType(em, productId, SALE_PRICE, "EXENTO");
 
