@@ -39,3 +39,6 @@ media/
 
 ### Local artifacts ###
 /backend.log
+
+### Local environment ###
+.env

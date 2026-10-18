@@ -17,8 +17,21 @@ public class JwtService {
     private final SecretKey key;
     private final long expirationMs;
 
+    private static final String LEGACY_DEV_SECRET_PREFIX = "posinvent-dev-jwt-secret-key";
+
     public JwtService(JwtProperties props) {
-        this.key = Keys.hmacShaKeyFor(props.secret().getBytes(StandardCharsets.UTF_8));
+        String secret = props.secret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET is required (app.jwt.secret)");
+        }
+        if (secret.startsWith(LEGACY_DEV_SECRET_PREFIX)) {
+            throw new IllegalStateException("JWT_SECRET must not use the legacy development default");
+        }
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < 64) {
+            throw new IllegalStateException("JWT_SECRET must be at least 64 bytes for HS512");
+        }
+        this.key = Keys.hmacShaKeyFor(secretBytes);
         this.expirationMs = props.expirationMs();
     }
 
