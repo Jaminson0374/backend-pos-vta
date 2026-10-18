@@ -221,12 +221,15 @@ public class PosDevolutionUseCase {
                 var ar = arOpt.get();
                 var adjustmentAmount = ar.outstanding().min(totalReturned);
                 arAdjustment = adjustmentAmount;
-                var newOutstanding = ar.outstanding().subtract(adjustmentAmount);
-                var newStatus = AccountsReceivable.computeStatus(ar.totalAmount(), ar.paidAmount());
+                // The return shrinks the receivable itself. Reducing only `outstanding` would be
+                // undone by the next receipt, which recomputes it as totalAmount - paidAmount.
+                var newTotalAmount = ar.totalAmount().subtract(adjustmentAmount);
+                var newOutstanding = AccountsReceivable.computeOutstanding(newTotalAmount, ar.paidAmount());
+                var newStatus = AccountsReceivable.computeStatus(newTotalAmount, ar.paidAmount());
 
                 var updatedAr = new AccountsReceivable(
                         ar.id(), ar.clientId(), ar.documentId(),
-                        ar.totalAmount(), ar.paidAmount(), newOutstanding,
+                        newTotalAmount, ar.paidAmount(), newOutstanding,
                         ar.dueDate(), newStatus,
                         ar.createdAt(), null,
                         ar.interestRate(), ar.interestAmount(), ar.lastInterestCalcDate()

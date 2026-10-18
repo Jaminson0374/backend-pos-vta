@@ -384,6 +384,10 @@ class PosDevolutionUseCaseTest {
         var arCaptor = ArgumentCaptor.forClass(AccountsReceivable.class);
         verify(arRepo).save(arCaptor.capture());
         assertThat(arCaptor.getValue().outstanding()).isEqualByComparingTo("9500.00");
+        // The receivable total must shrink with the return, otherwise a later receipt
+        // recomputes outstanding as totalAmount - paidAmount and re-inflates it.
+        assertThat(arCaptor.getValue().totalAmount()).isEqualByComparingTo("9500.00");
+        assertThat(arCaptor.getValue().status()).isEqualTo(AccountsReceivable.ArStatus.OPEN);
 
         // The static balance writer is gone: the AR ledger is the only source of truth.
     }
