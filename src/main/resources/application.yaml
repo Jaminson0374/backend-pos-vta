@@ -17,6 +17,10 @@ app:
   security:
     certificate:
       secret-key: ${CERT_SECRET_KEY}
+    rate-limit:
+      trust-forwarded-headers: ${RATE_LIMIT_TRUST_FORWARDED:false}
+      max-buckets: ${RATE_LIMIT_MAX_BUCKETS:10000}
+      # capacities/windows use the record defaults unless overridden
   inventory:
     auto-dispose: false
     expiration-warning-days: 30
