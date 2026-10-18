@@ -4,6 +4,7 @@ import co.posinvent.application.usecase.SupplierBalanceUseCase;
 import co.posinvent.infrastructure.adapters.in.rest.SupplierBalanceController;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import co.posinvent.infrastructure.config.JwtAuthFilter;
+import co.posinvent.application.service.JwtBlacklistService;
 import co.posinvent.infrastructure.config.JwtService;
 import co.posinvent.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.DisplayName;
@@ -57,11 +58,15 @@ class SupplierBalanceControllerSecurityTest {
     @MockitoBean
     private UserDetailsService userDetailsService;
 
+    @MockitoBean
+    private JwtBlacklistService jwtBlacklistService;
+
     @TestConfiguration
     static class JwtFilterTestConfig {
         @Bean
-        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService) {
-            return new JwtAuthFilter(jwtService, userDetailsService);
+        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService,
+                                    JwtBlacklistService jwtBlacklistService) {
+            return new JwtAuthFilter(jwtService, userDetailsService, jwtBlacklistService);
         }
     }
 

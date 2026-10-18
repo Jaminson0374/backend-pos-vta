@@ -37,6 +37,7 @@ public class JwtService {
 
     public String generateToken(UUID userId, String username, String role, UUID employeeId, long tokenVersion) {
         var builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(username)
                 .claim("uid", userId.toString())
                 .claim("role", role)

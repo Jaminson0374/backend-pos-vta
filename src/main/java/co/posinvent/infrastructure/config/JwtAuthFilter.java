@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.config;
 
+import co.posinvent.application.service.JwtBlacklistService;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
@@ -27,10 +28,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final JwtBlacklistService blacklistService;
 
-    public JwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService) {
+    public JwtAuthFilter(
+            JwtService jwtService,
+            UserDetailsService userDetailsService,
+            JwtBlacklistService blacklistService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
+        this.blacklistService = blacklistService;
     }
 
     @Override
@@ -65,23 +71,33 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         final String subject = claims.getSubject();
+        final String jti = claims.getId();
         final Object uidClaim = claims.get("uid");
         final Object tokenVersionClaim = claims.get("token_version");
 
         if (subject == null || subject.isBlank()
+                || jti == null || jti.isBlank()
                 || !(uidClaim instanceof String uidValue)
                 || !(tokenVersionClaim instanceof Number versionValue)) {
-            // Fail closed: legacy tokens without token_version force a re-login.
-            log.debug("Rejected JWT: missing sub/uid/token_version claims");
+            // Fail closed: legacy tokens without jti/token_version force a re-login.
+            log.debug("Rejected JWT: missing sub/jti/uid/token_version claims");
             filterChain.doFilter(request, response);
             return;
         }
 
         final UUID userId;
+        final UUID jtiValue;
         try {
             userId = UUID.fromString(uidValue);
+            jtiValue = UUID.fromString(jti);
         } catch (IllegalArgumentException e) {
-            log.debug("Rejected JWT: malformed uid claim");
+            log.debug("Rejected JWT: malformed uid or jti claim");
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (blacklistService.isRevoked(jtiValue)) {
+            log.debug("Rejected JWT: jti has been revoked");
             filterChain.doFilter(request, response);
             return;
         }

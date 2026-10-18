@@ -1,5 +1,6 @@
 package co.posinvent.infrastructure.config;
 
+import co.posinvent.application.service.JwtBlacklistService;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +37,7 @@ class JwtAuthFilterTest {
 
     private JwtService jwtService;
     private UserDetailsService userDetailsService;
+    private JwtBlacklistService blacklistService;
     private JwtAuthFilter filter;
 
     @BeforeEach
@@ -42,7 +45,9 @@ class JwtAuthFilterTest {
         SecurityContextHolder.clearContext();
         jwtService = new JwtService(new JwtProperties(SECRET, EXPIRATION_MS));
         userDetailsService = mock(UserDetailsService.class);
-        filter = new JwtAuthFilter(jwtService, userDetailsService);
+        blacklistService = mock(JwtBlacklistService.class);
+        when(blacklistService.isRevoked(any())).thenReturn(false);
+        filter = new JwtAuthFilter(jwtService, userDetailsService, blacklistService);
     }
 
     @AfterEach
@@ -108,6 +113,34 @@ class JwtAuthFilterTest {
         verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void blacklistedJtiDoesNotAuthenticateButContinuesChain() throws Exception {
+        when(userDetailsService.loadUserByUsername(USERNAME))
+                .thenReturn(principal(CURRENT_VERSION));
+        var token = jwtService.generateToken(USER_ID, USERNAME, "ADMIN", null, CURRENT_VERSION);
+        var jti = UUID.fromString(jwtService.extractAllClaims(token).getId());
+        when(blacklistService.isRevoked(jti)).thenReturn(true);
+
+        var chain = mock(FilterChain.class);
+        runFilter(token, chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void tokenWithoutJtiClaimDoesNotAuthenticate() throws Exception {
+        when(userDetailsService.loadUserByUsername(USERNAME))
+                .thenReturn(principal(CURRENT_VERSION));
+        var tokenWithoutJti = tokenWithoutJtiClaim();
+
+        var chain = mock(FilterChain.class);
+        runFilter(tokenWithoutJti, chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
     private void runFilter(String token, FilterChain chain) throws Exception {
         var request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + token);
@@ -128,9 +161,23 @@ class JwtAuthFilterTest {
     private static String tokenWithoutTokenVersionClaim() {
         var key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(USERNAME)
                 .claim("uid", USER_ID.toString())
                 .claim("role", "ADMIN")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
+                .signWith(key, Jwts.SIG.HS512)
+                .compact();
+    }
+
+    private static String tokenWithoutJtiClaim() {
+        var key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+        return Jwts.builder()
+                .subject(USERNAME)
+                .claim("uid", USER_ID.toString())
+                .claim("role", "ADMIN")
+                .claim("token_version", CURRENT_VERSION)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
                 .signWith(key, Jwts.SIG.HS512)

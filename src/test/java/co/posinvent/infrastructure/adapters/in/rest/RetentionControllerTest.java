@@ -7,6 +7,7 @@ import co.posinvent.domain.repository.SupplierInvoiceRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import co.posinvent.infrastructure.config.JwtAuthFilter;
+import co.posinvent.application.service.JwtBlacklistService;
 import co.posinvent.infrastructure.config.JwtService;
 import co.posinvent.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.DisplayName;
@@ -73,11 +74,15 @@ class RetentionControllerTest {
     @MockitoBean
     private UserDetailsService userDetailsService;
 
+    @MockitoBean
+    private JwtBlacklistService jwtBlacklistService;
+
     @TestConfiguration
     static class JwtFilterTestConfig {
         @Bean
-        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService) {
-            return new JwtAuthFilter(jwtService, userDetailsService);
+        JwtAuthFilter jwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService,
+                                    JwtBlacklistService jwtBlacklistService) {
+            return new JwtAuthFilter(jwtService, userDetailsService, jwtBlacklistService);
         }
     }
 
