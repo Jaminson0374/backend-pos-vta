@@ -6,7 +6,9 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,4 +47,10 @@ public interface AccountsReceivableRepository {
      * field on the receivable side.
      */
     BigDecimal sumOutstandingByClientId(UUID clientId);
+
+    /**
+     * Batch version of {@link #sumOutstandingByClientId(UUID)}: derived outstanding keyed by
+     * client id, for every client that has at least one AR row.
+     */
+    Map<UUID, BigDecimal> sumOutstandingByClientIds(Collection<UUID> clientIds);
 }

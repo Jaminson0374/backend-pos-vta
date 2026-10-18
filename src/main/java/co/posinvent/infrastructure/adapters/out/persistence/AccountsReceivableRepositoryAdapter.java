@@ -6,10 +6,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 public class AccountsReceivableRepositoryAdapter implements AccountsReceivableRepository {
@@ -86,7 +90,18 @@ public class AccountsReceivableRepositoryAdapter implements AccountsReceivableRe
     }
 
     @Override
-    public java.math.BigDecimal sumOutstandingByClientId(UUID clientId) {
+    public BigDecimal sumOutstandingByClientId(UUID clientId) {
         return jpa.sumOutstandingByClientId(clientId);
+    }
+
+    @Override
+    public Map<UUID, BigDecimal> sumOutstandingByClientIds(Collection<UUID> clientIds) {
+        if (clientIds == null || clientIds.isEmpty()) {
+            return Map.of();
+        }
+        return jpa.sumOutstandingByClientIds(clientIds).stream()
+                .collect(Collectors.toMap(
+                        AccountsReceivableJpaRepository.ClientOutstanding::getClientId,
+                        AccountsReceivableJpaRepository.ClientOutstanding::getOutstanding));
     }
 }
