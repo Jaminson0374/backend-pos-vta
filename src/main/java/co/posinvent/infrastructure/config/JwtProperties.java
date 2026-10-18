@@ -1,11 +1,16 @@
 package co.posinvent.infrastructure.config;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @ConfigurationProperties(prefix = "app.jwt")
 public record JwtProperties(
-        @DefaultValue("posinvent-dev-jwt-secret-key-v1-must-be-at-least-64-bytes-for-hs512!!")
+        @NotBlank
+        @Size(min = 64)
         String secret,
         @DefaultValue("86400000")
         long expirationMs

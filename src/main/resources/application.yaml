@@ -36,7 +36,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/posinvent_db
     username: ${DB_USER:posinvent}
-    password: ${DB_PASS:posinvent123}
+    password: ${DB_PASS}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -65,7 +65,7 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:posinvent-dev-jwt-secret-key-v1-must-be-at-least-64-bytes-for-hs512!!}
+    secret: ${JWT_SECRET}
     expiration-ms: 86400000
   frontend-url: ${FRONTEND_URL:http://localhost:4200}
 
