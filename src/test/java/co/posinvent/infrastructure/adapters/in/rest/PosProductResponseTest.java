@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +31,19 @@ class PosProductResponseTest {
         given(product.minStock()).willReturn(new BigDecimal("2.00"));
         given(product.totalStock()).willReturn(new BigDecimal("8.00"));
         given(product.active()).willReturn(true);
+        given(product.images()).willReturn(List.of(
+                new Product.ProductImage(
+                        UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        "https://cdn.example.com/lomo.png",
+                        0)));
+        given(product.promotions()).willReturn(List.of(
+                new Product.ProductPromotion(
+                        UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                        "Lomo en oferta",
+                        new BigDecimal("10.00"),
+                        null,
+                        null,
+                        true)));
 
         var response = PosProductResponse.from(product);
         var json = new ObjectMapper().writeValueAsString(response);
@@ -39,6 +53,11 @@ class PosProductResponseTest {
                 .contains("25000.00")
                 .contains("\"name\"")
                 .contains("Lomo de cerdo")
+                .contains("\"images\"")
+                .contains("https://cdn.example.com/lomo.png")
+                .contains("\"promotions\"")
+                .contains("Lomo en oferta")
+                .doesNotContain("\"presentations\"")
                 .doesNotContain("costPrice")
                 .doesNotContain("profitMargin")
                 .doesNotContain("suppliers")

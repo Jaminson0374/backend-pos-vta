@@ -46,6 +46,13 @@ class LogisticsControllerSecurityTest {
     private static final UUID RECEIPT_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
     private static final UUID WAREHOUSE_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
     private static final UUID PRODUCT_ID = UUID.fromString("77777777-7777-7777-7777-777777777777");
+    private static final UUID PICKING_ID = UUID.fromString("88888888-8888-8888-8888-888888888888");
+    private static final UUID SHIPMENT_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
+    private static final UUID GUIDE_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
+    private static final String PICKINGS_PATH = "/api/v1/logistics/pickings";
+    private static final String SHIPMENTS_PATH = "/api/v1/logistics/shipments";
+    private static final String TRANSPORT_GUIDES_PATH = "/api/v1/logistics/transport-guides";
 
     private static final String CREATE_RECEIPT_BODY = """
             {
@@ -105,6 +112,34 @@ class LogisticsControllerSecurityTest {
                 .andExpect(status().isOk());
 
         then(useCase).should().listReceipts(any());
+    }
+
+    private void expectReadAllowed(String path, String role) throws Exception {
+        mockMvc.perform(get(path).with(asRole(role)))
+                .andExpect(status().isOk());
+    }
+
+    private void expectReadDenied(String path, String role) throws Exception {
+        mockMvc.perform(get(path).with(asRole(role)))
+                .andExpect(status().isForbidden());
+
+        then(useCase).shouldHaveNoInteractions();
+    }
+
+    private void expectStatusUpdateAllowed(String path, UUID id, String status, String role) throws Exception {
+        mockMvc.perform(patch(path, id)
+                        .param("status", status)
+                        .with(asRole(role)))
+                .andExpect(status().isOk());
+    }
+
+    private void expectStatusUpdateDenied(String path, UUID id, String status, String role) throws Exception {
+        mockMvc.perform(patch(path, id)
+                        .param("status", status)
+                        .with(asRole(role)))
+                .andExpect(status().isForbidden());
+
+        then(useCase).shouldHaveNoInteractions();
     }
 
     @Test
@@ -196,5 +231,191 @@ class LogisticsControllerSecurityTest {
                 .andExpect(status().isForbidden());
 
         then(useCase).shouldHaveNoInteractions();
+    }
+
+    // ── Pickings ───────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("ADMIN can list pickings (GET /pickings -> 200)")
+    void adminCanListPickings() throws Exception {
+        expectReadAllowed(PICKINGS_PATH, "ADMIN");
+
+        then(useCase).should().listPickings(any());
+    }
+
+    @Test
+    @DisplayName("ALMACENISTA can list pickings (GET /pickings -> 200)")
+    void almacenistaCanListPickings() throws Exception {
+        expectReadAllowed(PICKINGS_PATH, "ALMACENISTA");
+
+        then(useCase).should().listPickings(any());
+    }
+
+    @Test
+    @DisplayName("AUXILIAR can list pickings (GET /pickings -> 200)")
+    void auxiliarCanListPickings() throws Exception {
+        expectReadAllowed(PICKINGS_PATH, "AUXILIAR");
+
+        then(useCase).should().listPickings(any());
+    }
+
+    @Test
+    @DisplayName("CONTADOR can list pickings (GET /pickings -> 200)")
+    void contadorCanListPickings() throws Exception {
+        expectReadAllowed(PICKINGS_PATH, "CONTADOR");
+
+        then(useCase).should().listPickings(any());
+    }
+
+    @Test
+    @DisplayName("CAJERO cannot list pickings (GET /pickings -> 403)")
+    void cajeroCannotListPickings() throws Exception {
+        expectReadDenied(PICKINGS_PATH, "CAJERO");
+    }
+
+    @Test
+    @DisplayName("ADMIN can change a picking status (PATCH /pickings/{id}/status -> 200)")
+    void adminCanUpdatePickingStatus() throws Exception {
+        expectStatusUpdateAllowed(PICKINGS_PATH + "/{id}/status", PICKING_ID, "PICKED", "ADMIN");
+
+        then(useCase).should().updatePickingStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("ALMACENISTA can change a picking status (PATCH /pickings/{id}/status -> 200)")
+    void almacenistaCanUpdatePickingStatus() throws Exception {
+        expectStatusUpdateAllowed(PICKINGS_PATH + "/{id}/status", PICKING_ID, "PICKED", "ALMACENISTA");
+
+        then(useCase).should().updatePickingStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("AUXILIAR cannot change a picking status (PATCH /pickings/{id}/status -> 403)")
+    void auxiliarCannotUpdatePickingStatus() throws Exception {
+        expectStatusUpdateDenied(PICKINGS_PATH + "/{id}/status", PICKING_ID, "PICKED", "AUXILIAR");
+    }
+
+    // ── Shipments ──────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("ADMIN can list shipments (GET /shipments -> 200)")
+    void adminCanListShipments() throws Exception {
+        expectReadAllowed(SHIPMENTS_PATH, "ADMIN");
+
+        then(useCase).should().listShipments(any());
+    }
+
+    @Test
+    @DisplayName("ALMACENISTA can list shipments (GET /shipments -> 200)")
+    void almacenistaCanListShipments() throws Exception {
+        expectReadAllowed(SHIPMENTS_PATH, "ALMACENISTA");
+
+        then(useCase).should().listShipments(any());
+    }
+
+    @Test
+    @DisplayName("AUXILIAR can list shipments (GET /shipments -> 200)")
+    void auxiliarCanListShipments() throws Exception {
+        expectReadAllowed(SHIPMENTS_PATH, "AUXILIAR");
+
+        then(useCase).should().listShipments(any());
+    }
+
+    @Test
+    @DisplayName("CONTADOR can list shipments (GET /shipments -> 200)")
+    void contadorCanListShipments() throws Exception {
+        expectReadAllowed(SHIPMENTS_PATH, "CONTADOR");
+
+        then(useCase).should().listShipments(any());
+    }
+
+    @Test
+    @DisplayName("CAJERO cannot list shipments (GET /shipments -> 403)")
+    void cajeroCannotListShipments() throws Exception {
+        expectReadDenied(SHIPMENTS_PATH, "CAJERO");
+    }
+
+    @Test
+    @DisplayName("ADMIN can change a shipment status (PATCH /shipments/{id}/status -> 200)")
+    void adminCanUpdateShipmentStatus() throws Exception {
+        expectStatusUpdateAllowed(SHIPMENTS_PATH + "/{id}/status", SHIPMENT_ID, "SHIPPED", "ADMIN");
+
+        then(useCase).should().updateShipmentStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("ALMACENISTA can change a shipment status (PATCH /shipments/{id}/status -> 200)")
+    void almacenistaCanUpdateShipmentStatus() throws Exception {
+        expectStatusUpdateAllowed(SHIPMENTS_PATH + "/{id}/status", SHIPMENT_ID, "SHIPPED", "ALMACENISTA");
+
+        then(useCase).should().updateShipmentStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("AUXILIAR cannot change a shipment status (PATCH /shipments/{id}/status -> 403)")
+    void auxiliarCannotUpdateShipmentStatus() throws Exception {
+        expectStatusUpdateDenied(SHIPMENTS_PATH + "/{id}/status", SHIPMENT_ID, "SHIPPED", "AUXILIAR");
+    }
+
+    // ── Transport guides ───────────────────────────────────────────
+
+    @Test
+    @DisplayName("ADMIN can list transport guides (GET /transport-guides -> 200)")
+    void adminCanListTransportGuides() throws Exception {
+        expectReadAllowed(TRANSPORT_GUIDES_PATH, "ADMIN");
+
+        then(useCase).should().listGuides(any());
+    }
+
+    @Test
+    @DisplayName("ALMACENISTA can list transport guides (GET /transport-guides -> 200)")
+    void almacenistaCanListTransportGuides() throws Exception {
+        expectReadAllowed(TRANSPORT_GUIDES_PATH, "ALMACENISTA");
+
+        then(useCase).should().listGuides(any());
+    }
+
+    @Test
+    @DisplayName("AUXILIAR can list transport guides (GET /transport-guides -> 200)")
+    void auxiliarCanListTransportGuides() throws Exception {
+        expectReadAllowed(TRANSPORT_GUIDES_PATH, "AUXILIAR");
+
+        then(useCase).should().listGuides(any());
+    }
+
+    @Test
+    @DisplayName("CONTADOR can list transport guides (GET /transport-guides -> 200)")
+    void contadorCanListTransportGuides() throws Exception {
+        expectReadAllowed(TRANSPORT_GUIDES_PATH, "CONTADOR");
+
+        then(useCase).should().listGuides(any());
+    }
+
+    @Test
+    @DisplayName("CAJERO cannot list transport guides (GET /transport-guides -> 403)")
+    void cajeroCannotListTransportGuides() throws Exception {
+        expectReadDenied(TRANSPORT_GUIDES_PATH, "CAJERO");
+    }
+
+    @Test
+    @DisplayName("ADMIN can change a transport guide status (PATCH /transport-guides/{id}/status -> 200)")
+    void adminCanUpdateTransportGuideStatus() throws Exception {
+        expectStatusUpdateAllowed(TRANSPORT_GUIDES_PATH + "/{id}/status", GUIDE_ID, "ISSUED", "ADMIN");
+
+        then(useCase).should().updateGuideStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("ALMACENISTA can change a transport guide status (PATCH /transport-guides/{id}/status -> 200)")
+    void almacenistaCanUpdateTransportGuideStatus() throws Exception {
+        expectStatusUpdateAllowed(TRANSPORT_GUIDES_PATH + "/{id}/status", GUIDE_ID, "ISSUED", "ALMACENISTA");
+
+        then(useCase).should().updateGuideStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("AUXILIAR cannot change a transport guide status (PATCH /transport-guides/{id}/status -> 403)")
+    void auxiliarCannotUpdateTransportGuideStatus() throws Exception {
+        expectStatusUpdateDenied(TRANSPORT_GUIDES_PATH + "/{id}/status", GUIDE_ID, "ISSUED", "AUXILIAR");
     }
 }

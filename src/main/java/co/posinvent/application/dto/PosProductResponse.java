@@ -33,7 +33,6 @@ public record PosProductResponse(
         boolean active,
 
         List<ProductResponse.ProductImageResponse> images,
-        List<ProductPresentationResponse> presentations,
         List<ProductResponse.ProductPromotionResponse> promotions
 ) {
 
@@ -60,13 +59,6 @@ public record PosProductResponse(
                 p.images() == null ? List.of() : p.images().stream()
                         .map(i -> new ProductResponse.ProductImageResponse(
                                 i.id(), i.imageUrl(), i.displayOrder()))
-                        .toList(),
-                p.presentations() == null ? List.of() : p.presentations().stream()
-                        .map(pp -> new ProductPresentationResponse(
-                                pp.id(), pp.productId(), pp.code(), pp.name(),
-                                pp.unitOfMeasureId(), "", pp.conversionFactor(),
-                                pp.salePrice(), pp.isDefault(), pp.active(),
-                                pp.createdAt(), pp.updatedAt()))
                         .toList(),
                 p.promotions() == null ? List.of() : p.promotions().stream()
                         .map(pr -> new ProductResponse.ProductPromotionResponse(
