@@ -4,12 +4,14 @@ import co.posinvent.application.dto.LogContactRequest;
 import co.posinvent.application.usecase.CollectionUseCase;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/collections")
+@PreAuthorize("hasAnyRole('ADMIN','CONTADOR','CAJERO')")
 public class CollectionController {
 
     private final CollectionUseCase useCase;

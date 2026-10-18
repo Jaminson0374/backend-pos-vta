@@ -29,6 +29,7 @@ public class ProductController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','ALMACENISTA','CARNICERO','CONTADOR')")
     public ResponseEntity<PageResponse<ProductResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -50,6 +51,7 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','AUXILIAR','ALMACENISTA','CARNICERO','CONTADOR')")
     public ResponseEntity<ProductResponse> getById(@PathVariable UUID id) {
         var product = productUseCase.getById(id);
         var formulas = formulaRepo.findByParentProductId(id).stream()

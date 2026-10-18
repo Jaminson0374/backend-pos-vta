@@ -3,8 +3,6 @@ package co.posinvent.infrastructure.adapters.out.persistence;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -27,10 +25,6 @@ public class RoleEntity {
 
     @Column(nullable = false, unique = true, length = 50)
     private String name;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "jsonb")
-    private String permissions;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreatedDate

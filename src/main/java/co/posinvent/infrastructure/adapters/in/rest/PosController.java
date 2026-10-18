@@ -6,7 +6,7 @@ import co.posinvent.application.dto.DiscountAuthorizationRequest;
 import co.posinvent.application.dto.DiscountAuthorizationResponse;
 import co.posinvent.application.dto.ElectronicInvoiceResponse;
 import co.posinvent.application.dto.PageResponse;
-import co.posinvent.application.dto.ProductResponse;
+import co.posinvent.application.dto.PosProductResponse;
 import co.posinvent.application.usecase.AuthorizeDiscountUseCase;
 import co.posinvent.application.usecase.CheckoutRequest;
 import co.posinvent.application.usecase.CheckoutResponse;
@@ -97,14 +97,14 @@ public class PosController {
 
     @GetMapping("/products/search")
     @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
-    public ResponseEntity<PageResponse<ProductResponse>> searchProducts(
+    public ResponseEntity<PageResponse<PosProductResponse>> searchProducts(
             @RequestParam String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         var pageable = PageRequest.of(page, size);
         var result = productRepo.searchByName(q, pageable);
-        return ResponseEntity.ok(PageResponse.from(result, ProductResponse::from));
+        return ResponseEntity.ok(PageResponse.from(result, PosProductResponse::from));
     }
 
     @GetMapping("/invoices/{salesDocumentId}/dian")
