@@ -19,7 +19,12 @@ public record ThirdPartyResponse(
         ThirdPartyType type,
         UUID priceListId,
         BigDecimal creditLimit,
-        BigDecimal currentBalance,
+        /**
+         * Derived receivable balance: {@code SUM(accounts_receivable.outstanding)} for
+         * {@code CLIENT}/{@code BOTH}; {@code null} for every other third-party type.
+         * Never read from the frozen {@code third_parties.current_balance} column.
+         */
+        BigDecimal outstanding,
         PersonType personType,
         TaxRegime taxRegime,
         List<String> taxResponsibilities,
@@ -57,10 +62,10 @@ public record ThirdPartyResponse(
         boolean otherTaxResp,
         EmployeeBasicData employeeData
 ) {
-    public static ThirdPartyResponse from(ThirdParty t) {
+    public static ThirdPartyResponse from(ThirdParty t, BigDecimal outstanding) {
         return new ThirdPartyResponse(
                 t.id(), t.numIdentification(), t.name(), t.type(), t.priceListId(),
-                t.creditLimit(), t.currentBalance(), t.personType(), t.taxRegime(),
+                t.creditLimit(), outstanding, t.personType(), t.taxRegime(),
                 t.taxResponsibilities(), t.cityCode(), t.dianClassification(),
                 t.active(), t.createdAt(),
                 t.thirdPartyCategoryId(), t.identificationTypeId(),

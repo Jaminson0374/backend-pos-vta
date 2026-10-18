@@ -12,46 +12,49 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.EmployeeBasicData;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.model.ThirdParty.ThirdPartyType;
+import co.posinvent.domain.repository.AccountsReceivableRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
 import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyCategoryJpaRepository;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
 public class ThirdPartyUseCase {
 
     private final ThirdPartyRepository thirdPartyRepository;
+    private final AccountsReceivableRepository accountsReceivableRepository;
     private final ThirdPartyCategoryJpaRepository categoryJpaRepository;
 
     public ThirdPartyUseCase(
             ThirdPartyRepository thirdPartyRepository,
+            AccountsReceivableRepository accountsReceivableRepository,
             ThirdPartyCategoryJpaRepository categoryJpaRepository) {
         this.thirdPartyRepository = thirdPartyRepository;
+        this.accountsReceivableRepository = accountsReceivableRepository;
         this.categoryJpaRepository = categoryJpaRepository;
     }
 
     @Transactional(readOnly = true)
     public PageResponse<ThirdPartyResponse> list(Pageable pageable) {
-        return PageResponse.from(thirdPartyRepository.findAll(pageable), ThirdPartyResponse::from);
+        return toPageResponse(thirdPartyRepository.findAll(pageable));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<ThirdPartyResponse> listByTypeAndActive(ThirdPartyType type, boolean active, Pageable pageable) {
-        return PageResponse.from(
-                thirdPartyRepository.findByTypeAndActive(type, active, pageable),
-                ThirdPartyResponse::from);
+        return toPageResponse(thirdPartyRepository.findByTypeAndActive(type, active, pageable));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<ThirdPartyResponse> listByPersonTypeAndActive(ThirdParty.PersonType personType, boolean active, Pageable pageable) {
-        return PageResponse.from(
-                thirdPartyRepository.findByPersonTypeAndActive(personType, active, pageable),
-                ThirdPartyResponse::from);
+        return toPageResponse(thirdPartyRepository.findByPersonTypeAndActive(personType, active, pageable));
     }
 
     @Transactional(readOnly = true)
@@ -64,13 +67,13 @@ public class ThirdPartyUseCase {
     @Transactional(readOnly = true)
     public PageResponse<ThirdPartyResponse> search(String query, Pageable pageable) {
         var searchPattern = query != null && !query.isBlank() ? "%" + query.toLowerCase() + "%" : null;
-        return PageResponse.from(thirdPartyRepository.search(searchPattern, pageable), ThirdPartyResponse::from);
+        return toPageResponse(thirdPartyRepository.search(searchPattern, pageable));
     }
 
     @Transactional(readOnly = true)
     public ThirdPartyResponse getById(UUID id) {
         return thirdPartyRepository.findById(id)
-                .map(ThirdPartyResponse::from)
+                .map(this::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Tercero", id));
     }
 
@@ -127,7 +130,7 @@ public class ThirdPartyUseCase {
                 toEmployeeData(request.employeeData())
         );
 
-        return ThirdPartyResponse.from(thirdPartyRepository.save(thirdParty));
+        return toResponse(thirdPartyRepository.save(thirdParty));
     }
 
     @Auditable(entityType = "THIRD_PARTY", action = "UPDATE")
@@ -148,7 +151,7 @@ public class ThirdPartyUseCase {
                 resolveType(request),
                 request.priceListId(),
                 request.creditLimit(),
-                existing.currentBalance(),
+                BigDecimal.ZERO,
                 request.personType(),
                 request.taxRegime(),
                 request.taxResponsibilities(),
@@ -186,7 +189,7 @@ public class ThirdPartyUseCase {
                 toEmployeeData(request.employeeData())
         );
 
-        return ThirdPartyResponse.from(thirdPartyRepository.save(updated));
+        return toResponse(thirdPartyRepository.save(updated));
     }
 
     @Transactional(readOnly = true)
@@ -194,6 +197,31 @@ public class ThirdPartyUseCase {
         return thirdPartyRepository.findEmployeesWithoutUser().stream()
                 .map(ThirdPartySummaryResponse::from)
                 .toList();
+    }
+
+    private PageResponse<ThirdPartyResponse> toPageResponse(Page<ThirdParty> page) {
+        var clientIds = page.getContent().stream()
+                .filter(ThirdPartyUseCase::isClient)
+                .map(ThirdParty::id)
+                .filter(Objects::nonNull)
+                .toList();
+        var sums = clientIds.isEmpty()
+                ? Map.<UUID, BigDecimal>of()
+                : accountsReceivableRepository.sumOutstandingByClientIds(clientIds);
+        return PageResponse.from(page, t -> ThirdPartyResponse.from(t, outstandingFor(t, sums)));
+    }
+
+    private ThirdPartyResponse toResponse(ThirdParty t) {
+        return ThirdPartyResponse.from(t,
+                isClient(t) ? accountsReceivableRepository.sumOutstandingByClientId(t.id()) : null);
+    }
+
+    private static boolean isClient(ThirdParty t) {
+        return t.type() == ThirdPartyType.CLIENT || t.type() == ThirdPartyType.BOTH;
+    }
+
+    private static BigDecimal outstandingFor(ThirdParty t, Map<UUID, BigDecimal> sums) {
+        return isClient(t) ? sums.getOrDefault(t.id(), BigDecimal.ZERO) : null;
     }
 
     private ThirdPartyType resolveType(ThirdPartyRequest request) {

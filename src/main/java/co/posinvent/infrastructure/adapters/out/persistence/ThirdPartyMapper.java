@@ -32,6 +32,7 @@ interface ThirdPartyMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "version", ignore = true)
+    @Mapping(target = "currentBalance", ignore = true)
     @Mapping(target = "tpCategoryId", source = "thirdPartyCategoryId")
     @Mapping(target = "granContribuyente",  source = "isGranContribuyente")
     @Mapping(target = "autoretenedor",       source = "isAutoretenedor")

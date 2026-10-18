@@ -38,12 +38,16 @@ public record AccountsReceivable(
 
     /**
      * Determines status from paid amount vs total.
+     *
+     * <p>The fully-covered check runs first so a receivable with nothing left to collect is PAID
+     * even when nothing was ever paid: {@code (0, 0)} is a fully returned receivable. A positive
+     * total with no payment still reports OPEN.</p>
      */
     public static ArStatus computeStatus(BigDecimal totalAmount, BigDecimal paidAmount) {
         var t = totalAmount != null ? totalAmount : BigDecimal.ZERO;
         var p = paidAmount != null ? paidAmount : BigDecimal.ZERO;
-        if (p.compareTo(BigDecimal.ZERO) == 0) return ArStatus.OPEN;
         if (p.compareTo(t) >= 0) return ArStatus.PAID;
+        if (p.compareTo(BigDecimal.ZERO) == 0) return ArStatus.OPEN;
         return ArStatus.PARTIAL;
     }
 }

@@ -36,6 +36,7 @@ public class ManageSalesDocumentUseCase {
     private final StockRepository stockRepo;
     private final WarehouseRepository warehouseRepo;
     private final ProductRepository productRepo;
+    private final AccountsReceivableRepository accountsReceivableRepository;
     private final AccountsReceivableUseCase accountsReceivableUseCase;
     private final FefoPicker fefoPicker;
     private final RecordMovementUseCase recordMovement;
@@ -48,6 +49,7 @@ public class ManageSalesDocumentUseCase {
             StockRepository stockRepo,
             WarehouseRepository warehouseRepo,
             ProductRepository productRepo,
+            AccountsReceivableRepository accountsReceivableRepository,
             AccountsReceivableUseCase accountsReceivableUseCase,
             FefoPicker fefoPicker,
             RecordMovementUseCase recordMovement,
@@ -59,6 +61,7 @@ public class ManageSalesDocumentUseCase {
         this.stockRepo = stockRepo;
         this.warehouseRepo = warehouseRepo;
         this.productRepo = productRepo;
+        this.accountsReceivableRepository = accountsReceivableRepository;
         this.accountsReceivableUseCase = accountsReceivableUseCase;
         this.fefoPicker = fefoPicker;
         this.recordMovement = recordMovement;
@@ -248,17 +251,18 @@ public class ManageSalesDocumentUseCase {
         var creditLimit = client.creditLimit() != null
                 ? client.creditLimit()
                 : BigDecimal.ZERO;
-        var currentBalance = client.currentBalance() != null
-                ? client.currentBalance()
+        var derivedOutstanding = accountsReceivableRepository.sumOutstandingByClientId(doc.clientId());
+        var outstanding = derivedOutstanding != null
+                ? derivedOutstanding
                 : BigDecimal.ZERO;
         var docTotal = doc.totalAmount() != null
                 ? doc.totalAmount()
                 : BigDecimal.ZERO;
 
-        if (creditLimit.compareTo(currentBalance.add(docTotal)) < 0) {
+        if (creditLimit.compareTo(outstanding.add(docTotal)) < 0) {
             throw new BusinessException("CREDIT_LIMIT_EXCEEDED",
                     "Excede cupo de crédito disponible. Límite: " + creditLimit
-                    + ", Saldo actual: " + currentBalance
+                    + ", Saldo actual de CxC: " + outstanding
                     + ", Total documento: " + docTotal);
         }
     }

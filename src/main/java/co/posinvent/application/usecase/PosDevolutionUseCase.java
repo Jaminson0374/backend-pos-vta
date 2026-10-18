@@ -9,7 +9,6 @@ import co.posinvent.domain.repository.AccountsReceivableRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
-import co.posinvent.domain.repository.ThirdPartyRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +33,6 @@ public class PosDevolutionUseCase {
     private final ProductRepository productRepo;
     private final RecordMovementUseCase recordMovement;
     private final AccountsReceivableRepository arRepo;
-    private final ThirdPartyRepository thirdPartyRepo;
     private final ApplicationEventPublisher eventPublisher;
 
     public PosDevolutionUseCase(
@@ -43,7 +41,6 @@ public class PosDevolutionUseCase {
             ProductRepository productRepo,
             RecordMovementUseCase recordMovement,
             AccountsReceivableRepository arRepo,
-            ThirdPartyRepository thirdPartyRepo,
             ApplicationEventPublisher eventPublisher
     ) {
         this.documentRepo = documentRepo;
@@ -51,7 +48,6 @@ public class PosDevolutionUseCase {
         this.productRepo = productRepo;
         this.recordMovement = recordMovement;
         this.arRepo = arRepo;
-        this.thirdPartyRepo = thirdPartyRepo;
         this.eventPublisher = eventPublisher;
     }
 
@@ -217,7 +213,7 @@ public class PosDevolutionUseCase {
             }
         }
 
-        // 6. If original invoice was credit sale, reduce AR outstanding and adjust ThirdParty balance
+        // 6. If original invoice was credit sale, reduce AR outstanding
         var arAdjustment = BigDecimal.ZERO.setScale(2);
         if (Boolean.TRUE.equals(invoice.isCreditSale())) {
             var arOpt = arRepo.findByDocumentId(invoice.id());
@@ -225,44 +221,20 @@ public class PosDevolutionUseCase {
                 var ar = arOpt.get();
                 var adjustmentAmount = ar.outstanding().min(totalReturned);
                 arAdjustment = adjustmentAmount;
-                var newOutstanding = ar.outstanding().subtract(adjustmentAmount);
-                var newStatus = AccountsReceivable.computeStatus(ar.totalAmount(), ar.paidAmount());
+                // The return shrinks the receivable itself. Reducing only `outstanding` would be
+                // undone by the next receipt, which recomputes it as totalAmount - paidAmount.
+                var newTotalAmount = ar.totalAmount().subtract(adjustmentAmount);
+                var newOutstanding = AccountsReceivable.computeOutstanding(newTotalAmount, ar.paidAmount());
+                var newStatus = AccountsReceivable.computeStatus(newTotalAmount, ar.paidAmount());
 
                 var updatedAr = new AccountsReceivable(
                         ar.id(), ar.clientId(), ar.documentId(),
-                        ar.totalAmount(), ar.paidAmount(), newOutstanding,
+                        newTotalAmount, ar.paidAmount(), newOutstanding,
                         ar.dueDate(), newStatus,
                         ar.createdAt(), null,
                         ar.interestRate(), ar.interestAmount(), ar.lastInterestCalcDate()
                 );
                 arRepo.save(updatedAr);
-
-                // Reduce ThirdParty.currentBalance by the adjusted amount
-                var thirdParty = thirdPartyRepo.findById(ar.clientId());
-                if (thirdParty.isPresent()) {
-                    var tp = thirdParty.get();
-                    var newBalance = tp.currentBalance() != null
-                            ? tp.currentBalance().subtract(adjustmentAmount).max(BigDecimal.ZERO)
-                            : BigDecimal.ZERO;
-                    var updatedTp = new ThirdParty(
-                            tp.id(), tp.numIdentification(), tp.name(), tp.type(),
-                            tp.priceListId(), tp.creditLimit(), newBalance,
-                            tp.personType(), tp.taxRegime(), tp.taxResponsibilities(),
-                            tp.cityCode(), tp.dianClassification(), tp.active(),
-                            tp.createdAt(), tp.updatedAt(),
-                            tp.thirdPartyCategoryId(), tp.identificationTypeId(),
-                            tp.dv(), tp.lastName(), tp.commonName(), tp.phone(),
-                            tp.address(), tp.departmentId(), tp.cityId(), tp.email(),
-                            tp.website(), tp.entryDate(), tp.creditDays(),
-                            tp.contactName(), tp.contactPhone(), tp.contactAddress(),
-                            tp.contactEmail(), tp.taxContactFirstName(),
-                            tp.taxContactLastName(), tp.taxEmail(), tp.billingPhone(),
-                            tp.isGranContribuyente(), tp.isAutoretenedor(),
-                            tp.isAgenteRetencionIva(), tp.isRegimenSimple(),
-                            tp.otherTaxResp(), tp.employeeData()
-                    );
-                    thirdPartyRepo.save(updatedTp);
-                }
             }
         }
 
