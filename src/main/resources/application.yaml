@@ -14,6 +14,9 @@ spring:
 app:
   media:
     storage-path: ${APP_MEDIA_STORAGE_PATH:./media}
+  security:
+    certificate:
+      secret-key: ${CERT_SECRET_KEY}
   inventory:
     auto-dispose: false
     expiration-warning-days: 30

@@ -22,6 +22,9 @@ spring:
     enabled: false
 
 app:
+  security:
+    certificate:
+      secret-key: YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=
   jwt:
     secret: test-jwt-secret-key-for-integration-tests-must-be-at-least-64-bytes-long!!!
     expiration-ms: 86400000

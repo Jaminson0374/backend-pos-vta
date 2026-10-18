@@ -1,6 +1,6 @@
 package co.posinvent.infrastructure.adapters.in.rest;
 
-import co.posinvent.domain.model.DigitalCertificate;
+import co.posinvent.application.dto.DigitalCertificateResponse;
 import co.posinvent.application.usecase.ManageDigitalCertificateUseCase;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -22,17 +22,17 @@ public class DigitalCertificateController {
     }
 
     @GetMapping
-    public List<DigitalCertificate> listAll() {
+    public List<DigitalCertificateResponse> listAll() {
         return useCase.listAll();
     }
 
     @GetMapping("/{id}")
-    public DigitalCertificate getById(@PathVariable UUID id) {
+    public DigitalCertificateResponse getById(@PathVariable UUID id) {
         return useCase.getById(id);
     }
 
     @PostMapping
-    public DigitalCertificate upload(
+    public DigitalCertificateResponse upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "password", required = false) String password,
             @RequestParam(value = "name", required = false) String name) throws IOException {

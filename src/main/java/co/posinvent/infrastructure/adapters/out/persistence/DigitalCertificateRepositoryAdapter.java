@@ -25,6 +25,8 @@ class DigitalCertificateRepositoryAdapter implements DigitalCertificateRepositor
                 ? jpa.findById(domain.id()).orElse(new DigitalCertificateEntity())
                 : new DigitalCertificateEntity();
         entity.setName(domain.name());
+        entity.setIssuer(domain.issuer());
+        entity.setSubject(domain.subject());
         entity.setCertificateData(domain.certificateData());
         entity.setPasswordEncrypted(domain.passwordEncrypted());
         entity.setValidUntil(domain.validUntil());
