@@ -129,6 +129,20 @@ class JwtAuthFilterTest {
     }
 
     @Test
+    void blacklistLookupFailureDoesNotAuthenticate() throws Exception {
+        when(userDetailsService.loadUserByUsername(USERNAME))
+                .thenReturn(principal(CURRENT_VERSION));
+        var token = jwtService.generateToken(USER_ID, USERNAME, "ADMIN", null, CURRENT_VERSION);
+        when(blacklistService.isRevoked(any())).thenThrow(new RuntimeException("db down"));
+
+        var chain = mock(FilterChain.class);
+        runFilter(token, chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void tokenWithoutJtiClaimDoesNotAuthenticate() throws Exception {
         when(userDetailsService.loadUserByUsername(USERNAME))
                 .thenReturn(principal(CURRENT_VERSION));

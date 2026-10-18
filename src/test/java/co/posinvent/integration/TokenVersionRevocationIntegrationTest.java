@@ -30,7 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end proof of token-version revocation (S2a).
  *
  * <p>A password reset and an active-to-inactive transition must bump
- * {@code users.token_version}, which invalidates every previously issued JWT.</p>
+ * {@code users.token_version}, which invalidates every previously issued JWT.
+ * Ordinary edits and repeated deactivations must not bump it again.</p>
  */
 class TokenVersionRevocationIntegrationTest extends AbstractIntegrationTest {
 
@@ -43,6 +44,8 @@ class TokenVersionRevocationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PasswordResetTokenJpaRepository tokenJpaRepository;
     @Autowired private RoleJpaRepository roleJpaRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+
+    private record UserFixture(UUID userId, UUID employeeId, UUID roleId, String email) {}
 
     @Test
     void passwordResetIncrementsTokenVersionAndReplacesPasswordHash() {
@@ -83,11 +86,55 @@ class TokenVersionRevocationIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void deactivatingUserIncrementsTokenVersion() {
+        var fixture = createUserFixture(true);
+
+        // The security context set by AbstractIntegrationTest belongs to a different admin,
+        // so this is not a self-deactivation.
+        updateUser(fixture, false, fixture.email());
+
+        var reloaded = userJpaRepository.findById(fixture.userId()).orElseThrow();
+        assertThat(reloaded.isActive()).isFalse();
+        assertThat(reloaded.getTokenVersion()).isEqualTo(1L);
+    }
+
+    @Test
+    void updatingActiveUserWithoutDeactivatingDoesNotIncrementTokenVersion() {
+        var fixture = createUserFixture(true);
+        var newEmail = "revocation-edited-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+
+        updateUser(fixture, true, newEmail);
+
+        var reloaded = userJpaRepository.findById(fixture.userId()).orElseThrow();
+        assertThat(reloaded.isActive()).isTrue();
+        assertThat(reloaded.getEmail()).isEqualTo(newEmail);
+        assertThat(reloaded.getTokenVersion()).isZero();
+    }
+
+    @Test
+    void updatingAlreadyInactiveUserDoesNotIncrementTokenVersionAgain() {
+        var fixture = createUserFixture(true);
+
+        updateUser(fixture, false, fixture.email());
+        updateUser(fixture, false, "revocation-second-edit-" + UUID.randomUUID() + "@example.com");
+
+        var reloaded = userJpaRepository.findById(fixture.userId()).orElseThrow();
+        assertThat(reloaded.isActive()).isFalse();
+        assertThat(reloaded.getTokenVersion()).isEqualTo(1L);
+    }
+
+    private void updateUser(UserFixture fixture, boolean active, String email) {
+        userUseCase.update(
+                fixture.userId(),
+                new UserRequest(fixture.employeeId(), email, fixture.roleId(), active)
+        );
+    }
+
+    private UserFixture createUserFixture(boolean active) {
         var suffix = UUID.randomUUID().toString().substring(0, 8);
+        var email = "revocation-deactivate-" + suffix + "@example.com";
         var userIdHolder = new UUID[1];
         var employeeIdHolder = new UUID[1];
         var roleIdHolder = new UUID[1];
-        var email = "revocation-deactivate-" + suffix + "@example.com";
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var employee = new ThirdPartyEntity();
@@ -108,7 +155,7 @@ class TokenVersionRevocationIntegrationTest extends AbstractIntegrationTest {
             user.setEmail(email);
             user.setFullName("Revocation Deactivate User");
             user.setRole(role);
-            user.setActive(true);
+            user.setActive(active);
             user.setEmployee(employee);
             user.setCreatedAt(OffsetDateTime.now());
             user.setUpdatedAt(OffsetDateTime.now());
@@ -119,16 +166,7 @@ class TokenVersionRevocationIntegrationTest extends AbstractIntegrationTest {
             roleIdHolder[0] = role.getId();
         });
 
-        // The security context set by AbstractIntegrationTest belongs to a different admin,
-        // so this is not a self-deactivation.
-        userUseCase.update(
-                userIdHolder[0],
-                new UserRequest(employeeIdHolder[0], email, roleIdHolder[0], false)
-        );
-
-        var reloaded = userJpaRepository.findById(userIdHolder[0]).orElseThrow();
-        assertThat(reloaded.isActive()).isFalse();
-        assertThat(reloaded.getTokenVersion()).isEqualTo(1L);
+        return new UserFixture(userIdHolder[0], employeeIdHolder[0], roleIdHolder[0], email);
     }
 
     private RoleEntity roleByName(String name) {

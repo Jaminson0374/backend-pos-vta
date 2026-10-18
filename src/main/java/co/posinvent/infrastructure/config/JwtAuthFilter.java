@@ -72,8 +72,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         final String subject = claims.getSubject();
         final String jti = claims.getId();
-        final Object uidClaim = claims.get("uid");
-        final Object tokenVersionClaim = claims.get("token_version");
+        final Object uidClaim = claims.get(JwtService.CLAIM_UID);
+        final Object tokenVersionClaim = claims.get(JwtService.CLAIM_TOKEN_VERSION);
 
         if (subject == null || subject.isBlank()
                 || jti == null || jti.isBlank()
@@ -96,7 +96,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (blacklistService.isRevoked(jtiValue)) {
+        final boolean revoked;
+        try {
+            revoked = blacklistService.isRevoked(jtiValue);
+        } catch (Exception e) {
+            // Fail closed: a broken blacklist lookup must not authenticate the request.
+            log.warn("Rejected JWT: blacklist lookup failed ({})", e.getMessage());
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (revoked) {
             log.debug("Rejected JWT: jti has been revoked");
             filterChain.doFilter(request, response);
             return;
@@ -119,7 +129,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // Unknown or inactive user: leave the request unauthenticated (401).
             log.debug("Rejected JWT: unknown or inactive user subject={}", subject);
         } catch (Exception e) {
-            log.debug("Rejected JWT: could not load user subject={} ({})", subject, e.getMessage());
+            log.warn("Rejected JWT: could not load user subject={} ({})", subject, e.getMessage());
         }
 
         filterChain.doFilter(request, response);

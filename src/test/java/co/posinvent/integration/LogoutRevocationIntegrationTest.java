@@ -70,6 +70,14 @@ class LogoutRevocationIntegrationTest extends AbstractIntegrationTest {
         assertThat(revoked.getRevokedAt()).isNotNull();
         assertThat(blacklistService.isRevoked(firstJti)).isTrue();
 
+        // Duplicate/concurrent logout retries must be idempotent and keep a single row.
+        logoutUseCase.logout(firstToken);
+        var rowsForJti = blacklistRepository.findAll().stream()
+                .filter(row -> firstJti.equals(row.getJti()))
+                .count();
+        assertThat(rowsForJti).isEqualTo(1L);
+        assertThat(blacklistService.isRevoked(firstJti)).isTrue();
+
         var secondToken = jwtService.generateToken(
                 userIdHolder[0], username, roleNameHolder[0], null, tokenVersionHolder[0]);
         var secondJti = UUID.fromString(jwtService.extractAllClaims(secondToken).getId());

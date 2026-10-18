@@ -91,7 +91,8 @@ class PaymentControllerSecurityTest {
                 "user-" + role.toLowerCase(),
                 "irrelevant-hash",
                 List.of(new SimpleGrantedAuthority("ROLE_" + role)),
-                null
+                null,
+                0L
         );
         return authentication(new UsernamePasswordAuthenticationToken(
                 principal, null, principal.getAuthorities()));

@@ -1,7 +1,8 @@
 package co.posinvent.application.service;
 
-import co.posinvent.infrastructure.adapters.out.persistence.JwtBlacklistEntity;
 import co.posinvent.infrastructure.adapters.out.persistence.JwtBlacklistJpaRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,8 @@ import java.util.UUID;
 @Service
 public class JwtBlacklistService {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtBlacklistService.class);
+
     private final JwtBlacklistJpaRepository repository;
 
     public JwtBlacklistService(JwtBlacklistJpaRepository repository) {
@@ -27,14 +30,7 @@ public class JwtBlacklistService {
 
     @Transactional
     public void revoke(UUID jti, OffsetDateTime expiresAt) {
-        var entity = repository.findById(jti).orElseGet(() -> {
-            var created = new JwtBlacklistEntity();
-            created.setJti(jti);
-            return created;
-        });
-        entity.setExpiresAt(expiresAt);
-        entity.setRevokedAt(OffsetDateTime.now(ZoneOffset.UTC));
-        repository.save(entity);
+        repository.upsert(jti, expiresAt);
     }
 
     @Transactional(readOnly = true)
@@ -45,6 +41,7 @@ public class JwtBlacklistService {
     @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void purgeExpired() {
-        repository.deleteByExpiresAtBefore(OffsetDateTime.now(ZoneOffset.UTC));
+        int purged = repository.deleteExpiredBefore(OffsetDateTime.now(ZoneOffset.UTC));
+        log.info("purged {} expired JWT blacklist rows", purged);
     }
 }
