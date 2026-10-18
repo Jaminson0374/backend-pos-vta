@@ -46,6 +46,7 @@ class SaleCogsFromKardexIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PucAccountRepository pucRepo;
 
     private UUID orderId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -76,13 +77,17 @@ class SaleCogsFromKardexIntegrationTest extends AbstractIntegrationTest {
                     em,
                     "ORD-COGS-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, QTY);
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "COGS-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
 
     @Test
     void saleJournalValuesCogsAtKardexCostNotSalePrice() {
-        var request = new CheckoutRequest(orderId, null,
+        var request = new CheckoutRequest(orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", SALE_SUBTOTAL)));
 
         checkoutUseCase.checkout(request, TEST_USER_ID);

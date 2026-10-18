@@ -52,6 +52,7 @@ class DevolutionReversalJournalIntegrationTest extends AbstractIntegrationTest {
 
     private UUID orderId;
     private UUID productId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -82,6 +83,10 @@ class DevolutionReversalJournalIntegrationTest extends AbstractIntegrationTest {
                     em,
                     "ORD-REV-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, QTY);
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "REV-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
@@ -91,7 +96,7 @@ class DevolutionReversalJournalIntegrationTest extends AbstractIntegrationTest {
         // 1. Sell the goods (this posts the SALE entry: debit receivable 20,000 / credit income 20,000,
         //    debit COGS 6,000 / credit inventory 6,000).
         checkoutUseCase.checkout(
-                new CheckoutRequest(orderId, null,
+                new CheckoutRequest(orderId, null, shiftId,
                         List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
                 TEST_USER_ID);
 

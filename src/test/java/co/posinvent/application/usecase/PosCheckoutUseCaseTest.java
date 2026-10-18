@@ -1,5 +1,7 @@
 package co.posinvent.application.usecase;
 
+import co.posinvent.domain.exception.BusinessException;
+import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.FefoPicker;
@@ -10,6 +12,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -20,6 +23,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -40,6 +45,7 @@ class PosCheckoutUseCaseTest {
     @Mock private CompanyConfigRepository companyConfigRepo;
     @Mock private UserRepository userRepo;
     @Mock private AuthorizeDiscountUseCase authorizeDiscountUseCase;
+    @Mock private ShiftRepository shiftRepo;
 
     private PosCheckoutUseCase useCase;
 
@@ -54,6 +60,7 @@ class PosCheckoutUseCaseTest {
     private static final UUID USER_ID = UUID.randomUUID();
     private static final UUID CASH_REGISTER_ID = UUID.randomUUID();
     private static final UUID INVOICE_ID = UUID.randomUUID();
+    private static final UUID SHIFT_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -67,17 +74,50 @@ class PosCheckoutUseCaseTest {
                 priceEngine, fefoPicker, recordMovement, costingService,
                 eventPublisher, concurrencyExecutor, numberingService,
                 new DiscountEngineService(productRepo, companyConfigRepo), userRepo,
-                authorizeDiscountUseCase
+                authorizeDiscountUseCase, shiftRepo
         );
 
         // Numbering is delegated to the active DIAN resolution service; its own
-        // behavior is covered by DianNumberingServiceTest.
-        when(numberingService.nextInvoiceNumber()).thenReturn("FE0001");
+        // behavior is covered by DianNumberingServiceTest. Lenient because failure-path
+        // tests stop before numbering is reached.
+        lenient().when(numberingService.nextInvoiceNumber()).thenReturn("FE0001");
+    }
+
+    private static Shift openShift(UUID ownerId) {
+        return new Shift(
+                SHIFT_ID, CASH_REGISTER_ID, ownerId, null, null,
+                OffsetDateTime.now().minusHours(1), null,
+                BigDecimal.ZERO, null, ShiftStatus.OPEN, null, OffsetDateTime.now());
+    }
+
+    private void stubOpenShift() {
+        when(shiftRepo.findById(SHIFT_ID)).thenReturn(Optional.of(openShift(USER_ID)));
+    }
+
+    private static SalesDocument confirmedOrder(UUID orderShiftId) {
+        var item = new SaleItem(null, ORDER_ID, PRODUCT_ID,
+                BigDecimal.ONE, null, null, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, 1, null);
+        return new SalesDocument(
+                ORDER_ID, SalesDocumentType.ORDER, SalesDocumentStatus.CONFIRMED,
+                "ORD-TEST", CLIENT_ID, WAREHOUSE_ID, orderShiftId, null, null,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, USER_ID,
+                OffsetDateTime.now(), OffsetDateTime.now(),
+                List.of(item), null, false, null
+        );
+    }
+
+    private static User userWithRole(String roleName) {
+        return new User(USER_ID, "test-user", "Test User", "test@example.com",
+                new Role(UUID.randomUUID(), roleName, null), true,
+                OffsetDateTime.now(), OffsetDateTime.now(), null, null);
     }
 
     @Test
     void shouldCreateMultipleInventoryMovementsWhenFefoPicksMultipleBatches() {
         // ── Arrange ─────────────────────────────────────────────────────
+        stubOpenShift();
         var item = new SaleItem(null, ORDER_ID, PRODUCT_ID,
                 new BigDecimal("8"), null, null, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, 1, null);
@@ -166,7 +206,7 @@ class PosCheckoutUseCaseTest {
         }).when(documentRepo).save(any(SalesDocument.class));
 
         // ── Act ─────────────────────────────────────────────────────────
-        var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID,
+        var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
                 List.of(
                         new CheckoutRequest.PaymentLine("CASH", new BigDecimal("250000")),
                         new CheckoutRequest.PaymentLine("CARD", new BigDecimal("150000"))));
@@ -204,6 +244,18 @@ class PosCheckoutUseCaseTest {
         assertThat(savedPayments.get(1).method()).isEqualTo("CARD");
         assertThat(savedPayments.get(1).amount()).isEqualByComparingTo("150000");
         assertThat(savedPayments.get(1).createdBy()).isEqualTo(USER_ID);
+
+        // Both documents are stamped with the validated shift and its register.
+        var docCaptor = ArgumentCaptor.forClass(SalesDocument.class);
+        verify(documentRepo, times(2)).save(docCaptor.capture());
+        var savedInvoiceDoc = docCaptor.getAllValues().get(0);
+        var invoicedOrder = docCaptor.getAllValues().get(1);
+        assertThat(savedInvoiceDoc.type()).isEqualTo(SalesDocumentType.INVOICE);
+        assertThat(savedInvoiceDoc.shiftId()).isEqualTo(SHIFT_ID);
+        assertThat(savedInvoiceDoc.cashRegisterId()).isEqualTo(CASH_REGISTER_ID);
+        assertThat(invoicedOrder.type()).isEqualTo(SalesDocumentType.ORDER);
+        assertThat(invoicedOrder.shiftId()).isEqualTo(SHIFT_ID);
+        assertThat(invoicedOrder.cashRegisterId()).isEqualTo(CASH_REGISTER_ID);
     }
 
     /**
@@ -214,6 +266,7 @@ class PosCheckoutUseCaseTest {
     @Test
     void shouldReduceCommittedQuantityByAllocationAndClampAtZero() {
         // ── Arrange ─────────────────────────────────────────────────────
+        stubOpenShift();
         var item = new SaleItem(null, ORDER_ID, PRODUCT_ID,
                 new BigDecimal("8"), null, null, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, 1, null);
@@ -290,7 +343,7 @@ class PosCheckoutUseCaseTest {
         }).when(documentRepo).save(any(SalesDocument.class));
 
         // ── Act ─────────────────────────────────────────────────────────
-        var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID,
+        var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("400000"))));
         useCase.checkout(request, USER_ID);
 
@@ -302,5 +355,155 @@ class PosCheckoutUseCaseTest {
         assertThat(savedStocks.get(0).committedQuantity()).isEqualByComparingTo("5");
         // Batch 2: committed 0 - 5 clamped at 0
         assertThat(savedStocks.get(1).committedQuantity()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void shouldRejectCheckoutWhenShiftDoesNotExist() {
+        when(documentRepo.findById(ORDER_ID)).thenReturn(Optional.of(confirmedOrder(null)));
+        when(shiftRepo.findById(SHIFT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.checkout(
+                new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
+                USER_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(stockRepo);
+        verify(documentRepo, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectCheckoutWhenShiftIsClosed() {
+        when(documentRepo.findById(ORDER_ID)).thenReturn(Optional.of(confirmedOrder(null)));
+        when(shiftRepo.findById(SHIFT_ID)).thenReturn(Optional.of(new Shift(
+                SHIFT_ID, CASH_REGISTER_ID, USER_ID, null, null,
+                OffsetDateTime.now().minusHours(2), OffsetDateTime.now(),
+                BigDecimal.ZERO, BigDecimal.ZERO, ShiftStatus.CLOSED, null, OffsetDateTime.now())));
+
+        assertThatThrownBy(() -> useCase.checkout(
+                new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
+                USER_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo("POS_SHIFT_NOT_OPEN"));
+
+        verifyNoInteractions(stockRepo);
+        verify(documentRepo, never()).save(any());
+    }
+
+    @Test
+    void shouldDenyCheckoutWhenShiftBelongsToAnotherCashier() {
+        when(documentRepo.findById(ORDER_ID)).thenReturn(Optional.of(confirmedOrder(null)));
+        when(shiftRepo.findById(SHIFT_ID))
+                .thenReturn(Optional.of(openShift(UUID.randomUUID())));
+        when(userRepo.findById(USER_ID)).thenReturn(Optional.of(userWithRole("CAJERO")));
+
+        assertThatThrownBy(() -> useCase.checkout(
+                new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
+                USER_ID))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(stockRepo);
+        verify(documentRepo, never()).save(any());
+    }
+
+    @Test
+    void shouldAllowAdminToCheckoutAShiftOwnedByAnotherUser() {
+        when(shiftRepo.findById(SHIFT_ID))
+                .thenReturn(Optional.of(openShift(UUID.randomUUID())));
+        when(userRepo.findById(USER_ID)).thenReturn(Optional.of(userWithRole("ADMIN")));
+        stubSuccessfulCheckout();
+
+        assertThatCode(() -> useCase.checkout(
+                new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("1000.00")))),
+                USER_ID))
+                .doesNotThrowAnyException();
+
+        verify(stockRepo).save(any(InventoryStock.class));
+    }
+
+    @Test
+    void shouldRejectCheckoutWhenRequestRegisterDiffersFromTheShift() {
+        when(documentRepo.findById(ORDER_ID)).thenReturn(Optional.of(confirmedOrder(null)));
+        when(shiftRepo.findById(SHIFT_ID)).thenReturn(Optional.of(openShift(USER_ID)));
+
+        assertThatThrownBy(() -> useCase.checkout(
+                new CheckoutRequest(ORDER_ID, UUID.randomUUID(), SHIFT_ID,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
+                USER_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo("POS_SHIFT_REGISTER_MISMATCH"));
+
+        verifyNoInteractions(stockRepo);
+        verify(documentRepo, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectCheckoutWhenOrderBelongsToAnotherShift() {
+        when(documentRepo.findById(ORDER_ID))
+                .thenReturn(Optional.of(confirmedOrder(UUID.randomUUID())));
+        when(shiftRepo.findById(SHIFT_ID)).thenReturn(Optional.of(openShift(USER_ID)));
+
+        assertThatThrownBy(() -> useCase.checkout(
+                new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
+                USER_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo("POS_SHIFT_MISMATCH"));
+
+        verifyNoInteractions(stockRepo);
+        verify(documentRepo, never()).save(any());
+    }
+
+    private void stubSuccessfulCheckout() {
+        when(documentRepo.findById(any(UUID.class))).thenAnswer(inv -> {
+            UUID id = inv.getArgument(0);
+            if (id.equals(ORDER_ID)) {
+                return Optional.of(confirmedOrder(null));
+            }
+            return Optional.of(new SalesDocument(
+                    id, SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT,
+                    "INV-TEST", CLIENT_ID, WAREHOUSE_ID, SHIFT_ID, CASH_REGISTER_ID, ORDER_ID,
+                    new BigDecimal("1000.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    new BigDecimal("1000.00"), USER_ID,
+                    OffsetDateTime.now(), OffsetDateTime.now(),
+                    List.of(), null, false, null
+            ));
+        });
+
+        when(priceEngine.resolvePrice(PRODUCT_ID, CLIENT_ID))
+                .thenReturn(new PriceResult(new BigDecimal("1000.00"), "EXENTO", BigDecimal.ZERO, BigDecimal.ZERO));
+        when(fefoPicker.pick(PRODUCT_ID, WAREHOUSE_ID, BigDecimal.ONE))
+                .thenReturn(List.of(new BatchAllocation(BATCH1_ID, BigDecimal.ONE, BigDecimal.ZERO)));
+        when(stockRepo.findByProductBatchWarehouse(PRODUCT_ID, BATCH1_ID, WAREHOUSE_ID))
+                .thenReturn(Optional.of(new InventoryStock(
+                        STOCK1_ID, PRODUCT_ID, BATCH1_ID, WAREHOUSE_ID,
+                        new BigDecimal("10"), BigDecimal.ZERO, BigDecimal.ZERO,
+                        OffsetDateTime.now().minusDays(1), null
+                )));
+        doAnswer(inv -> inv.getArgument(0)).when(stockRepo).save(any(InventoryStock.class));
+        when(recordMovement.record(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new InventoryMovement(
+                        UUID.randomUUID(), PRODUCT_ID, null, WAREHOUSE_ID,
+                        MovementType.EXIT, BigDecimal.ONE, BigDecimal.ZERO,
+                        BigDecimal.TEN, new BigDecimal("9"),
+                        "SALE", ORDER_ID, "test", "SYSTEM", null
+                ));
+        doReturn(BigDecimal.ZERO).when(costingService).resolveCostOnExit(any(), any(), any(), any());
+        doNothing().when(productRepo).recalculateTotalStock(PRODUCT_ID);
+        doAnswer(inv -> {
+            SalesDocument doc = inv.getArgument(0);
+            var assignedId = doc.type() == SalesDocumentType.INVOICE
+                    ? INVOICE_ID : UUID.randomUUID();
+            return new SalesDocument(
+                    assignedId, doc.type(), doc.status(), doc.documentNumber(),
+                    doc.clientId(), doc.warehouseId(), doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
+                    doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax19(),
+                    doc.totalAmount(), doc.createdBy(), doc.createdAt(), doc.updatedAt(),
+                    doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
+            );
+        }).when(documentRepo).save(any(SalesDocument.class));
     }
 }

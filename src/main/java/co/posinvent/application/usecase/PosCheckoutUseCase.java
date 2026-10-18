@@ -5,11 +5,13 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.SalePaymentRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
+import co.posinvent.domain.repository.ShiftRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.UserRepository;
 import co.posinvent.domain.service.FefoPicker;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -37,6 +39,7 @@ public class PosCheckoutUseCase {
     private final DiscountEngineService discountEngine;
     private final UserRepository userRepo;
     private final AuthorizeDiscountUseCase authorizeDiscountUseCase;
+    private final ShiftRepository shiftRepo;
 
     public PosCheckoutUseCase(
             SalesDocumentRepository documentRepo,
@@ -52,7 +55,8 @@ public class PosCheckoutUseCase {
             DianNumberingService numberingService,
             DiscountEngineService discountEngine,
             UserRepository userRepo,
-            AuthorizeDiscountUseCase authorizeDiscountUseCase
+            AuthorizeDiscountUseCase authorizeDiscountUseCase,
+            ShiftRepository shiftRepo
     ) {
         this.documentRepo = documentRepo;
         this.salePaymentRepo = salePaymentRepo;
@@ -68,6 +72,7 @@ public class PosCheckoutUseCase {
         this.discountEngine = discountEngine;
         this.userRepo = userRepo;
         this.authorizeDiscountUseCase = authorizeDiscountUseCase;
+        this.shiftRepo = shiftRepo;
     }
 
     /**
@@ -101,6 +106,10 @@ public class PosCheckoutUseCase {
             throw new BusinessException("POS_NO_ITEMS",
                     "El pedido no tiene ítems para facturar.");
         }
+
+        // 1b. Every sale must belong to an open shift. The shift is the source of truth
+        //     for the cash register: a request may omit it, but never contradict it.
+        var shift = loadAndValidateShift(request, order, userId);
 
         // 2. Load items and resolve prices, then apply discounts BEFORE IVA:
         //    active promotion (automatic) + the manual discount carried by the order line.
@@ -234,8 +243,8 @@ public class PosCheckoutUseCase {
                 docNumber,
                 order.clientId(),
                 order.warehouseId(),
-                order.shiftId(),
-                request.cashRegisterId(),
+                request.shiftId(),
+                shift.cashRegisterId(),
                 request.orderId(),
                 computed.net(),
                 computed.tax0(),
@@ -276,7 +285,7 @@ public class PosCheckoutUseCase {
         var invoicedOrder = new SalesDocument(
                 order.id(), order.type(), SalesDocumentStatus.INVOICED,
                 order.documentNumber(), order.clientId(), order.warehouseId(),
-                order.shiftId(), order.cashRegisterId(), order.sourceDocumentId(),
+                request.shiftId(), shift.cashRegisterId(), order.sourceDocumentId(),
                 order.totalNet(), order.totalTax0(), order.totalTax5(), order.totalTax19(),
                 order.totalAmount(), order.createdBy(), order.createdAt(), order.updatedAt(),
                 order.items(), order.dueDate(), order.isCreditSale(), order.reason(),
@@ -297,6 +306,34 @@ public class PosCheckoutUseCase {
         // 9. Return INVOICE
         return CheckoutResponse.from(documentRepo.findById(savedInvoice.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Factura", savedInvoice.id())), change);
+    }
+
+    private Shift loadAndValidateShift(CheckoutRequest request, SalesDocument order, UUID userId) {
+        var shift = shiftRepo.findById(request.shiftId())
+                .orElseThrow(() -> new ResourceNotFoundException("Turno", request.shiftId()));
+
+        if (shift.status() != ShiftStatus.OPEN) {
+            throw new BusinessException("POS_SHIFT_NOT_OPEN",
+                    "El turno no está abierto. Abrí un turno antes de vender.");
+        }
+        if (request.cashRegisterId() != null
+                && !request.cashRegisterId().equals(shift.cashRegisterId())) {
+            throw new BusinessException("POS_SHIFT_REGISTER_MISMATCH",
+                    "La caja de la venta no coincide con la caja del turno.");
+        }
+        if (order.shiftId() != null && !order.shiftId().equals(request.shiftId())) {
+            throw new BusinessException("POS_SHIFT_MISMATCH",
+                    "El pedido pertenece a otro turno.");
+        }
+
+        // An administrator may operate any shift. Everyone else (including a user with
+        // no resolved role) must be the shift's effective owner.
+        var role = resolveRole(userId);
+        if (!"ADMIN".equals(role)
+                && (userId == null || !userId.equals(shift.effectiveOwnerId()))) {
+            throw new AccessDeniedException("El turno no pertenece al usuario.");
+        }
+        return shift;
     }
 
     private String resolveRole(UUID userId) {

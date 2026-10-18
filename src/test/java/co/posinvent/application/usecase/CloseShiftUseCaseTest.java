@@ -8,6 +8,7 @@ import co.posinvent.domain.model.SalesDocumentStatus;
 import co.posinvent.domain.model.SalesDocumentType;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ShiftRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,15 +49,21 @@ class CloseShiftUseCaseTest {
     @Mock private ShiftRepository shiftRepository;
     @Mock private SalesDocumentRepository documentRepo;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private CurrentActorProvider actorProvider;
+    @Mock private ShiftAccessGuard accessGuard;
 
     private CloseShiftUseCase useCase;
     private Shift openShift;
+    private CurrentActorProvider.CurrentActor actor;
 
     @BeforeEach
     void setUp() {
-        useCase = new CloseShiftUseCase(shiftRepository, documentRepo, eventPublisher);
+        actor = new CurrentActorProvider.CurrentActor(USER_ID, "CAJERO");
+        lenient().when(actorProvider.current()).thenReturn(actor);
+        useCase = new CloseShiftUseCase(
+                shiftRepository, documentRepo, eventPublisher, actorProvider, accessGuard);
         openShift = new Shift(
-                SHIFT_ID, CASH_REGISTER_ID, USER_ID,
+                SHIFT_ID, CASH_REGISTER_ID, USER_ID, null, null,
                 OffsetDateTime.now().minusHours(8), null,
                 BigDecimal.ZERO, null, ShiftStatus.OPEN, null,
                 OffsetDateTime.now().minusHours(8));

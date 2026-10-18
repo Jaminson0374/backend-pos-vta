@@ -47,6 +47,7 @@ class DiscountAuthorizationIntegrationTest extends AbstractIntegrationTest {
     private UUID orderId;
     private UUID secondOrderId;
     private UUID adminUserId;
+    private UUID shiftId;
     private String adminUsername;
     private String dianPrefix;
 
@@ -100,13 +101,17 @@ class DiscountAuthorizationIntegrationTest extends AbstractIntegrationTest {
                     em, "ORD-DAU-B-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId,
                     List.of(new TestDataFactory.OrderLine(productId, batchId, BigDecimal.ONE)));
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "DAU-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
 
     private CheckoutRequest checkoutRequest(UUID order, UUID authorizationId) {
         return new CheckoutRequest(
-                order, null,
+                order, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("10000.00"))),
                 "PCT", DISCOUNT_PCT, "Descuento autorizado por admin", authorizationId);
     }

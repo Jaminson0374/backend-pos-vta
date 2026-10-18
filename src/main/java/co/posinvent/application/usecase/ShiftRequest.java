@@ -7,5 +7,6 @@ import java.util.UUID;
 
 public record ShiftRequest(
         @NotNull UUID cashRegisterId,
+        UUID assignedTo,
         BigDecimal openingAmount
 ) {}

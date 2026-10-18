@@ -48,6 +48,7 @@ class StockReservationIntegrationTest extends AbstractIntegrationTest {
     private UUID batchId;
     private UUID clientId;
     private UUID orderId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -86,6 +87,10 @@ class StockReservationIntegrationTest extends AbstractIntegrationTest {
             orderId = TestDataFactory.createConfirmedOrder(
                     em, "ORD-RSV-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, ORDER_QUANTITY);
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "RSV-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
@@ -93,7 +98,7 @@ class StockReservationIntegrationTest extends AbstractIntegrationTest {
     @Test
     void checkoutConsumesReservationWithoutCommittedDrift() {
         var request = new CheckoutRequest(
-                orderId, null,
+                orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", SALE_PRICE.multiply(ORDER_QUANTITY))));
 
         checkoutUseCase.checkout(request, TEST_USER_ID);

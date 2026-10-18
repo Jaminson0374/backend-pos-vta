@@ -8,6 +8,7 @@ import co.posinvent.domain.model.ShiftClosedAccountedEvent;
 import co.posinvent.domain.model.ShiftStatus;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ShiftRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -28,16 +29,22 @@ public class CloseShiftUseCase {
     private final ShiftRepository shiftRepository;
     private final SalesDocumentRepository documentRepo;
     private final ApplicationEventPublisher eventPublisher;
+    private final CurrentActorProvider actorProvider;
+    private final ShiftAccessGuard accessGuard;
 
     @Autowired
     public CloseShiftUseCase(
             ShiftRepository shiftRepository,
             SalesDocumentRepository documentRepo,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            CurrentActorProvider actorProvider,
+            ShiftAccessGuard accessGuard
     ) {
         this.shiftRepository = shiftRepository;
         this.documentRepo = documentRepo;
         this.eventPublisher = eventPublisher;
+        this.actorProvider = actorProvider;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
@@ -48,6 +55,9 @@ public class CloseShiftUseCase {
         if (existing.status() == ShiftStatus.CLOSED) {
             throw new IllegalStateException("El turno ya está CERRADO.");
         }
+
+        var actor = actorProvider.current();
+        accessGuard.requireOperate(existing, actor);
 
         // Query invoices and POS devoluciones (credit notes) for this shift
         List<SalesDocument> invoices = documentRepo.findByShiftIdAndType(
@@ -88,6 +98,8 @@ public class CloseShiftUseCase {
                 existing.id(),
                 existing.cashRegisterId(),
                 existing.userId(),
+                existing.assignedTo(),
+                actor.userId(),
                 existing.openingTime(),
                 OffsetDateTime.now(),
                 existing.openingAmount(),

@@ -29,6 +29,12 @@ public class ShiftEntity {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    @Column(name = "assigned_to")
+    private UUID assignedTo;
+
+    @Column(name = "closed_by")
+    private UUID closedBy;
+
     @Column(name = "opening_time", nullable = false)
     private OffsetDateTime openingTime;
 

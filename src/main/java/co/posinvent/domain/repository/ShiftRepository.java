@@ -17,4 +17,6 @@ public interface ShiftRepository {
     Optional<Shift> findByCashRegisterIdAndStatus(UUID cashRegisterId, ShiftStatus status);
 
     Page<Shift> findAll(Pageable pageable);
+
+    Page<Shift> findByUserIdOrAssignedTo(UUID userId, UUID assignedTo, Pageable pageable);
 }

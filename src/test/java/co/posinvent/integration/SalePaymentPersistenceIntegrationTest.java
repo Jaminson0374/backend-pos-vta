@@ -45,6 +45,7 @@ class SalePaymentPersistenceIntegrationTest extends AbstractIntegrationTest {
     private UUID warehouseId;
     private UUID clientId;
     private UUID orderId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -76,6 +77,10 @@ class SalePaymentPersistenceIntegrationTest extends AbstractIntegrationTest {
             orderId = TestDataFactory.createConfirmedOrder(
                     em, "ORD-SP-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, BigDecimal.ONE);
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "SP-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
@@ -83,7 +88,7 @@ class SalePaymentPersistenceIntegrationTest extends AbstractIntegrationTest {
     @Test
     void persistsOneSalePaymentPerTenderLineLinkedToInvoice() {
         var request = new CheckoutRequest(
-                orderId, null,
+                orderId, null, shiftId,
                 List.of(
                         new CheckoutRequest.PaymentLine("CASH", new BigDecimal("600.00")),
                         new CheckoutRequest.PaymentLine("CARD", new BigDecimal("400.00"))));

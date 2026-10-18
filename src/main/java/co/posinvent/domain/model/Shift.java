@@ -8,6 +8,8 @@ public record Shift(
         UUID id,
         UUID cashRegisterId,
         UUID userId,
+        UUID assignedTo,
+        UUID closedBy,
         OffsetDateTime openingTime,
         OffsetDateTime closingTime,
         BigDecimal openingAmount,
@@ -15,4 +17,9 @@ public record Shift(
         ShiftStatus status,
         String zReportUrl,
         OffsetDateTime createdAt
-) {}
+) {
+    /** The user who effectively operates this shift: the assignee when present, else the opener. */
+    public UUID effectiveOwnerId() {
+        return assignedTo != null ? assignedTo : userId;
+    }
+}

@@ -10,6 +10,7 @@ import co.posinvent.domain.model.SalesDocumentType;
 import co.posinvent.domain.repository.CashCountRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ShiftRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,21 +33,30 @@ public class RegisterCashCountUseCase {
     private final ShiftRepository shiftRepository;
     private final SalesDocumentRepository documentRepo;
     private final CashCountRepository cashCountRepository;
+    private final CurrentActorProvider actorProvider;
+    private final ShiftAccessGuard accessGuard;
 
     public RegisterCashCountUseCase(
             ShiftRepository shiftRepository,
             SalesDocumentRepository documentRepo,
-            CashCountRepository cashCountRepository
+            CashCountRepository cashCountRepository,
+            CurrentActorProvider actorProvider,
+            ShiftAccessGuard accessGuard
     ) {
         this.shiftRepository = shiftRepository;
         this.documentRepo = documentRepo;
         this.cashCountRepository = cashCountRepository;
+        this.actorProvider = actorProvider;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
-    public CashCountResponse execute(UUID shiftId, RegisterCashCountRequest request, UUID createdBy) {
+    public CashCountResponse execute(UUID shiftId, RegisterCashCountRequest request) {
         var shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> new ResourceNotFoundException("Turno", shiftId));
+
+        var actor = actorProvider.current();
+        accessGuard.requireOperate(shift, actor);
 
         var lines = request.lines().stream()
                 .map(RegisterCashCountUseCase::toLine)
@@ -67,7 +77,7 @@ public class RegisterCashCountUseCase {
                 countedTotal,
                 difference,
                 request.notes(),
-                createdBy,
+                actor.userId(),
                 null,
                 null,
                 lines);
@@ -79,8 +89,11 @@ public class RegisterCashCountUseCase {
     /** History of cash counts for a shift, most recent first. */
     @Transactional(readOnly = true)
     public List<CashCountResponse> history(UUID shiftId) {
-        shiftRepository.findById(shiftId)
+        var shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> new ResourceNotFoundException("Turno", shiftId));
+
+        accessGuard.requireRead(shift, actorProvider.current());
+
         return cashCountRepository.findByShiftId(shiftId).stream()
                 .map(CashCountResponse::from)
                 .toList();

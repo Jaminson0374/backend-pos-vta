@@ -59,6 +59,7 @@ class DianNumberingIntegrationTest extends AbstractIntegrationTest {
     private UUID productId;
     private UUID batchId;
     private UUID clientId;
+    private UUID shiftId;
     private final List<UUID> orderIds = new ArrayList<>();
 
     @BeforeEach
@@ -88,6 +89,10 @@ class DianNumberingIntegrationTest extends AbstractIntegrationTest {
                     em, PREFIX, RANGE_FROM, RANGE_TO,
                     LocalDate.now().minusDays(1), LocalDate.now().plusDays(1));
 
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "DIAN-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
+
             for (int i = 0; i < ORDERS; i++) {
                 orderIds.add(TestDataFactory.createConfirmedOrder(
                         em,
@@ -110,7 +115,7 @@ class DianNumberingIntegrationTest extends AbstractIntegrationTest {
                 try {
                     startGate.await();
                     var request = new CheckoutRequest(
-                            orderId, null,
+                            orderId, null, shiftId,
                             List.of(new CheckoutRequest.PaymentLine("CASH", SALE_PRICE)));
                     checkoutUseCase.checkout(request, TEST_USER_ID);
                 } catch (Throwable t) {
