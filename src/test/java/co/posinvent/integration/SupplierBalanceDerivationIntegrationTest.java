@@ -13,7 +13,6 @@ import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.model.Warehouse;
 import co.posinvent.domain.repository.AccountsPayableRepository;
 import co.posinvent.domain.repository.PurchaseOrderRepository;
-import co.posinvent.domain.repository.ThirdPartyRepository;
 import co.posinvent.infrastructure.adapters.out.persistence.TestDataFactory;
 import co.posinvent.infrastructure.adapters.out.persistence.ThirdPartyEntity;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,19 +29,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Guards that the supplier payable balance is derived exclusively from
- * {@code accounts_payable.outstanding} and never from the static
- * {@code third_parties.current_balance} column.
+ * {@code accounts_payable.outstanding}.
  *
- * <p>Seeds a supplier whose static balance is deliberately large and non-zero, then reconciles an
- * invoice through the real use cases. If any reader still mixed in the static field, the derived
- * balance would not match the CxP.</p>
+ * <p>Reconciles an invoice through the real use cases and asserts the derived balance matches the
+ * CxP. The legacy static balance column was removed in A6, so the CxP is the only payable source.</p>
  *
  * <p>Deliberately NOT {@code @Transactional}: the use cases commit their own transactions so the
  * reconciliation and its AFTER_COMMIT listeners behave like production.</p>
  */
 class SupplierBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
 
-    private static final BigDecimal STATIC_BALANCE = new BigDecimal("987654.32");
     private static final BigDecimal INVOICE_TOTAL = new BigDecimal("1000.00");
 
     @Autowired private SupplierInvoiceUseCase supplierInvoiceUseCase;
@@ -50,7 +46,6 @@ class SupplierBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private AccountsPayableRepository accountsPayableRepository;
     @Autowired private CreateGoodsReceiptUseCase createGoodsReceiptUseCase;
     @Autowired private PurchaseOrderRepository purchaseOrderRepository;
-    @Autowired private ThirdPartyRepository thirdPartyRepository;
 
     private UUID supplierId;
     private UUID warehouseId;
@@ -68,7 +63,6 @@ class SupplierBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
             supplier.setTaxResponsibilities(List.of());
             supplier.setActive(true);
             supplier.setCreditLimit(BigDecimal.ZERO);
-            supplier.setCurrentBalance(STATIC_BALANCE);
             em.persist(supplier);
             supplierId = supplier.getId();
 
@@ -80,20 +74,14 @@ class SupplierBalanceDerivationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void supplierOutstandingComesFromTheCxPAndIgnoresTheStaticCurrentBalance() {
+    void supplierOutstandingComesFromTheCxP() {
         var invoiceId = reconciledInvoice(INVOICE_TOTAL);
 
         var ap = ap(invoiceId);
         assertThat(ap.outstanding()).isEqualByComparingTo(INVOICE_TOTAL);
 
-        // Sanity: the static column really holds the large seeded value at assertion time.
-        assertThat(thirdPartyRepository.findById(supplierId).orElseThrow().currentBalance())
-                .isEqualByComparingTo(STATIC_BALANCE);
-
         var derived = accountsPayableUseCase.supplierOutstanding(supplierId);
-        assertThat(derived)
-                .isEqualByComparingTo(INVOICE_TOTAL)
-                .isNotEqualByComparingTo(STATIC_BALANCE);
+        assertThat(derived).isEqualByComparingTo(INVOICE_TOTAL);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

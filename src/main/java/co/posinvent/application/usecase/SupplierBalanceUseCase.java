@@ -14,8 +14,8 @@ import java.util.UUID;
  * Reads the supplier net position.
  *
  * <p>The payable side reuses {@link AccountsPayableUseCase#supplierOutstanding(UUID)} (no duplicated
- * CxP query). The asset side is the sum of the supplier's unapplied advances. The static
- * {@code third_parties.current_balance} is AR-only and is intentionally not consulted.</p>
+ * CxP query). The asset side is the sum of the supplier's unapplied advances. The legacy static
+ * balance column was AR-only and was removed in A6; it is not consulted.</p>
  */
 @Service
 public class SupplierBalanceUseCase {

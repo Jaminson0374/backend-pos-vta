@@ -106,7 +106,7 @@ class RetentionControllerTest {
     private static ThirdParty supplier(String name) {
         return new ThirdParty(
                 SUPPLIER_ID, "900123456", name, ThirdParty.ThirdPartyType.SUPPLIER,
-                null, BigDecimal.ZERO, BigDecimal.ZERO,
+                null, BigDecimal.ZERO,
                 ThirdParty.PersonType.JURIDICA, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), "001", null, true, null, null,
                 null, null, null, null, null, null, null, null, null, null,

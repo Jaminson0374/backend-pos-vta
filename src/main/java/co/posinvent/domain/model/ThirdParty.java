@@ -13,7 +13,6 @@ public record ThirdParty(
         ThirdPartyType type,
         UUID priceListId,
         BigDecimal creditLimit,
-        BigDecimal currentBalance,
         PersonType personType,
         TaxRegime taxRegime,
         List<String> taxResponsibilities,

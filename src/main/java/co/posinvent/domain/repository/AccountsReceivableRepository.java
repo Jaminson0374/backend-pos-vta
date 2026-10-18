@@ -43,8 +43,8 @@ public interface AccountsReceivableRepository {
 
     /**
      * Sum of {@code outstanding} over every AR row of the client. This is the single source of
-     * truth for the customer balance, replacing the static {@code third_parties.current_balance}
-     * field on the receivable side.
+     * truth for the customer balance, replacing the legacy static balance field on the receivable
+     * side (column removed in A6).
      */
     BigDecimal sumOutstandingByClientId(UUID clientId);
 

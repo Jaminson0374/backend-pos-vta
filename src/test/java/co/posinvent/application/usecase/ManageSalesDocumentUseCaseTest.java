@@ -154,7 +154,7 @@ class ManageSalesDocumentUseCaseTest {
         when(documentRepo.findById(DOC_ID)).thenReturn(Optional.of(invoice));
         when(documentRepo.save(any(SalesDocument.class))).thenAnswer(inv -> inv.getArgument(0));
         when(thirdPartyRepo.findById(CLIENT_ID))
-                .thenReturn(Optional.of(client(new BigDecimal("500"), BigDecimal.ZERO)));
+                .thenReturn(Optional.of(client(new BigDecimal("500"))));
         when(accountsReceivableRepository.sumOutstandingByClientId(CLIENT_ID))
                 .thenReturn(new BigDecimal("100"));
 
@@ -173,7 +173,7 @@ class ManageSalesDocumentUseCaseTest {
         when(documentRepo.findById(DOC_ID)).thenReturn(Optional.of(first), Optional.of(second));
         when(documentRepo.save(any(SalesDocument.class))).thenAnswer(inv -> inv.getArgument(0));
         when(thirdPartyRepo.findById(CLIENT_ID))
-                .thenReturn(Optional.of(client(new BigDecimal("500"), BigDecimal.ZERO)));
+                .thenReturn(Optional.of(client(new BigDecimal("500"))));
         when(accountsReceivableRepository.sumOutstandingByClientId(CLIENT_ID))
                 .thenReturn(BigDecimal.ZERO, new BigDecimal("400"));
 
@@ -190,7 +190,7 @@ class ManageSalesDocumentUseCaseTest {
         var invoice = creditInvoice(DOC_ID, new BigDecimal("200"));
         when(documentRepo.findById(DOC_ID)).thenReturn(Optional.of(invoice));
         when(thirdPartyRepo.findById(CLIENT_ID))
-                .thenReturn(Optional.of(client(new BigDecimal("500"), BigDecimal.ZERO)));
+                .thenReturn(Optional.of(client(new BigDecimal("500"))));
         when(accountsReceivableRepository.sumOutstandingByClientId(CLIENT_ID))
                 .thenReturn(new BigDecimal("400"));
 
@@ -222,10 +222,10 @@ class ManageSalesDocumentUseCaseTest {
                 List.of(), null, true, null);
     }
 
-    private ThirdParty client(BigDecimal creditLimit, BigDecimal currentBalance) {
+    private ThirdParty client(BigDecimal creditLimit) {
         return new ThirdParty(
                 CLIENT_ID, "900123456", "Cliente Test", ThirdParty.ThirdPartyType.CLIENT,
-                null, creditLimit, currentBalance,
+                null, creditLimit,
                 ThirdParty.PersonType.JURIDICA, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), "001", null, true, null, null,
                 null, null, null, null, null, null, null, null, null, null,

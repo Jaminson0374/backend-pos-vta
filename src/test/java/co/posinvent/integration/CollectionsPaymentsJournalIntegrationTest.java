@@ -44,7 +44,6 @@ class CollectionsPaymentsJournalIntegrationTest extends AbstractIntegrationTest 
 
     private static final BigDecimal RECEIPT_AMOUNT = new BigDecimal("150000.00");
     private static final BigDecimal PAYMENT_AMOUNT = new BigDecimal("80000.00");
-    private static final BigDecimal CLIENT_STATIC_BALANCE = new BigDecimal("777.77");
     // Dates deliberately not "today" so the test proves the document date is used.
     private static final LocalDate RECEIPT_DATE = LocalDate.of(2024, 6, 15);
     private static final LocalDate PAYMENT_DATE = LocalDate.of(2024, 6, 20);
@@ -66,8 +65,7 @@ class CollectionsPaymentsJournalIntegrationTest extends AbstractIntegrationTest 
 
             // ── collection (C3) fixture: client + a sales document anchoring the AR row ──
             clientId = TestDataFactory.createClientThirdParty(
-                    em, "CP-" + UUID.randomUUID().toString().substring(0, 8), "Collections Client",
-                    BigDecimal.ZERO, CLIENT_STATIC_BALANCE);
+                    em, "CP-" + UUID.randomUUID().toString().substring(0, 8), "Collections Client");
 
             var anchorDoc = new SalesDocumentEntity();
             anchorDoc.setType(SalesDocumentType.ORDER);
@@ -102,7 +100,6 @@ class CollectionsPaymentsJournalIntegrationTest extends AbstractIntegrationTest 
             supplier.setTaxResponsibilities(List.of());
             supplier.setActive(true);
             supplier.setCreditLimit(BigDecimal.ZERO);
-            supplier.setCurrentBalance(BigDecimal.ZERO);
             em.persist(supplier);
 
             var invoice = new SupplierInvoiceEntity();
@@ -136,12 +133,6 @@ class CollectionsPaymentsJournalIntegrationTest extends AbstractIntegrationTest 
         var response = customerReceiptUseCase.create(request);
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            // The receipt applies AR and posts the journal, but must leave the legacy static
-            // current_balance column exactly as it was seeded.
-            em.clear();
-            var persistedClient = em.find(ThirdPartyEntity.class, clientId);
-            assertThat(persistedClient.getCurrentBalance()).isEqualByComparingTo(CLIENT_STATIC_BALANCE);
-
             var cashId = pucRepo.findByCode("1105").orElseThrow().id();
             var receivableId = pucRepo.findByCode("1305").orElseThrow().id();
 

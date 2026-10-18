@@ -28,8 +28,8 @@ import static org.mockito.Mockito.when;
  * {@code netPosition = payableOutstanding - advanceBalance}.
  *
  * <p>An unapplied advance is an asset (saldo a favor); when it exceeds the CxP the net position is
- * negative, meaning we have credit in our favor. {@code third_parties.current_balance} is AR-only
- * and must not participate.</p>
+ * negative, meaning we have credit in our favor. The legacy static balance column was removed in
+ * A6 and must not participate.</p>
  */
 @ExtendWith(MockitoExtension.class)
 class SupplierBalanceUseCaseTest {
@@ -99,7 +99,7 @@ class SupplierBalanceUseCaseTest {
     private ThirdParty supplier() {
         return new ThirdParty(
                 SUPPLIER_ID, "900123456", "Proveedor Test", ThirdParty.ThirdPartyType.SUPPLIER,
-                null, BigDecimal.ZERO, BigDecimal.ZERO,
+                null, BigDecimal.ZERO,
                 ThirdParty.PersonType.JURIDICA, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), "001", null, true, null, null,
                 null, null, null, null, null, null, null, null, null, null,

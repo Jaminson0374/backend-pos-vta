@@ -309,7 +309,7 @@ class FormulaProductionUseCaseTest {
         return new ThirdParty(
                 SYSTEM_SUPPLIER_ID, "000000000-0", "PRODUCCIÓN INTERNA",
                 ThirdParty.ThirdPartyType.SUPPLIER, null,
-                BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 ThirdParty.PersonType.JURIDICA, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), null, null, true,
                 OffsetDateTime.now(), OffsetDateTime.now(),

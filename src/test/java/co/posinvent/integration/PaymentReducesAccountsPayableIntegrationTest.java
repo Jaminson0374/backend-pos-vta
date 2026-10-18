@@ -180,7 +180,6 @@ class PaymentReducesAccountsPayableIntegrationTest extends AbstractIntegrationTe
         supplier.setTaxResponsibilities(List.of());
         supplier.setActive(true);
         supplier.setCreditLimit(BigDecimal.ZERO);
-        supplier.setCurrentBalance(BigDecimal.ZERO);
         em.persist(supplier);
         return supplier.getId();
     }

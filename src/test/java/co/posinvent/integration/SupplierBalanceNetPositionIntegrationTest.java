@@ -64,7 +64,6 @@ class SupplierBalanceNetPositionIntegrationTest extends AbstractIntegrationTest 
             supplier.setTaxResponsibilities(List.of());
             supplier.setActive(true);
             supplier.setCreditLimit(BigDecimal.ZERO);
-            supplier.setCurrentBalance(BigDecimal.ZERO);
             em.persist(supplier);
             supplierId = supplier.getId();
 

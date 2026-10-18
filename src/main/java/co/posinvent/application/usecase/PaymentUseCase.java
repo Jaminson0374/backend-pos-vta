@@ -250,7 +250,7 @@ public class PaymentUseCase {
 
         // The supplier balance is derived from the CxP (SUM(outstanding)). The unapplied advance
         // is an asset (PUC 133005), not a payable; applying it crosses the asset against the AP.
-        // It never mutates the AR-only third_parties.current_balance.
+        // It never mutates the legacy AR-only balance column (removed in A6).
         return AdvanceResponse.from(savedPayment);
     }
 

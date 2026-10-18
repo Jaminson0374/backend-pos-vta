@@ -238,7 +238,7 @@ class ElectronicInvoicePayloadServiceTest {
     private ThirdParty client() {
         return new ThirdParty(
                 CLIENT_ID, "900123456", "Cliente Test", ThirdParty.ThirdPartyType.CLIENT,
-                null, BigDecimal.ZERO, BigDecimal.ZERO,
+                null, BigDecimal.ZERO,
                 ThirdParty.PersonType.JURIDICA, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), "001", null, true, null, null,
                 null, null, null, null, null, null, null, null, null, null,

@@ -47,9 +47,6 @@ public class ThirdPartyEntity {
     @Column(name = "credit_limit", nullable = false, precision = 15, scale = 2)
     private BigDecimal creditLimit;
 
-    @Column(name = "current_balance", nullable = false, precision = 15, scale = 2)
-    private BigDecimal currentBalance;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "person_type", nullable = false, length = 10)
     private PersonType personType;

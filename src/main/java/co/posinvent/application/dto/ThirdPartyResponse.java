@@ -22,7 +22,7 @@ public record ThirdPartyResponse(
         /**
          * Derived receivable balance: {@code SUM(accounts_receivable.outstanding)} for
          * {@code CLIENT}/{@code BOTH}; {@code null} for every other third-party type.
-         * Never read from the frozen {@code third_parties.current_balance} column.
+         * Never read from a static third-party balance column; the legacy column was removed in A6.
          */
         BigDecimal outstanding,
         PersonType personType,

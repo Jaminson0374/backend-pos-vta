@@ -70,7 +70,7 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
                     em,
                     "CRLIMIT-" + UUID.randomUUID().toString().substring(0, 8),
                     "Credit Limit Client",
-                    CREDIT_LIMIT, BigDecimal.ZERO);
+                    CREDIT_LIMIT);
 
             var systemSupplier = thirdPartyRepository.findByNumIdentification("000000000-0").orElseThrow();
             var batchId = TestDataFactory.createBatch(

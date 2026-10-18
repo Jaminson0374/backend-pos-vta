@@ -177,7 +177,7 @@ class PriceEngineServiceTest {
     private ThirdParty makeClient(UUID priceListId) {
         return new ThirdParty(
                 CLIENT_ID, "123", "Cliente Test", ThirdParty.ThirdPartyType.CLIENT,
-                priceListId, BigDecimal.ZERO, BigDecimal.ZERO,
+                priceListId, BigDecimal.ZERO,
                 ThirdParty.PersonType.NATURAL, ThirdParty.TaxRegime.ORDINARIO,
                 List.of(), "001", null, true, null, null,
                 null, null, null, null, null, null, null, null, null, null,

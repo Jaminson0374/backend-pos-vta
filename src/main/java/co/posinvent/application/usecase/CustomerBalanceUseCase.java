@@ -15,9 +15,8 @@ import java.util.UUID;
  * Reads the derived customer receivable balance.
  *
  * <p>{@code outstanding} comes from {@code SUM(accounts_receivable.outstanding)} for the client,
- * and {@code availableCredit = creditLimit - outstanding}. The static
- * {@code third_parties.current_balance} column is intentionally ignored: it is a legacy second
- * source of truth that no longer reflects the AR ledger.</p>
+ * and {@code availableCredit = creditLimit - outstanding}. The balance is derived only from the
+ * AR ledger; the legacy static balance column was removed in A6.</p>
  */
 @Service
 public class CustomerBalanceUseCase {
