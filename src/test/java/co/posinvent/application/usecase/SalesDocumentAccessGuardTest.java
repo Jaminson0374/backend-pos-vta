@@ -211,6 +211,17 @@ class SalesDocumentAccessGuardTest {
     }
 
     @Test
+    void adminAndContadorCanOperate() {
+        var actor = new CurrentActorProvider.CurrentActor(ACTOR_ID, Set.of("ADMIN", "CONTADOR"));
+
+        assertThatCode(() -> guard.requireOperate(
+                actor, document(FOREIGN_ID, null), "TRANSITION_SALES_DOCUMENT"))
+                .doesNotThrowAnyException();
+
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
     void contadorIsDeniedOperationEvenWhenCreator() {
         assertThatThrownBy(() -> guard.requireOperate(
                 actor("CONTADOR"), document(ACTOR_ID, null), "TRANSITION_SALES_DOCUMENT"))

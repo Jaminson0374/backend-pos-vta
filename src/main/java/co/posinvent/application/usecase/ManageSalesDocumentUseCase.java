@@ -135,17 +135,17 @@ public class ManageSalesDocumentUseCase {
         var transitioned = doc.transitionTo(target);
 
         switch (target) {
-            case CONFIRMED -> reserveStock(doc);
+            case CONFIRMED -> reserveStock(transitioned);
             case CANCELLED -> releaseStockIfNeeded(doc);
             case ISSUED -> {
-                if (Boolean.TRUE.equals(doc.isCreditSale())) {
-                    validateCreditOnIssue(doc);
+                if (Boolean.TRUE.equals(transitioned.isCreditSale())) {
+                    validateCreditOnIssue(transitioned);
                 }
                 // Decrement stock on ISSUED
-                decrementStock(doc);
+                decrementStock(transitioned);
                 // Auto-create CxC for credit sales
-                if (Boolean.TRUE.equals(doc.isCreditSale())) {
-                    accountsReceivableUseCase.createFromInvoice(doc);
+                if (Boolean.TRUE.equals(transitioned.isCreditSale())) {
+                    accountsReceivableUseCase.createFromInvoice(transitioned);
                 }
             }
         }

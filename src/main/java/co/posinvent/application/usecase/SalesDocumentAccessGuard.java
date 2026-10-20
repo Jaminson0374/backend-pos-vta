@@ -41,14 +41,15 @@ public class SalesDocumentAccessGuard {
     }
 
     public void requireOperate(CurrentActorProvider.CurrentActor actor, SalesDocument document, String operation) {
-        // CONTADOR is read-only regardless of authorship or shift ownership.
+        // ADMIN dominates even when the principal also carries CONTADOR.
+        if (actor.isAdmin()) {
+            return;
+        }
+
+        // A pure CONTADOR is read-only regardless of authorship or shift ownership.
         if (actor.isContador()) {
             SecurityAuditLogger.denied(actor, operation, "SalesDocument", document.id());
             throw new AccessDeniedException("No tiene permisos para operar este documento.");
-        }
-
-        if (actor.isAdmin()) {
-            return;
         }
 
         if (ownsDocument(actor, document)) {
