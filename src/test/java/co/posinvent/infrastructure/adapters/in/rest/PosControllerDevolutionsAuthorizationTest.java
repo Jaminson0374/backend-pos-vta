@@ -5,7 +5,6 @@ import co.posinvent.application.usecase.ManageElectronicInvoiceUseCase;
 import co.posinvent.application.usecase.PosCheckoutUseCase;
 import co.posinvent.application.usecase.PosDevolutionUseCase;
 import co.posinvent.domain.repository.ProductRepository;
-import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import co.posinvent.infrastructure.config.JwtAuthFilter;
 import co.posinvent.application.service.JwtBlacklistService;
@@ -63,9 +62,6 @@ class PosControllerDevolutionsAuthorizationTest {
 
     @MockitoBean
     private ProductRepository productRepository;
-
-    @MockitoBean
-    private SalesDocumentRepository salesDocumentRepository;
 
     @MockitoBean
     private ManageElectronicInvoiceUseCase manageElectronicInvoiceUseCase;
@@ -149,14 +145,27 @@ class PosControllerDevolutionsAuthorizationTest {
     @Test
     @DisplayName("R3-1: CAJERO can list devolutions (GET /devolutions -> 200)")
     void cajeroCanListDevolutions() throws Exception {
-        given(salesDocumentRepository.findBySourceDocumentId(any())).willReturn(List.of());
+        given(devolutionUseCase.getDevolutions(any())).willReturn(List.of());
 
         mockMvc.perform(get("/api/v1/pos/devolutions")
                         .param("invoiceId", INVOICE_ID.toString())
                         .with(asRole("CAJERO")))
                 .andExpect(status().isOk());
 
-        then(salesDocumentRepository).should().findBySourceDocumentId(any());
+        then(devolutionUseCase).should().getDevolutions(INVOICE_ID);
+    }
+
+    @Test
+    @DisplayName("S6b: CONTADOR can list devolutions read-only (GET /devolutions -> 200)")
+    void contadorCanListDevolutions() throws Exception {
+        given(devolutionUseCase.getDevolutions(any())).willReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/pos/devolutions")
+                        .param("invoiceId", INVOICE_ID.toString())
+                        .with(asRole("CONTADOR")))
+                .andExpect(status().isOk());
+
+        then(devolutionUseCase).should().getDevolutions(INVOICE_ID);
     }
 
     @Test
@@ -167,6 +176,6 @@ class PosControllerDevolutionsAuthorizationTest {
                         .with(asRole("VENDEDOR")))
                 .andExpect(status().isForbidden());
 
-        then(salesDocumentRepository).shouldHaveNoInteractions();
+        then(devolutionUseCase).shouldHaveNoInteractions();
     }
 }

@@ -24,6 +24,13 @@ public interface SalesDocumentRepository {
 
     Page<SalesDocument> findByTypeAndStatus(SalesDocumentType type, SalesDocumentStatus status, Pageable pageable);
 
+    /**
+     * Lists documents applying the optional filters and, when {@code restricted}, the
+     * caller's ownership rule in the database query. Pagination stays in SQL.
+     */
+    Page<SalesDocument> findVisible(SalesDocumentType type, SalesDocumentStatus status,
+                                    boolean restricted, UUID actorId, Pageable pageable);
+
     Page<SalesDocument> findByClientId(UUID clientId, Pageable pageable);
 
     List<SalesDocument> findByShiftIdAndType(UUID shiftId, SalesDocumentType type);

@@ -78,14 +78,70 @@ public final class TestDataFactory {
      * register (or reuse the returned shift).
      */
     public static UUID createOpenShift(EntityManager em, UUID userId, UUID cashRegisterId) {
+        return createOpenShift(em, userId, null, cashRegisterId);
+    }
+
+    /** Persists an OPEN shift whose effective owner is {@code assignedTo} when present. */
+    public static UUID createOpenShift(EntityManager em, UUID userId, UUID assignedTo, UUID cashRegisterId) {
         var shift = new ShiftEntity();
         shift.setCashRegisterId(cashRegisterId);
         shift.setUserId(userId);
+        shift.setAssignedTo(assignedTo);
         shift.setOpeningTime(OffsetDateTime.now().minusHours(1));
         shift.setOpeningAmount(BigDecimal.ZERO);
         shift.setStatus(ShiftStatus.OPEN);
         em.persist(shift);
         return shift.getId();
+    }
+
+    /** Inserts a user with the named seeded role and returns its id. */
+    public static UUID createUser(EntityManager em, String prefix, String roleName) {
+        var id = UUID.randomUUID();
+        var suffix = UUID.randomUUID().toString().substring(0, 8);
+        em.createNativeQuery("""
+                INSERT INTO users (id, username, password_hash, email, full_name, role_id, is_active)
+                SELECT CAST(:id AS uuid), :username, 'n/a', :email, :fullName, r.id, true
+                FROM roles r WHERE r.name = :role
+                """)
+                .setParameter("id", id.toString())
+                .setParameter("username", prefix + "-" + suffix)
+                .setParameter("email", prefix + "-" + suffix + "@example.com")
+                .setParameter("fullName", prefix + " " + suffix)
+                .setParameter("role", roleName)
+                .executeUpdate();
+        return id;
+    }
+
+    /**
+     * Inserts a sales document with an explicit {@code created_by}, bypassing the auditing
+     * listener so tests can seed documents owned by different actors.
+     */
+    public static UUID createSalesDocument(EntityManager em, SalesDocumentType type,
+                                           SalesDocumentStatus status, String documentNumber,
+                                           UUID clientId, UUID warehouseId, UUID shiftId,
+                                           UUID createdBy) {
+        var id = UUID.randomUUID();
+        em.createNativeQuery("""
+                INSERT INTO sales_documents
+                    (id, type, status, document_number, client_id, warehouse_id, shift_id,
+                     total_net, total_tax_0, total_tax_5, total_tax_19, total_amount,
+                     created_by, created_at, is_credit_sale)
+                VALUES
+                    (CAST(:id AS uuid), :type, :status, :documentNumber,
+                     CAST(:clientId AS uuid), CAST(:warehouseId AS uuid), CAST(:shiftId AS uuid),
+                     0, 0, 0, 0, 0, CAST(:createdBy AS uuid), :createdAt, false)
+                """)
+                .setParameter("id", id.toString())
+                .setParameter("type", type.name())
+                .setParameter("status", status.name())
+                .setParameter("documentNumber", documentNumber)
+                .setParameter("clientId", clientId.toString())
+                .setParameter("warehouseId", warehouseId.toString())
+                .setParameter("shiftId", shiftId == null ? null : shiftId.toString())
+                .setParameter("createdBy", createdBy.toString())
+                .setParameter("createdAt", OffsetDateTime.now())
+                .executeUpdate();
+        return id;
     }
 
     public static void createStock(EntityManager em, UUID productId, UUID batchId,

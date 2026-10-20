@@ -16,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -37,6 +38,8 @@ class PosDevolutionUseCaseTest {
     @Mock private RecordMovementUseCase recordMovement;
     @Mock private AccountsReceivableRepository arRepo;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider actorProvider;
+    @Mock private SalesDocumentAccessGuard accessGuard;
 
     private PosDevolutionUseCase useCase;
 
@@ -61,7 +64,8 @@ class PosDevolutionUseCaseTest {
     void setUp() {
         useCase = new PosDevolutionUseCase(
                 documentRepo, stockRepo, productRepo,
-                recordMovement, arRepo, eventPublisher);
+                recordMovement, arRepo, eventPublisher,
+                actorProvider, accessGuard);
     }
 
     // ── Scenario 1: Invoice not found → ResourceNotFoundException ──────────
@@ -79,6 +83,58 @@ class PosDevolutionUseCaseTest {
 
         verify(documentRepo).findById(INVOICE_ID);
         verifyNoMoreInteractions(documentRepo);
+    }
+
+    @Test
+    void foreignInvoiceIsDeniedBeforeStateValidation() {
+        var draftInvoice = document(SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT, false, List.of());
+        when(documentRepo.findById(INVOICE_ID)).thenReturn(Optional.of(draftInvoice));
+        doThrow(new AccessDeniedException("foreign"))
+                .when(accessGuard).requireRead(any(), eq(draftInvoice), eq("PROCESS_DEVOLUTION"));
+
+        var request = new DevolutionRequest(INVOICE_ID,
+                List.of(item(PRODUCT_A_ID, BigDecimal.ONE)), "Razón");
+
+        assertThatThrownBy(() -> useCase.processDevolution(request, USER_ID))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(documentRepo, never()).findBySourceDocumentIdAndType(any(), any());
+    }
+
+    @Test
+    void getDevolutionsReturnsNotesForVisibleInvoice() {
+        var invoice = document(SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED, false, List.of());
+        var note = mock(SalesDocument.class);
+        when(documentRepo.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        when(documentRepo.findBySourceDocumentId(INVOICE_ID)).thenReturn(List.of(note));
+
+        var result = useCase.getDevolutions(INVOICE_ID);
+
+        assertThat(result).containsExactly(note);
+        verify(accessGuard).requireRead(any(), eq(invoice), eq("READ_DEVOLUTIONS"));
+    }
+
+    @Test
+    void getDevolutionsRejectsForeignInvoice() {
+        var invoice = document(SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED, false, List.of());
+        when(documentRepo.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        doThrow(new AccessDeniedException("foreign"))
+                .when(accessGuard).requireRead(any(), eq(invoice), eq("READ_DEVOLUTIONS"));
+
+        assertThatThrownBy(() -> useCase.getDevolutions(INVOICE_ID))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(documentRepo, never()).findBySourceDocumentId(any());
+    }
+
+    @Test
+    void getDevolutionsUnknownInvoiceThrowsNotFound() {
+        when(documentRepo.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.getDevolutions(INVOICE_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(accessGuard);
     }
 
     // ── Scenario 2: Invoice is ORDER not INVOICE → BusinessException ───────

@@ -4,10 +4,13 @@ import co.posinvent.domain.model.SalesDocument;
 import co.posinvent.domain.model.SalesDocumentStatus;
 import co.posinvent.domain.model.SalesDocumentType;
 import co.posinvent.domain.repository.SalesDocumentRepository;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,6 +59,47 @@ class SalesDocumentRepositoryAdapter implements SalesDocumentRepository {
     @Override
     public Page<SalesDocument> findByTypeAndStatus(SalesDocumentType type, SalesDocumentStatus status, Pageable pageable) {
         return jpa.findByTypeAndStatus(type, status, pageable).map(mapper::toDomain);
+    }
+
+    @Override
+    public Page<SalesDocument> findVisible(SalesDocumentType type, SalesDocumentStatus status,
+                                           boolean restricted, UUID actorId, Pageable pageable) {
+        Specification<SalesDocumentEntity> specification = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (type != null) {
+                predicates.add(cb.equal(root.get("type"), type));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+
+            if (restricted) {
+                // A restriction matches when the actor created the document or effectively
+                // owns the shift it belongs to (assignee wins over the opener).
+                var ownedShift = query.subquery(UUID.class);
+                var shift = ownedShift.from(ShiftEntity.class);
+                ownedShift.select(shift.get("id")).where(
+                        cb.equal(shift.get("id"), root.get("shiftId")),
+                        cb.or(
+                                cb.equal(shift.get("assignedTo"), actorId),
+                                cb.and(
+                                        cb.isNull(shift.get("assignedTo")),
+                                        cb.equal(shift.get("userId"), actorId)
+                                )
+                        )
+                );
+
+                predicates.add(cb.or(
+                        cb.equal(root.get("createdBy"), actorId),
+                        cb.exists(ownedShift)
+                ));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return jpa.findAll(specification, pageable).map(mapper::toDomain);
     }
 
     @Override

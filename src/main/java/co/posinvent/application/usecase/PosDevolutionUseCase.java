@@ -9,6 +9,7 @@ import co.posinvent.domain.repository.AccountsReceivableRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,8 @@ public class PosDevolutionUseCase {
     private final RecordMovementUseCase recordMovement;
     private final AccountsReceivableRepository arRepo;
     private final ApplicationEventPublisher eventPublisher;
+    private final CurrentActorProvider actorProvider;
+    private final SalesDocumentAccessGuard accessGuard;
 
     public PosDevolutionUseCase(
             SalesDocumentRepository documentRepo,
@@ -41,7 +44,9 @@ public class PosDevolutionUseCase {
             ProductRepository productRepo,
             RecordMovementUseCase recordMovement,
             AccountsReceivableRepository arRepo,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            CurrentActorProvider actorProvider,
+            SalesDocumentAccessGuard accessGuard
     ) {
         this.documentRepo = documentRepo;
         this.stockRepo = stockRepo;
@@ -49,6 +54,18 @@ public class PosDevolutionUseCase {
         this.recordMovement = recordMovement;
         this.arRepo = arRepo;
         this.eventPublisher = eventPublisher;
+        this.actorProvider = actorProvider;
+        this.accessGuard = accessGuard;
+    }
+
+    @Transactional(readOnly = true)
+    public List<SalesDocument> getDevolutions(UUID invoiceId) {
+        var invoice = documentRepo.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Factura", invoiceId));
+
+        accessGuard.requireRead(actorProvider.current(), invoice, "READ_DEVOLUTIONS");
+
+        return documentRepo.findBySourceDocumentId(invoiceId);
     }
 
     @Transactional
@@ -56,6 +73,9 @@ public class PosDevolutionUseCase {
         // 1. Load original invoice, validate type=INVOICE, status=ISSUED
         var invoice = documentRepo.findById(request.invoiceId())
                 .orElseThrow(() -> new ResourceNotFoundException("Factura", request.invoiceId()));
+
+        // Fail closed before exposing type/state details to a caller that may not read it.
+        accessGuard.requireRead(actorProvider.current(), invoice, "PROCESS_DEVOLUTION");
 
         if (invoice.type() != SalesDocumentType.INVOICE) {
             throw new BusinessException("DEV_NOT_INVOICE",

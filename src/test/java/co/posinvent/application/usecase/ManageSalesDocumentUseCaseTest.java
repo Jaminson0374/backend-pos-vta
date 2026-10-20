@@ -45,6 +45,8 @@ class ManageSalesDocumentUseCaseTest {
     @Mock private FefoPicker fefoPicker;
     @Mock private RecordMovementUseCase recordMovement;
     @Mock private CompanyConfigRepository companyConfigRepo;
+    @Mock private co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider actorProvider;
+    @Mock private SalesDocumentAccessGuard accessGuard;
 
     private ManageSalesDocumentUseCase useCase;
 
@@ -62,7 +64,8 @@ class ManageSalesDocumentUseCaseTest {
                 documentRepo, itemRepo, thirdPartyRepo, stockRepo, warehouseRepo,
                 productRepo, accountsReceivableRepository, accountsReceivableUseCase,
                 fefoPicker, recordMovement,
-                new DiscountEngineService(productRepo, companyConfigRepo));
+                new DiscountEngineService(productRepo, companyConfigRepo),
+                actorProvider, accessGuard);
     }
 
     @Test
