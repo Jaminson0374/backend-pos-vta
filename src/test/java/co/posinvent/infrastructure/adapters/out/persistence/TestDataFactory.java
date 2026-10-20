@@ -3,12 +3,14 @@ package co.posinvent.infrastructure.adapters.out.persistence;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.SalesDocumentStatus;
 import co.posinvent.domain.model.SalesDocumentType;
+import co.posinvent.domain.model.ShiftStatus;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.model.Warehouse;
 
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,6 +61,31 @@ public final class TestDataFactory {
         b.setNotes("Batch de test");
         em.persist(b);
         return b.getId();
+    }
+
+    public static UUID createCashRegister(EntityManager em, String name) {
+        var register = new CashRegisterEntity();
+        register.setName(name);
+        register.setActive(true);
+        register.setCreatedAt(OffsetDateTime.now());
+        em.persist(register);
+        return register.getId();
+    }
+
+    /**
+     * Persists an OPEN shift for {@code userId} on the given register. The partial unique
+     * index allows only one OPEN shift per register, so each test must create its own
+     * register (or reuse the returned shift).
+     */
+    public static UUID createOpenShift(EntityManager em, UUID userId, UUID cashRegisterId) {
+        var shift = new ShiftEntity();
+        shift.setCashRegisterId(cashRegisterId);
+        shift.setUserId(userId);
+        shift.setOpeningTime(OffsetDateTime.now().minusHours(1));
+        shift.setOpeningAmount(BigDecimal.ZERO);
+        shift.setStatus(ShiftStatus.OPEN);
+        em.persist(shift);
+        return shift.getId();
     }
 
     public static void createStock(EntityManager em, UUID productId, UUID batchId,

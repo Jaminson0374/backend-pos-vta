@@ -12,6 +12,7 @@ import co.posinvent.domain.model.ShiftStatus;
 import co.posinvent.domain.repository.CashCountRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ShiftRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,15 +52,21 @@ class RegisterCashCountUseCaseTest {
     @Mock private ShiftRepository shiftRepository;
     @Mock private SalesDocumentRepository documentRepo;
     @Mock private CashCountRepository cashCountRepository;
+    @Mock private CurrentActorProvider actorProvider;
+    @Mock private ShiftAccessGuard accessGuard;
 
     private RegisterCashCountUseCase useCase;
     private Shift openShift;
+    private CurrentActorProvider.CurrentActor actor;
 
     @BeforeEach
     void setUp() {
-        useCase = new RegisterCashCountUseCase(shiftRepository, documentRepo, cashCountRepository);
+        actor = new CurrentActorProvider.CurrentActor(USER_ID, Set.of("CAJERO"));
+        lenient().when(actorProvider.current()).thenReturn(actor);
+        useCase = new RegisterCashCountUseCase(
+                shiftRepository, documentRepo, cashCountRepository, actorProvider, accessGuard);
         openShift = new Shift(
-                SHIFT_ID, CASH_REGISTER_ID, USER_ID,
+                SHIFT_ID, CASH_REGISTER_ID, USER_ID, null, null,
                 OffsetDateTime.now().minusHours(8), null,
                 BigDecimal.ZERO, null, ShiftStatus.OPEN, null,
                 OffsetDateTime.now().minusHours(8));
@@ -80,7 +88,7 @@ class RegisterCashCountUseCaseTest {
                         new CashCountLineRequest(new BigDecimal("100.00"), "MONEDA", 5)),
                 "Arqueo de prueba");
 
-        var response = useCase.execute(SHIFT_ID, request, USER_ID);
+        var response = useCase.execute(SHIFT_ID, request);
 
         // counted = 50000*2 + 100*5 = 100500
         assertThat(response.countedTotal()).isEqualByComparingTo("100500.00");
@@ -111,7 +119,7 @@ class RegisterCashCountUseCaseTest {
                 List.of(new CashCountLineRequest(new BigDecimal("70000.00"), "BILLETE", 1)),
                 null);
 
-        var response = useCase.execute(SHIFT_ID, request, USER_ID);
+        var response = useCase.execute(SHIFT_ID, request);
 
         // expected = 100000 invoiced - 30000 returned = 70000, matching the count.
         assertThat(response.expectedTotal()).isEqualByComparingTo("70000.00");
@@ -128,7 +136,7 @@ class RegisterCashCountUseCaseTest {
                 List.of(new CashCountLineRequest(new BigDecimal("1000.00"), "BILLETE", 1)),
                 null);
 
-        assertThatThrownBy(() -> useCase.execute(missingId, request, USER_ID))
+        assertThatThrownBy(() -> useCase.execute(missingId, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

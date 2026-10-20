@@ -48,6 +48,8 @@ class AccountingDecouplingIntegrationTest extends AbstractIntegrationTest {
     @Autowired private ThirdPartyRepository thirdPartyRepo;
     @Autowired private PucAccountRepository pucRepo;
 
+    private UUID shiftId;
+
     @Test
     void saleCommitsEvenWhenAccountingConfigurationIsBroken() {
         // A product whose own accounting template only declares the COGS debit. The resolved
@@ -57,9 +59,8 @@ class AccountingDecouplingIntegrationTest extends AbstractIntegrationTest {
         UUID[] ids = seedProductWithBrokenTemplate();
 
         assertThatCode(() -> checkoutUseCase.checkout(
-                new CheckoutRequest(ids[1], null,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID))
+                new CheckoutRequest(ids[1], null, shiftId,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL)))))
                 .doesNotThrowAnyException();
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
@@ -90,9 +91,8 @@ class AccountingDecouplingIntegrationTest extends AbstractIntegrationTest {
         UUID orderId = seedStandardProductAndOrder();
 
         checkoutUseCase.checkout(
-                new CheckoutRequest(orderId, null,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                new CheckoutRequest(orderId, null, shiftId,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = findInvoiceByOrder(orderId);
@@ -178,6 +178,10 @@ class AccountingDecouplingIntegrationTest extends AbstractIntegrationTest {
                     em, "BRK", 1L, 100_000L,
                     LocalDate.now().minusDays(1), LocalDate.now().plusDays(1));
 
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "BRK-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
+
             attachBrokenProductTemplate(productId);
 
             var orderId = TestDataFactory.createConfirmedOrder(
@@ -249,6 +253,10 @@ class AccountingDecouplingIntegrationTest extends AbstractIntegrationTest {
             TestDataFactory.createActiveDianResolution(
                     em, "DCP", 1L, 100_000L,
                     LocalDate.now().minusDays(1), LocalDate.now().plusDays(1));
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "DCP-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
 
             ids[0] = TestDataFactory.createConfirmedOrder(
                     em, "ORD-DCP-" + UUID.randomUUID().toString().substring(0, 6),

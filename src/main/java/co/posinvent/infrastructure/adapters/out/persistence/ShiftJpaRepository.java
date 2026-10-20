@@ -11,4 +11,6 @@ import java.util.UUID;
 interface ShiftJpaRepository extends JpaRepository<ShiftEntity, UUID> {
 
     Optional<ShiftEntity> findByCashRegisterIdAndStatus(UUID cashRegisterId, ShiftStatus status);
+
+    Page<ShiftEntity> findByUserIdOrAssignedTo(UUID userId, UUID assignedTo, Pageable pageable);
 }

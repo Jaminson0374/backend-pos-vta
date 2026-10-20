@@ -57,7 +57,7 @@ class CashCountPersistenceIntegrationTest extends AbstractIntegrationTest {
                         new CashCountLineRequest(new BigDecimal("100.00"), "MONEDA", 5)),
                 "Arqueo de integración");
 
-        var response = registerCashCountUseCase.execute(shiftId, request, TEST_USER_ID);
+        var response = registerCashCountUseCase.execute(shiftId, request);
 
         assertThat(response.id()).isNotNull();
         assertThat(response.countedTotal()).isEqualByComparingTo("100500.00");

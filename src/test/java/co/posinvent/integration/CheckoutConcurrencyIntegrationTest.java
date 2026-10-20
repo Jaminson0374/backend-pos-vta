@@ -12,6 +12,8 @@ import co.posinvent.infrastructure.adapters.out.persistence.TestDataFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.concurrent.DelegatingSecurityContextRunnable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -58,6 +60,7 @@ class CheckoutConcurrencyIntegrationTest extends AbstractIntegrationTest {
     private UUID productId;
     private UUID batchId;
     private UUID clientId;
+    private UUID shiftId;
     private final List<UUID> orderIds = new ArrayList<>();
 
     @BeforeEach
@@ -89,6 +92,10 @@ class CheckoutConcurrencyIntegrationTest extends AbstractIntegrationTest {
                     em, "CHK", 1L, 100000L, java.time.LocalDate.now().minusDays(1),
                     java.time.LocalDate.now().plusDays(1));
 
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "CHK-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
+
             for (int i = 0; i < ORDERS; i++) {
                 orderIds.add(TestDataFactory.createConfirmedOrder(
                         em,
@@ -108,20 +115,18 @@ class CheckoutConcurrencyIntegrationTest extends AbstractIntegrationTest {
         List<Future<?>> futures = new ArrayList<>();
 
         for (UUID orderId : orderIds) {
-            futures.add(pool.submit(() -> {
+            futures.add(pool.submit(DelegatingSecurityContextRunnable.create(() -> {
                 try {
                     startGate.await();
-                    // cashRegisterId is nullable and unused by the use case; keep it null
-                    // to avoid an unnecessary FK to cash_registers in this test.
+                    // cashRegisterId is nullable and derived from the shift by the use case.
                     var request = new CheckoutRequest(
-                            orderId, null,
+                            orderId, null, shiftId,
                             List.of(new CheckoutRequest.PaymentLine("CASH", SALE_PRICE)));
-                    checkoutUseCase.checkout(request, TEST_USER_ID);
+                    checkoutUseCase.checkout(request);
                 } catch (Throwable t) {
                     failures.add(t);
                 }
-                return null;
-            }));
+            }, SecurityContextHolder.getContext())));
         }
 
         startGate.countDown();

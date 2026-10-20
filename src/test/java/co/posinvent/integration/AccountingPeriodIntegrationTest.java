@@ -56,6 +56,7 @@ class AccountingPeriodIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PucAccountRepository pucRepo;
 
     private UUID orderId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -85,6 +86,10 @@ class AccountingPeriodIntegrationTest extends AbstractIntegrationTest {
             orderId = TestDataFactory.createConfirmedOrder(
                     em, "ORD-PER-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, QTY);
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "PER-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
@@ -103,9 +108,8 @@ class AccountingPeriodIntegrationTest extends AbstractIntegrationTest {
         accountingPeriodUseCase.close(CURRENT_PERIOD, TEST_USER_ID);
 
         checkoutUseCase.checkout(
-                new CheckoutRequest(orderId, null,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                new CheckoutRequest(orderId, null, shiftId,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = findInvoiceByOrder(orderId);
@@ -133,9 +137,8 @@ class AccountingPeriodIntegrationTest extends AbstractIntegrationTest {
     @Test
     void openPeriodPostsEntryDatedWithDocumentAndAuthoredByTheUser() {
         checkoutUseCase.checkout(
-                new CheckoutRequest(orderId, null,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                new CheckoutRequest(orderId, null, shiftId,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = findInvoiceByOrder(orderId);

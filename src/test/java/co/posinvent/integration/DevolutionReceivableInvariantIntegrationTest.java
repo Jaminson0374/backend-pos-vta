@@ -47,6 +47,7 @@ class DevolutionReceivableInvariantIntegrationTest extends AbstractIntegrationTe
 
     private UUID orderId;
     private UUID productId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -81,6 +82,10 @@ class DevolutionReceivableInvariantIntegrationTest extends AbstractIntegrationTe
                     em,
                     "ORD-ARINV-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, QTY);
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "ARINV-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
@@ -137,9 +142,8 @@ class DevolutionReceivableInvariantIntegrationTest extends AbstractIntegrationTe
      */
     private InvoiceFixture checkoutAndIssueCreditInvoice() {
         checkoutUseCase.checkout(
-                new CheckoutRequest(orderId, null,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                new CheckoutRequest(orderId, null, shiftId,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         return new TransactionTemplate(transactionManager).execute(status -> {
             var invoice = em.createQuery(

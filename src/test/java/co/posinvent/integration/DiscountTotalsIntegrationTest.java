@@ -43,6 +43,7 @@ class DiscountTotalsIntegrationTest extends AbstractIntegrationTest {
     private UUID orderId;
     private UUID exentoProductId;
     private UUID iva19ProductId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -90,6 +91,10 @@ class DiscountTotalsIntegrationTest extends AbstractIntegrationTest {
                                     iva19ProductId, iva19BatchId, IVA19_QTY,
                                     "AMOUNT", new BigDecimal("500"))
                     ));
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "DSC-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
@@ -98,11 +103,11 @@ class DiscountTotalsIntegrationTest extends AbstractIntegrationTest {
     void checkoutAppliesLineAndDocumentDiscountsBeforeIva() {
         // Line discounts ride on the order line; the document discount comes on checkout.
         var request = new CheckoutRequest(
-                orderId, null,
+                orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("25000.00"))),
                 "PCT", new BigDecimal("10"), "Descuento de prueba", null);
 
-        checkoutUseCase.checkout(request, TEST_USER_ID);
+        checkoutUseCase.checkout(request);
 
         var invoice = loadInvoice();
 

@@ -42,4 +42,9 @@ class ShiftRepositoryAdapter implements ShiftRepository {
     public Page<Shift> findAll(Pageable pageable) {
         return jpa.findAll(pageable).map(mapper::toDomain);
     }
+
+    @Override
+    public Page<Shift> findByUserIdOrAssignedTo(UUID userId, UUID assignedTo, Pageable pageable) {
+        return jpa.findByUserIdOrAssignedTo(userId, assignedTo, pageable).map(mapper::toDomain);
+    }
 }

@@ -47,6 +47,7 @@ class DiscountAuthorizationIntegrationTest extends AbstractIntegrationTest {
     private UUID orderId;
     private UUID secondOrderId;
     private UUID adminUserId;
+    private UUID shiftId;
     private String adminUsername;
     private String dianPrefix;
 
@@ -100,13 +101,17 @@ class DiscountAuthorizationIntegrationTest extends AbstractIntegrationTest {
                     em, "ORD-DAU-B-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId,
                     List.of(new TestDataFactory.OrderLine(productId, batchId, BigDecimal.ONE)));
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "DAU-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
 
     private CheckoutRequest checkoutRequest(UUID order, UUID authorizationId) {
         return new CheckoutRequest(
-                order, null,
+                order, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("10000.00"))),
                 "PCT", DISCOUNT_PCT, "Descuento autorizado por admin", authorizationId);
     }
@@ -131,7 +136,7 @@ class DiscountAuthorizationIntegrationTest extends AbstractIntegrationTest {
     void checkoutWithValidTokenStampsAuthorizedByOnTheInvoice() {
         var token = authorizeDiscountUseCase.authorize(adminUsername, ADMIN_PASSWORD, null, TEST_USER_ID);
 
-        checkoutUseCase.checkout(checkoutRequest(orderId, token.authorizationId()), TEST_USER_ID);
+        checkoutUseCase.checkout(checkoutRequest(orderId, token.authorizationId()));
 
         var invoice = loadInvoice(orderId);
         assertThat(invoice.getDiscountAuthorizedBy()).isEqualTo(adminUserId);
@@ -142,7 +147,7 @@ class DiscountAuthorizationIntegrationTest extends AbstractIntegrationTest {
     @Test
     void checkoutWithoutTokenRequiresAuthorization() {
         var error = businessError(() ->
-                checkoutUseCase.checkout(checkoutRequest(orderId, null), TEST_USER_ID));
+                checkoutUseCase.checkout(checkoutRequest(orderId, null)));
 
         assertThat(error.getErrorCode()).isEqualTo("DISCOUNT_AUTHORIZATION_REQUIRED");
     }
@@ -151,11 +156,11 @@ class DiscountAuthorizationIntegrationTest extends AbstractIntegrationTest {
     void reusingTheSameTokenFailsTheSecondCheckout() {
         var token = authorizeDiscountUseCase.authorize(adminUsername, ADMIN_PASSWORD, null, TEST_USER_ID);
 
-        checkoutUseCase.checkout(checkoutRequest(orderId, token.authorizationId()), TEST_USER_ID);
+        checkoutUseCase.checkout(checkoutRequest(orderId, token.authorizationId()));
         assertThat(loadInvoice(orderId).getDiscountAuthorizedBy()).isEqualTo(adminUserId);
 
         var error = businessError(() ->
-                checkoutUseCase.checkout(checkoutRequest(secondOrderId, token.authorizationId()), TEST_USER_ID));
+                checkoutUseCase.checkout(checkoutRequest(secondOrderId, token.authorizationId())));
         assertThat(error.getErrorCode()).isEqualTo("DISCOUNT_AUTHORIZATION_REQUIRED");
     }
 }

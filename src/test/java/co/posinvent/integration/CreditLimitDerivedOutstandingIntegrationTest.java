@@ -52,6 +52,7 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
 
     private UUID order1Id;
     private UUID order2Id;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -93,6 +94,10 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
                     em,
                     "ORD-CRLIMIT-2-" + UUID.randomUUID().toString().substring(0, 6),
                     clientId, warehouseId, productId, batchId, QTY);
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "CRLIMIT-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
@@ -125,9 +130,8 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
     /** Checks out the seeded order, returning the id of the DRAFT invoice it produced. */
     private UUID checkoutDraftInvoice(UUID orderId) {
         checkoutUseCase.checkout(
-                new CheckoutRequest(orderId, null,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", INVOICE_TOTAL))),
-                TEST_USER_ID);
+                new CheckoutRequest(orderId, null, shiftId,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", INVOICE_TOTAL))));
 
         return new TransactionTemplate(transactionManager).execute(status -> em.createQuery(
                         "select d.id from SalesDocumentEntity d "

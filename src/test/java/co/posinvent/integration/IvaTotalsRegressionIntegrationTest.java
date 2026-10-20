@@ -40,6 +40,7 @@ class IvaTotalsRegressionIntegrationTest extends AbstractIntegrationTest {
     @Autowired private ThirdPartyRepository thirdPartyRepo;
 
     private UUID orderId;
+    private UUID shiftId;
 
     @BeforeEach
     void setUp() {
@@ -83,16 +84,20 @@ class IvaTotalsRegressionIntegrationTest extends AbstractIntegrationTest {
                             new TestDataFactory.OrderLine(exentoProductId, exentoBatchId, BigDecimal.ONE),
                             new TestDataFactory.OrderLine(iva19ProductId, iva19BatchId, IVA19_QTY)
                     ));
+
+            var cashRegisterId = TestDataFactory.createCashRegister(
+                    em, "IVA-REG-" + UUID.randomUUID().toString().substring(0, 8));
+            shiftId = TestDataFactory.createOpenShift(em, TEST_USER_ID, cashRegisterId);
             em.flush();
         });
     }
 
     @Test
     void checkoutComputesZeroAndNineteenTaxesExactly() {
-        var request = new CheckoutRequest(orderId, null,
+        var request = new CheckoutRequest(orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("25000.00"))));
 
-        checkoutUseCase.checkout(request, TEST_USER_ID);
+        checkoutUseCase.checkout(request);
 
         var tx = new TransactionTemplate(transactionManager);
         var invoice = tx.execute(s -> em.createQuery(
