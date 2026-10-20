@@ -8,25 +8,30 @@ import co.posinvent.domain.model.StockTransfer;
 import co.posinvent.domain.model.TransferStatus;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.StockTransferRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,16 +43,30 @@ class CreateTransferUseCaseTest {
     @Mock
     private StockRepository stockRepo;
 
+    @Mock
+    private CurrentActorProvider actorProvider;
+
+    @Mock
+    private WarehouseAccessGuard accessGuard;
+
     private CreateTransferUseCase useCase;
 
+    private static final UUID ACTOR_ID = UUID.randomUUID();
     private static final UUID SOURCE_WAREHOUSE_ID = UUID.randomUUID();
     private static final UUID TARGET_WAREHOUSE_ID = UUID.randomUUID();
     private static final UUID PRODUCT_ID = UUID.randomUUID();
     private static final UUID BATCH_ID = UUID.randomUUID();
 
+    private CurrentActorProvider.CurrentActor actor;
+    private WarehouseAccess access;
+
     @BeforeEach
     void setUp() {
-        useCase = new CreateTransferUseCase(transferRepo, stockRepo);
+        actor = new CurrentActorProvider.CurrentActor(ACTOR_ID, Set.of("ALMACENISTA"));
+        access = new WarehouseAccess(false, Set.of(SOURCE_WAREHOUSE_ID));
+        when(actorProvider.current()).thenReturn(actor);
+        when(accessGuard.memberships(actor)).thenReturn(access);
+        useCase = new CreateTransferUseCase(transferRepo, stockRepo, actorProvider, accessGuard);
     }
 
     @Test
@@ -63,6 +82,7 @@ class CreateTransferUseCaseTest {
         assertThat(response.status()).isEqualTo(TransferStatus.DRAFT.name());
         assertThat(response.sourceWarehouseId()).isEqualTo(SOURCE_WAREHOUSE_ID);
         assertThat(response.targetWarehouseId()).isEqualTo(TARGET_WAREHOUSE_ID);
+        assertThat(response.createdBy()).isEqualTo(ACTOR_ID.toString());
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().get(0).productId()).isEqualTo(PRODUCT_ID);
         assertThat(response.items().get(0).quantity()).isEqualByComparingTo("4");
@@ -70,7 +90,24 @@ class CreateTransferUseCaseTest {
         var captor = ArgumentCaptor.forClass(StockTransfer.class);
         verify(transferRepo).save(captor.capture());
         assertThat(captor.getValue().status()).isEqualTo(TransferStatus.DRAFT);
+        assertThat(captor.getValue().createdBy()).isEqualTo(ACTOR_ID.toString());
         assertThat(captor.getValue().items()).hasSize(1);
+    }
+
+    @Test
+    void execute_deniesWhenActorIsNotMemberOfTheSourceWarehouse() {
+        doThrow(new AccessDeniedException("No tiene acceso a la bodega de este traslado."))
+                .when(accessGuard).requireAny(
+                        actor, access, List.of(SOURCE_WAREHOUSE_ID),
+                        "CREATE_TRANSFER", "source:" + SOURCE_WAREHOUSE_ID);
+
+        assertThatThrownBy(() -> useCase.execute(new TransferRequest(
+                SOURCE_WAREHOUSE_ID, TARGET_WAREHOUSE_ID, null,
+                List.of(new TransferItemRequest(PRODUCT_ID, BATCH_ID, BigDecimal.ONE)))))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(stockRepo);
+        verify(transferRepo, never()).save(any());
     }
 
     @Test

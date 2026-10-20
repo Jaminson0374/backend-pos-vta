@@ -8,10 +8,12 @@ import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.StockTransferRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Service
 public class ConfirmTransferUseCase implements ConfirmTransferPort {
@@ -21,23 +23,41 @@ public class ConfirmTransferUseCase implements ConfirmTransferPort {
     private final ProductRepository productRepo;
     private final RecordMovementUseCase recordMovement;
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
+    private final CurrentActorProvider actorProvider;
+    private final WarehouseAccessGuard accessGuard;
 
     public ConfirmTransferUseCase(
             StockTransferRepository transferRepo, StockRepository stockRepo,
             ProductRepository productRepo, RecordMovementUseCase recordMovement,
-            OptimisticConcurrencyExecutor concurrencyExecutor
+            OptimisticConcurrencyExecutor concurrencyExecutor,
+            CurrentActorProvider actorProvider, WarehouseAccessGuard accessGuard
     ) {
         this.transferRepo = transferRepo;
         this.stockRepo = stockRepo;
         this.productRepo = productRepo;
         this.recordMovement = recordMovement;
         this.concurrencyExecutor = concurrencyExecutor;
+        this.actorProvider = actorProvider;
+        this.accessGuard = accessGuard;
     }
 
     public TransferResponse execute(java.util.UUID transferId) {
+        // Resolve the actor and membership once on the caller's thread so retries never
+        // depend on a thread-local security context and never re-query memberships.
+        var actor = actorProvider.current();
+        var access = accessGuard.memberships(actor);
+
         return concurrencyExecutor.execute(() -> {
             var transfer = transferRepo.findById(transferId)
                     .orElseThrow(() -> new ResourceNotFoundException("Traslado", transferId));
+
+            accessGuard.requireAny(
+                    actor,
+                    access,
+                    List.of(transfer.targetWarehouseId()),
+                    "CONFIRM_TRANSFER",
+                    transferId
+            );
 
             if (transfer.status() != TransferStatus.DRAFT) {
                 throw new BusinessException("TRANSFER_NOT_DRAFT", "Solo traslados en DRAFT pueden confirmarse.");
@@ -90,8 +110,8 @@ public class ConfirmTransferUseCase implements ConfirmTransferPort {
             var confirmed = new StockTransfer(
                     transfer.id(), transfer.sourceWarehouseId(), transfer.targetWarehouseId(),
                     TransferStatus.CONFIRMED, transfer.notes(),
-                    transfer.createdBy(), transfer.createdAt(), "SYSTEM", OffsetDateTime.now(),
-                    transfer.items()
+                    transfer.createdBy(), transfer.createdAt(), actor.userId().toString(),
+                    OffsetDateTime.now(), transfer.items()
             );
 
             return TransferResponse.from(transferRepo.save(confirmed));

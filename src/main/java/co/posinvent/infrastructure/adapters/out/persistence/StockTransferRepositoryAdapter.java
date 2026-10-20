@@ -5,6 +5,7 @@ import co.posinvent.domain.model.StockTransfer;
 import co.posinvent.domain.repository.StockTransferRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -52,5 +53,34 @@ public class StockTransferRepositoryAdapter implements StockTransferRepository {
     @Override
     public Page<StockTransfer> findAll(Pageable pageable) {
         return jpa.findAll(pageable).map(mapper::toDomain);
+    }
+
+    @Override
+    public Page<StockTransfer> findVisible(UUID actorId, boolean restricted, Pageable pageable) {
+        Specification<StockTransferEntity> specification = (root, query, cb) -> {
+            if (!restricted) {
+                return cb.conjunction();
+            }
+
+            // EXISTS (select 1 from user_warehouses uw
+            //         where uw.user_id = :actorId
+            //           and (uw.warehouse_id = t.source_warehouse_id
+            //                or uw.warehouse_id = t.target_warehouse_id))
+            var membership = query.subquery(UUID.class);
+            var userWarehouse = membership.from(UserWarehouseEntity.class);
+            membership.select(userWarehouse.get("id").get("warehouseId")).where(
+                    cb.equal(userWarehouse.get("id").get("userId"), actorId),
+                    cb.or(
+                            cb.equal(userWarehouse.get("id").get("warehouseId"),
+                                    root.get("sourceWarehouseId")),
+                            cb.equal(userWarehouse.get("id").get("warehouseId"),
+                                    root.get("targetWarehouseId"))
+                    )
+            );
+
+            return cb.exists(membership);
+        };
+
+        return jpa.findAll(specification, pageable).map(mapper::toDomain);
     }
 }

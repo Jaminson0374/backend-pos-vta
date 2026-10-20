@@ -9,17 +9,20 @@ import co.posinvent.domain.model.TransferStatus;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.StockTransferRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -28,8 +31,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,18 +56,33 @@ class ConfirmTransferUseCaseTest {
     @Mock
     private OptimisticConcurrencyExecutor concurrencyExecutor;
 
+    @Mock
+    private CurrentActorProvider actorProvider;
+
+    @Mock
+    private WarehouseAccessGuard accessGuard;
+
     private ConfirmTransferUseCase useCase;
 
+    private static final UUID ACTOR_ID = UUID.randomUUID();
     private static final UUID TRANSFER_ID = UUID.randomUUID();
     private static final UUID SOURCE_WAREHOUSE_ID = UUID.randomUUID();
     private static final UUID TARGET_WAREHOUSE_ID = UUID.randomUUID();
     private static final UUID PRODUCT_ID = UUID.randomUUID();
     private static final UUID BATCH_ID = UUID.randomUUID();
 
+    private CurrentActorProvider.CurrentActor actor;
+    private WarehouseAccess access;
+
     @BeforeEach
     void setUp() {
+        actor = new CurrentActorProvider.CurrentActor(ACTOR_ID, Set.of("ALMACENISTA"));
+        access = new WarehouseAccess(false, Set.of(TARGET_WAREHOUSE_ID));
+        when(actorProvider.current()).thenReturn(actor);
+        when(accessGuard.memberships(actor)).thenReturn(access);
         useCase = new ConfirmTransferUseCase(
-                transferRepo, stockRepo, productRepo, recordMovement, concurrencyExecutor);
+                transferRepo, stockRepo, productRepo, recordMovement, concurrencyExecutor,
+                actorProvider, accessGuard);
         doAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get())
                 .when(concurrencyExecutor).execute(any());
     }
@@ -81,6 +102,7 @@ class ConfirmTransferUseCaseTest {
         var response = useCase.execute(TRANSFER_ID);
 
         assertThat(response.status()).isEqualTo(TransferStatus.CONFIRMED.name());
+        assertThat(response.confirmedBy()).isEqualTo(ACTOR_ID.toString());
 
         var stockCaptor = ArgumentCaptor.forClass(InventoryStock.class);
         verify(stockRepo, times(2)).save(stockCaptor.capture());
@@ -169,6 +191,22 @@ class ConfirmTransferUseCaseTest {
         assertThatThrownBy(() -> useCase.execute(TRANSFER_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", "TRANSFER_NO_STOCK");
+    }
+
+    @Test
+    void execute_deniesWhenActorIsNotMemberOfTheTargetWarehouse() {
+        var transfer = transfer(TransferStatus.DRAFT, List.of(item("4")));
+        when(transferRepo.findById(TRANSFER_ID)).thenReturn(Optional.of(transfer));
+        doThrow(new AccessDeniedException("No tiene acceso a la bodega de este traslado."))
+                .when(accessGuard).requireAny(
+                        actor, access, List.of(TARGET_WAREHOUSE_ID),
+                        "CONFIRM_TRANSFER", TRANSFER_ID);
+
+        assertThatThrownBy(() -> useCase.execute(TRANSFER_ID))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(stockRepo);
+        verify(transferRepo, never()).save(any());
     }
 
     private StockTransfer transfer(TransferStatus status, List<StockTransferItem> items) {

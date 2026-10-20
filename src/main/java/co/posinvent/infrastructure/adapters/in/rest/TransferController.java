@@ -55,7 +55,7 @@ public class TransferController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','ALMACENISTA','CAJERO')")
+    @PreAuthorize("hasAnyRole('ADMIN','ALMACENISTA','AUXILIAR')")
     public ResponseEntity<Page<TransferResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
@@ -64,7 +64,7 @@ public class TransferController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','ALMACENISTA','CAJERO')")
+    @PreAuthorize("hasAnyRole('ADMIN','ALMACENISTA','AUXILIAR')")
     public ResponseEntity<TransferResponse> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(getTransfer.execute(id));
     }
