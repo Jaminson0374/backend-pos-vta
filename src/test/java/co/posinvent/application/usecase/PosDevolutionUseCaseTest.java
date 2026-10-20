@@ -37,6 +37,8 @@ class PosDevolutionUseCaseTest {
     @Mock private RecordMovementUseCase recordMovement;
     @Mock private AccountsReceivableRepository arRepo;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider actorProvider;
+    @Mock private SalesDocumentAccessGuard accessGuard;
 
     private PosDevolutionUseCase useCase;
 
@@ -61,7 +63,8 @@ class PosDevolutionUseCaseTest {
     void setUp() {
         useCase = new PosDevolutionUseCase(
                 documentRepo, stockRepo, productRepo,
-                recordMovement, arRepo, eventPublisher);
+                recordMovement, arRepo, eventPublisher,
+                actorProvider, accessGuard);
     }
 
     // ── Scenario 1: Invoice not found → ResourceNotFoundException ──────────

@@ -45,7 +45,7 @@ public class SalesDocumentController {
     }
 
     @GetMapping("/documents")
-    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO','CONTADOR')")
     public ResponseEntity<PageResponse<SalesDocumentResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -56,7 +56,7 @@ public class SalesDocumentController {
     }
 
     @GetMapping("/documents/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
+    @PreAuthorize("hasAnyRole('ADMIN','CAJERO','CONTADOR')")
     public ResponseEntity<SalesDocumentResponse> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(useCase.getById(id));
     }

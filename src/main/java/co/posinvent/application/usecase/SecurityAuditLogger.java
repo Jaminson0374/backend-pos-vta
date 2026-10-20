@@ -18,7 +18,12 @@ final class SecurityAuditLogger {
     }
 
     static void denied(CurrentActorProvider.CurrentActor actor, String operation, Object object) {
-        log.warn("[Acceso Denegado] Actor: {} | Rol: {} | Intento de Operación: {} | Objeto (Shift): {}",
-                actor.userId(), actor.roles(), operation, object);
+        denied(actor, operation, "Shift", object);
+    }
+
+    static void denied(CurrentActorProvider.CurrentActor actor, String operation,
+                       String objectType, Object object) {
+        log.warn("[Acceso Denegado] Actor: {} | Rol: {} | Intento de Operación: {} | Objeto ({}): {}",
+                actor.userId(), actor.roles(), operation, objectType, object);
     }
 }

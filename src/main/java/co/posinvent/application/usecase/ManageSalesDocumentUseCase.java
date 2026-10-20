@@ -7,6 +7,7 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.FefoPicker;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +42,8 @@ public class ManageSalesDocumentUseCase {
     private final FefoPicker fefoPicker;
     private final RecordMovementUseCase recordMovement;
     private final DiscountEngineService discountEngine;
+    private final CurrentActorProvider actorProvider;
+    private final SalesDocumentAccessGuard accessGuard;
 
     public ManageSalesDocumentUseCase(
             SalesDocumentRepository documentRepo,
@@ -53,7 +56,9 @@ public class ManageSalesDocumentUseCase {
             AccountsReceivableUseCase accountsReceivableUseCase,
             FefoPicker fefoPicker,
             RecordMovementUseCase recordMovement,
-            DiscountEngineService discountEngine
+            DiscountEngineService discountEngine,
+            CurrentActorProvider actorProvider,
+            SalesDocumentAccessGuard accessGuard
     ) {
         this.documentRepo = documentRepo;
         this.itemRepo = itemRepo;
@@ -66,6 +71,8 @@ public class ManageSalesDocumentUseCase {
         this.fefoPicker = fefoPicker;
         this.recordMovement = recordMovement;
         this.discountEngine = discountEngine;
+        this.actorProvider = actorProvider;
+        this.accessGuard = accessGuard;
     }
 
     // ── Create ────────────────────────────────────────────────────────────
@@ -475,35 +482,13 @@ public class ManageSalesDocumentUseCase {
     @Transactional(readOnly = true)
     public PageResponse<SalesDocumentResponse> getDocuments(
             int page, int size, SalesDocumentType type, SalesDocumentStatus status) {
+        var actor = actorProvider.current();
+        boolean restricted = !(actor.isAdmin() || actor.isContador());
         var sort = Sort.by(Sort.Direction.DESC, "createdAt");
         var pageable = PageRequest.of(page, size, sort);
 
-        if (type != null && status != null) {
-            return PageResponse.from(
-                    documentRepo.findByTypeAndStatus(type, status, pageable)
-                            .map(SalesDocumentResponse::from)
-                            .map(this::enrich),
-                    r -> r
-            );
-        }
-        if (type != null) {
-            return PageResponse.from(
-                    documentRepo.findByType(type, pageable)
-                            .map(SalesDocumentResponse::from)
-                            .map(this::enrich),
-                    r -> r
-            );
-        }
-        if (status != null) {
-            return PageResponse.from(
-                    documentRepo.findByStatus(status, pageable)
-                            .map(SalesDocumentResponse::from)
-                            .map(this::enrich),
-                    r -> r
-            );
-        }
         return PageResponse.from(
-                documentRepo.findAll(pageable)
+                documentRepo.findVisible(type, status, restricted, actor.userId(), pageable)
                         .map(SalesDocumentResponse::from)
                         .map(this::enrich),
                 r -> r
@@ -512,8 +497,10 @@ public class ManageSalesDocumentUseCase {
 
     @Transactional(readOnly = true)
     public SalesDocumentResponse getById(UUID id) {
+        var actor = actorProvider.current();
         var doc = documentRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Documento de venta", id));
+        accessGuard.requireRead(actor, doc, "READ_SALES_DOCUMENT");
         return enrich(SalesDocumentResponse.from(doc));
     }
 

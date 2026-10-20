@@ -9,6 +9,7 @@ import co.posinvent.domain.repository.AccountsReceivableRepository;
 import co.posinvent.domain.repository.ProductRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,8 @@ public class PosDevolutionUseCase {
     private final RecordMovementUseCase recordMovement;
     private final AccountsReceivableRepository arRepo;
     private final ApplicationEventPublisher eventPublisher;
+    private final CurrentActorProvider actorProvider;
+    private final SalesDocumentAccessGuard accessGuard;
 
     public PosDevolutionUseCase(
             SalesDocumentRepository documentRepo,
@@ -41,7 +44,9 @@ public class PosDevolutionUseCase {
             ProductRepository productRepo,
             RecordMovementUseCase recordMovement,
             AccountsReceivableRepository arRepo,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            CurrentActorProvider actorProvider,
+            SalesDocumentAccessGuard accessGuard
     ) {
         this.documentRepo = documentRepo;
         this.stockRepo = stockRepo;
@@ -49,6 +54,18 @@ public class PosDevolutionUseCase {
         this.recordMovement = recordMovement;
         this.arRepo = arRepo;
         this.eventPublisher = eventPublisher;
+        this.actorProvider = actorProvider;
+        this.accessGuard = accessGuard;
+    }
+
+    @Transactional(readOnly = true)
+    public List<SalesDocument> getDevolutions(UUID invoiceId) {
+        var invoice = documentRepo.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Factura", invoiceId));
+
+        accessGuard.requireRead(actorProvider.current(), invoice, "READ_DEVOLUTIONS");
+
+        return documentRepo.findBySourceDocumentId(invoiceId);
     }
 
     @Transactional
@@ -65,6 +82,8 @@ public class PosDevolutionUseCase {
             throw new BusinessException("DEV_NOT_ISSUED",
                     "La factura debe estar ISSUED para procesar devolución. Estado actual: " + invoice.status());
         }
+
+        accessGuard.requireRead(actorProvider.current(), invoice, "PROCESS_DEVOLUTION");
 
         // 2. Check that no prior credit note already exists for this invoice
         var existingCreditNotes = documentRepo.findBySourceDocumentIdAndType(
