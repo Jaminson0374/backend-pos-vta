@@ -7,11 +7,16 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
 /**
- * Object-level read rules for sales documents.
+ * Object-level authorization rules for sales documents.
  *
- * <p>ADMIN and CONTADOR may read every document. A CAJERO may read only documents they
- * created or documents that belong to a shift they effectively own
- * ({@code assigned_to}, falling back to {@code user_id}). Everything else fails closed.</p>
+ * <p><strong>Read</strong>: ADMIN and CONTADOR may read every document. A CAJERO may read only
+ * documents they created or documents that belong to a shift they effectively own
+ * ({@code assigned_to}, falling back to {@code user_id}).</p>
+ *
+ * <p><strong>Operate</strong> (transitions): ADMIN, the creator, or the effective shift owner.
+ * CONTADOR gets no blanket permission here — it may read, but not operate.</p>
+ *
+ * <p>Every denial fails closed and leaves one structured audit WARN.</p>
  */
 @Component
 public class SalesDocumentAccessGuard {
@@ -27,20 +32,45 @@ public class SalesDocumentAccessGuard {
             return;
         }
 
-        if (actor.userId() != null && actor.userId().equals(document.createdBy())) {
+        if (ownsDocument(actor, document)) {
             return;
-        }
-
-        if (document.shiftId() != null) {
-            var shift = shiftRepository.findById(document.shiftId()).orElse(null);
-            if (shift != null
-                    && shift.effectiveOwnerId() != null
-                    && shift.effectiveOwnerId().equals(actor.userId())) {
-                return;
-            }
         }
 
         SecurityAuditLogger.denied(actor, operation, "SalesDocument", document.id());
         throw new AccessDeniedException("No tiene permisos para acceder a este documento.");
+    }
+
+    public void requireOperate(CurrentActorProvider.CurrentActor actor, SalesDocument document, String operation) {
+        // CONTADOR is read-only regardless of authorship or shift ownership.
+        if (actor.isContador()) {
+            SecurityAuditLogger.denied(actor, operation, "SalesDocument", document.id());
+            throw new AccessDeniedException("No tiene permisos para operar este documento.");
+        }
+
+        if (actor.isAdmin()) {
+            return;
+        }
+
+        if (ownsDocument(actor, document)) {
+            return;
+        }
+
+        SecurityAuditLogger.denied(actor, operation, "SalesDocument", document.id());
+        throw new AccessDeniedException("No tiene permisos para operar este documento.");
+    }
+
+    private boolean ownsDocument(CurrentActorProvider.CurrentActor actor, SalesDocument document) {
+        if (actor.userId() != null && actor.userId().equals(document.createdBy())) {
+            return true;
+        }
+
+        if (document.shiftId() != null) {
+            var shift = shiftRepository.findById(document.shiftId()).orElse(null);
+            return shift != null
+                    && shift.effectiveOwnerId() != null
+                    && shift.effectiveOwnerId().equals(actor.userId());
+        }
+
+        return false;
     }
 }

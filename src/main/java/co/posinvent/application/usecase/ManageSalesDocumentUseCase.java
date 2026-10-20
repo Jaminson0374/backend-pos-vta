@@ -129,7 +129,10 @@ public class ManageSalesDocumentUseCase {
         var doc = documentRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Documento de venta", id));
 
-        validateTransition(doc, target);
+        var actor = actorProvider.current();
+        accessGuard.requireOperate(actor, doc, "TRANSITION_SALES_DOCUMENT");
+
+        var transitioned = doc.transitionTo(target);
 
         switch (target) {
             case CONFIRMED -> reserveStock(doc);
@@ -147,106 +150,8 @@ public class ManageSalesDocumentUseCase {
             }
         }
 
-        var updated = new SalesDocument(
-                doc.id(), doc.type(), target,
-                doc.documentNumber(), doc.clientId(), doc.warehouseId(),
-                doc.shiftId(), doc.cashRegisterId(), doc.sourceDocumentId(),
-                doc.totalNet(), doc.totalTax0(), doc.totalTax5(), doc.totalTax19(),
-                doc.totalAmount(), doc.createdBy(), doc.createdAt(), doc.updatedAt(),
-                doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason()
-        );
-
-        var saved = documentRepo.save(updated);
+        var saved = documentRepo.save(transitioned);
         return enrich(SalesDocumentResponse.from(saved));
-    }
-
-    // ── Guard validation ──────────────────────────────────────────────────
-
-    private void validateTransition(SalesDocument doc, SalesDocumentStatus target) {
-        var current = doc.status();
-
-        if (doc.type() == SalesDocumentType.QUOTE) {
-            validateQuoteTransition(current, target, doc);
-            return;
-        }
-        if (doc.type() == SalesDocumentType.ORDER) {
-            validateOrderTransition(current, target, doc);
-            return;
-        }
-        if (doc.type() == SalesDocumentType.INVOICE) {
-            validateInvoiceTransition(current, target);
-            return;
-        }
-        if (doc.type() == SalesDocumentType.CREDIT_NOTE || doc.type() == SalesDocumentType.DEBIT_NOTE) {
-            validateInvoiceTransition(current, target);
-            return;
-        }
-
-        throw illegalTransition(doc.type(), current, target);
-    }
-
-    private void validateQuoteTransition(SalesDocumentStatus current, SalesDocumentStatus target, SalesDocument doc) {
-        if (target == SalesDocumentStatus.SENT) {
-            if (current != SalesDocumentStatus.DRAFT)
-                throw illegalTransition(SalesDocumentType.QUOTE, current, target);
-            if (doc.items().isEmpty())
-                throw new BusinessException("SD_NO_ITEMS",
-                        "La cotización debe tener al menos un ítem para ser enviada");
-            return;
-        }
-        if (target == SalesDocumentStatus.ACCEPTED || target == SalesDocumentStatus.REJECTED
-                || target == SalesDocumentStatus.EXPIRED) {
-            if (current != SalesDocumentStatus.SENT)
-                throw illegalTransition(SalesDocumentType.QUOTE, current, target);
-            return;
-        }
-        throw illegalTransition(SalesDocumentType.QUOTE, current, target);
-    }
-
-    private void validateOrderTransition(SalesDocumentStatus current, SalesDocumentStatus target, SalesDocument doc) {
-        if (target == SalesDocumentStatus.CONFIRMED) {
-            if (current != SalesDocumentStatus.DRAFT)
-                throw illegalTransition(SalesDocumentType.ORDER, current, target);
-            if (doc.items().isEmpty())
-                throw new BusinessException("SD_NO_ITEMS",
-                        "El pedido debe tener al menos un ítem para confirmar");
-            return;
-        }
-        if (target == SalesDocumentStatus.CANCELLED) {
-            if (current != SalesDocumentStatus.CONFIRMED && current != SalesDocumentStatus.DRAFT)
-                throw illegalTransition(SalesDocumentType.ORDER, current, target);
-            return;
-        }
-        if (target == SalesDocumentStatus.INVOICED || target == SalesDocumentStatus.PARTIALLY_INVOICED) {
-            if (current != SalesDocumentStatus.CONFIRMED && current != SalesDocumentStatus.PARTIALLY_INVOICED)
-                throw illegalTransition(SalesDocumentType.ORDER, current, target);
-            return;
-        }
-        throw illegalTransition(SalesDocumentType.ORDER, current, target);
-    }
-
-    private void validateInvoiceTransition(SalesDocumentStatus current, SalesDocumentStatus target) {
-        if (target == SalesDocumentStatus.ISSUED) {
-            if (current != SalesDocumentStatus.DRAFT)
-                throw illegalTransition(SalesDocumentType.INVOICE, current, target);
-            return;
-        }
-        if (target == SalesDocumentStatus.PAID) {
-            if (current != SalesDocumentStatus.ISSUED)
-                throw illegalTransition(SalesDocumentType.INVOICE, current, target);
-            return;
-        }
-        if (target == SalesDocumentStatus.CANCELLED) {
-            if (current != SalesDocumentStatus.ISSUED)
-                throw illegalTransition(SalesDocumentType.INVOICE, current, target);
-            return;
-        }
-        throw illegalTransition(SalesDocumentType.INVOICE, current, target);
-    }
-
-    private BusinessException illegalTransition(SalesDocumentType type, SalesDocumentStatus from, SalesDocumentStatus to) {
-        return new BusinessException("SD_INVALID_TRANSITION",
-                "Transición inválida para " + type + ": " + from + " → " + to);
     }
 
     // ── Credit validation ─────────────────────────────────────────────────
