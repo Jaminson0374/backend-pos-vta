@@ -9,25 +9,46 @@ import co.posinvent.domain.model.StockTransferItem;
 import co.posinvent.domain.model.TransferStatus;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.StockTransferRepository;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class CreateTransferUseCase implements CreateTransferPort {
 
     private final StockTransferRepository transferRepo;
     private final StockRepository stockRepo;
+    private final CurrentActorProvider actorProvider;
+    private final WarehouseAccessGuard accessGuard;
 
-    public CreateTransferUseCase(StockTransferRepository transferRepo, StockRepository stockRepo) {
+    public CreateTransferUseCase(
+            StockTransferRepository transferRepo,
+            StockRepository stockRepo,
+            CurrentActorProvider actorProvider,
+            WarehouseAccessGuard accessGuard
+    ) {
         this.transferRepo = transferRepo;
         this.stockRepo = stockRepo;
+        this.actorProvider = actorProvider;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
     public TransferResponse execute(TransferRequest request) {
+        var actor = actorProvider.current();
+        var access = accessGuard.memberships(actor);
+        accessGuard.requireAny(
+                actor,
+                access,
+                List.of(request.sourceWarehouseId()),
+                "CREATE_TRANSFER",
+                "source:" + request.sourceWarehouseId()
+        );
+
         var items = new ArrayList<StockTransferItem>();
         for (var item : request.items()) {
             var sourceStock = stockRepo.findByProductBatchWarehouse(
@@ -48,7 +69,7 @@ public class CreateTransferUseCase implements CreateTransferPort {
                 request.targetWarehouseId(),
                 TransferStatus.DRAFT,
                 request.notes(),
-                "SYSTEM", null, null, null,
+                actor.userId().toString(), null, null, null,
                 items
         );
 

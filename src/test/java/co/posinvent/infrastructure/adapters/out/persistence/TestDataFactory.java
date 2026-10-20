@@ -112,6 +112,42 @@ public final class TestDataFactory {
         return id;
     }
 
+    /** Grants a warehouse membership to a user (idempotent at the database level). */
+    public static void createUserWarehouse(EntityManager em, UUID userId, UUID warehouseId) {
+        em.createNativeQuery("""
+                INSERT INTO user_warehouses (user_id, warehouse_id)
+                VALUES (CAST(:userId AS uuid), CAST(:warehouseId AS uuid))
+                ON CONFLICT DO NOTHING
+                """)
+                .setParameter("userId", userId.toString())
+                .setParameter("warehouseId", warehouseId.toString())
+                .executeUpdate();
+    }
+
+    /**
+     * Seeds a stock transfer row without items. Transfer read isolation only depends on the
+     * source/target warehouse ids, so tests avoid the heavier item FK graph.
+     */
+    public static UUID createStockTransfer(EntityManager em, UUID sourceWarehouseId,
+                                           UUID targetWarehouseId, String status, String createdBy) {
+        var id = UUID.randomUUID();
+        em.createNativeQuery("""
+                INSERT INTO stock_transfers
+                    (id, source_warehouse_id, target_warehouse_id, status, created_by, created_at)
+                VALUES
+                    (CAST(:id AS uuid), CAST(:sourceWarehouseId AS uuid),
+                     CAST(:targetWarehouseId AS uuid), :status, :createdBy, :createdAt)
+                """)
+                .setParameter("id", id.toString())
+                .setParameter("sourceWarehouseId", sourceWarehouseId.toString())
+                .setParameter("targetWarehouseId", targetWarehouseId.toString())
+                .setParameter("status", status)
+                .setParameter("createdBy", createdBy)
+                .setParameter("createdAt", OffsetDateTime.now())
+                .executeUpdate();
+        return id;
+    }
+
     /**
      * Inserts a sales document with an explicit {@code created_by}, bypassing the auditing
      * listener so tests can seed documents owned by different actors.

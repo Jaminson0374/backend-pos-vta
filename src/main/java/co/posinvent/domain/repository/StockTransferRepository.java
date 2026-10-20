@@ -14,4 +14,10 @@ public interface StockTransferRepository {
     Optional<StockTransfer> findById(UUID id);
 
     Page<StockTransfer> findAll(Pageable pageable);
+
+    /**
+     * Lists transfers applying, when {@code restricted}, the actor's warehouse membership in the
+     * database query. Pagination stays in SQL.
+     */
+    Page<StockTransfer> findVisible(UUID actorId, boolean restricted, Pageable pageable);
 }
