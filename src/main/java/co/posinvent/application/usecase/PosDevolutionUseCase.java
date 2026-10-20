@@ -74,6 +74,9 @@ public class PosDevolutionUseCase {
         var invoice = documentRepo.findById(request.invoiceId())
                 .orElseThrow(() -> new ResourceNotFoundException("Factura", request.invoiceId()));
 
+        // Fail closed before exposing type/state details to a caller that may not read it.
+        accessGuard.requireRead(actorProvider.current(), invoice, "PROCESS_DEVOLUTION");
+
         if (invoice.type() != SalesDocumentType.INVOICE) {
             throw new BusinessException("DEV_NOT_INVOICE",
                     "El documento no es una factura. Tipo: " + invoice.type());
@@ -82,8 +85,6 @@ public class PosDevolutionUseCase {
             throw new BusinessException("DEV_NOT_ISSUED",
                     "La factura debe estar ISSUED para procesar devolución. Estado actual: " + invoice.status());
         }
-
-        accessGuard.requireRead(actorProvider.current(), invoice, "PROCESS_DEVOLUTION");
 
         // 2. Check that no prior credit note already exists for this invoice
         var existingCreditNotes = documentRepo.findBySourceDocumentIdAndType(
