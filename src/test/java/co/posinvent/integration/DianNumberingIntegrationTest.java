@@ -12,6 +12,8 @@ import co.posinvent.infrastructure.adapters.out.persistence.TestDataFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.concurrent.DelegatingSecurityContextRunnable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -111,18 +113,17 @@ class DianNumberingIntegrationTest extends AbstractIntegrationTest {
         List<Future<?>> futures = new ArrayList<>();
 
         for (UUID orderId : orderIds) {
-            futures.add(pool.submit(() -> {
+            futures.add(pool.submit(DelegatingSecurityContextRunnable.create(() -> {
                 try {
                     startGate.await();
                     var request = new CheckoutRequest(
                             orderId, null, shiftId,
                             List.of(new CheckoutRequest.PaymentLine("CASH", SALE_PRICE)));
-                    checkoutUseCase.checkout(request, TEST_USER_ID);
+                    checkoutUseCase.checkout(request);
                 } catch (Throwable t) {
                     failures.add(t);
                 }
-                return null;
-            }));
+            }, SecurityContextHolder.getContext())));
         }
 
         startGate.countDown();

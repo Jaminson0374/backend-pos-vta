@@ -90,7 +90,7 @@ class SaleCogsFromKardexIntegrationTest extends AbstractIntegrationTest {
         var request = new CheckoutRequest(orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", SALE_SUBTOTAL)));
 
-        checkoutUseCase.checkout(request, TEST_USER_ID);
+        checkoutUseCase.checkout(request);
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = em.createQuery(

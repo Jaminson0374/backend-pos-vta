@@ -8,8 +8,8 @@ import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ShiftRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ProductRepository;
-import co.posinvent.domain.repository.UserRepository;
 import co.posinvent.domain.service.FefoPicker;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -37,7 +37,7 @@ public class PosCheckoutUseCase {
     private final OptimisticConcurrencyExecutor concurrencyExecutor;
     private final DianNumberingService numberingService;
     private final DiscountEngineService discountEngine;
-    private final UserRepository userRepo;
+    private final CurrentActorProvider actorProvider;
     private final AuthorizeDiscountUseCase authorizeDiscountUseCase;
     private final ShiftRepository shiftRepo;
 
@@ -54,7 +54,7 @@ public class PosCheckoutUseCase {
             OptimisticConcurrencyExecutor concurrencyExecutor,
             DianNumberingService numberingService,
             DiscountEngineService discountEngine,
-            UserRepository userRepo,
+            CurrentActorProvider actorProvider,
             AuthorizeDiscountUseCase authorizeDiscountUseCase,
             ShiftRepository shiftRepo
     ) {
@@ -70,7 +70,7 @@ public class PosCheckoutUseCase {
         this.concurrencyExecutor = concurrencyExecutor;
         this.numberingService = numberingService;
         this.discountEngine = discountEngine;
-        this.userRepo = userRepo;
+        this.actorProvider = actorProvider;
         this.authorizeDiscountUseCase = authorizeDiscountUseCase;
         this.shiftRepo = shiftRepo;
     }
@@ -85,11 +85,14 @@ public class PosCheckoutUseCase {
      * commit or roll back together). Wrapping only the stock loop would nest a
      * {@code REQUIRES_NEW} transaction and break that atomicity.</p>
      */
-    public CheckoutResponse checkout(CheckoutRequest request, UUID userId) {
-        return concurrencyExecutor.execute(() -> doCheckout(request, userId));
+    public CheckoutResponse checkout(CheckoutRequest request) {
+        // Resolve the authenticated actor once, on the caller's thread, so the retry
+        // executor never depends on a thread-local security context.
+        var actor = actorProvider.current();
+        return concurrencyExecutor.execute(() -> doCheckout(request, actor));
     }
 
-    private CheckoutResponse doCheckout(CheckoutRequest request, UUID userId) {
+    private CheckoutResponse doCheckout(CheckoutRequest request, CurrentActorProvider.CurrentActor actor) {
         // 1. Load ORDER, verify status=CONFIRMED
         var order = documentRepo.findById(request.orderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", request.orderId()));
@@ -109,7 +112,7 @@ public class PosCheckoutUseCase {
 
         // 1b. Every sale must belong to an open shift. The shift is the source of truth
         //     for the cash register: a request may omit it, but never contradict it.
-        var shift = loadAndValidateShift(request, order, userId);
+        var shift = loadAndValidateShift(request, order, actor);
 
         // 2. Load items and resolve prices, then apply discounts BEFORE IVA:
         //    active promotion (automatic) + the manual discount carried by the order line.
@@ -149,7 +152,7 @@ public class PosCheckoutUseCase {
         UUID discountAuthorizedBy = null;
         if (computed.discountTotal().signum() > 0
                 && discountEngine.requiresDiscountAuthorization(
-                        resolveRole(userId),
+                        actor.primaryRoleForDiscountPolicy(),
                         discountEngine.manualDiscountPct(lineInputs),
                         discountEngine.totalDiscountPct(lineInputs, computed.discountTotal()))) {
             if (request.discountAuthorizationId() == null) {
@@ -251,7 +254,7 @@ public class PosCheckoutUseCase {
                 computed.tax5(),
                 computed.tax19(),
                 computed.total(),
-                userId,
+                actor.userId(),
                 null,
                 null,
                 persistedItems,
@@ -277,7 +280,7 @@ public class PosCheckoutUseCase {
         for (var line : request.payments()) {
             salePaymentRepo.save(new SalePayment(
                     null, savedInvoice.id(), line.method(), line.amount(),
-                    userId, null, null
+                    actor.userId(), null, null
             ));
         }
 
@@ -308,7 +311,9 @@ public class PosCheckoutUseCase {
                 .orElseThrow(() -> new ResourceNotFoundException("Factura", savedInvoice.id())), change);
     }
 
-    private Shift loadAndValidateShift(CheckoutRequest request, SalesDocument order, UUID userId) {
+    private Shift loadAndValidateShift(
+            CheckoutRequest request, SalesDocument order,
+            CurrentActorProvider.CurrentActor actor) {
         var shift = shiftRepo.findById(request.shiftId())
                 .orElseThrow(() -> new ResourceNotFoundException("Turno", request.shiftId()));
 
@@ -326,22 +331,13 @@ public class PosCheckoutUseCase {
                     "El pedido pertenece a otro turno.");
         }
 
-        // An administrator may operate any shift. Everyone else (including a user with
-        // no resolved role) must be the shift's effective owner.
-        var role = resolveRole(userId);
-        if (!"ADMIN".equals(role)
-                && (userId == null || !userId.equals(shift.effectiveOwnerId()))) {
+        // Single source of truth: the token roles must authorize the shift. An
+        // administrator may operate any shift; everyone else must be its effective owner.
+        if (!actor.isAdmin()
+                && (actor.userId() == null || !actor.userId().equals(shift.effectiveOwnerId()))) {
+            SecurityAuditLogger.denied(actor, "CHECKOUT", request.shiftId());
             throw new AccessDeniedException("El turno no pertenece al usuario.");
         }
         return shift;
-    }
-
-    private String resolveRole(UUID userId) {
-        if (userId == null) {
-            return null;
-        }
-        return userRepo.findById(userId)
-                .map(user -> user.role() == null ? null : user.role().name())
-                .orElse(null);
     }
 }

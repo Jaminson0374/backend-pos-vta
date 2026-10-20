@@ -5,6 +5,7 @@ import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.FefoPicker;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -43,7 +45,7 @@ class PosCheckoutUseCaseTest {
     @Mock private OptimisticConcurrencyExecutor concurrencyExecutor;
     @Mock private DianNumberingService numberingService;
     @Mock private CompanyConfigRepository companyConfigRepo;
-    @Mock private UserRepository userRepo;
+    @Mock private CurrentActorProvider actorProvider;
     @Mock private AuthorizeDiscountUseCase authorizeDiscountUseCase;
     @Mock private ShiftRepository shiftRepo;
 
@@ -73,9 +75,12 @@ class PosCheckoutUseCaseTest {
                 documentRepo, salePaymentRepo, stockRepo, productRepo,
                 priceEngine, fefoPicker, recordMovement, costingService,
                 eventPublisher, concurrencyExecutor, numberingService,
-                new DiscountEngineService(productRepo, companyConfigRepo), userRepo,
+                new DiscountEngineService(productRepo, companyConfigRepo), actorProvider,
                 authorizeDiscountUseCase, shiftRepo
         );
+
+        lenient().when(actorProvider.current())
+                .thenReturn(new CurrentActorProvider.CurrentActor(USER_ID, Set.of("CAJERO")));
 
         // Numbering is delegated to the active DIAN resolution service; its own
         // behavior is covered by DianNumberingServiceTest. Lenient because failure-path
@@ -106,12 +111,6 @@ class PosCheckoutUseCaseTest {
                 OffsetDateTime.now(), OffsetDateTime.now(),
                 List.of(item), null, false, null
         );
-    }
-
-    private static User userWithRole(String roleName) {
-        return new User(USER_ID, "test-user", "Test User", "test@example.com",
-                new Role(UUID.randomUUID(), roleName, null), true,
-                OffsetDateTime.now(), OffsetDateTime.now(), null, null);
     }
 
     @Test
@@ -210,7 +209,7 @@ class PosCheckoutUseCaseTest {
                 List.of(
                         new CheckoutRequest.PaymentLine("CASH", new BigDecimal("250000")),
                         new CheckoutRequest.PaymentLine("CARD", new BigDecimal("150000"))));
-        useCase.checkout(request, USER_ID);
+        useCase.checkout(request);
 
         // ── Assert ──────────────────────────────────────────────────────
 
@@ -345,7 +344,7 @@ class PosCheckoutUseCaseTest {
         // ── Act ─────────────────────────────────────────────────────────
         var request = new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("400000"))));
-        useCase.checkout(request, USER_ID);
+        useCase.checkout(request);
 
         // ── Assert ──────────────────────────────────────────────────────
         var stockCaptor = ArgumentCaptor.forClass(InventoryStock.class);
@@ -364,8 +363,7 @@ class PosCheckoutUseCaseTest {
 
         assertThatThrownBy(() -> useCase.checkout(
                 new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
-                USER_ID))
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN)))))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verifyNoInteractions(stockRepo);
@@ -382,8 +380,7 @@ class PosCheckoutUseCaseTest {
 
         assertThatThrownBy(() -> useCase.checkout(
                 new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
-                USER_ID))
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN)))))
                 .isInstanceOfSatisfying(BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo("POS_SHIFT_NOT_OPEN"));
 
@@ -396,12 +393,10 @@ class PosCheckoutUseCaseTest {
         when(documentRepo.findById(ORDER_ID)).thenReturn(Optional.of(confirmedOrder(null)));
         when(shiftRepo.findById(SHIFT_ID))
                 .thenReturn(Optional.of(openShift(UUID.randomUUID())));
-        when(userRepo.findById(USER_ID)).thenReturn(Optional.of(userWithRole("CAJERO")));
 
         assertThatThrownBy(() -> useCase.checkout(
                 new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
-                USER_ID))
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN)))))
                 .isInstanceOf(AccessDeniedException.class);
 
         verifyNoInteractions(stockRepo);
@@ -412,13 +407,31 @@ class PosCheckoutUseCaseTest {
     void shouldAllowAdminToCheckoutAShiftOwnedByAnotherUser() {
         when(shiftRepo.findById(SHIFT_ID))
                 .thenReturn(Optional.of(openShift(UUID.randomUUID())));
-        when(userRepo.findById(USER_ID)).thenReturn(Optional.of(userWithRole("ADMIN")));
+        when(actorProvider.current())
+                .thenReturn(new CurrentActorProvider.CurrentActor(USER_ID, Set.of("ADMIN")));
         stubSuccessfulCheckout();
 
         assertThatCode(() -> useCase.checkout(
                 new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("1000.00")))),
-                USER_ID))
+                        List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("1000.00"))))))
+                .doesNotThrowAnyException();
+
+        verify(stockRepo).save(any(InventoryStock.class));
+    }
+
+    @Test
+    void shouldAllowMultiRoleAdminToCheckoutAShiftOwnedByAnotherUser() {
+        when(shiftRepo.findById(SHIFT_ID))
+                .thenReturn(Optional.of(openShift(UUID.randomUUID())));
+        // The token carries both roles; authorization must not depend on the role order.
+        when(actorProvider.current())
+                .thenReturn(new CurrentActorProvider.CurrentActor(
+                        USER_ID, Set.of("CAJERO", "ADMIN")));
+        stubSuccessfulCheckout();
+
+        assertThatCode(() -> useCase.checkout(
+                new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
+                        List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("1000.00"))))))
                 .doesNotThrowAnyException();
 
         verify(stockRepo).save(any(InventoryStock.class));
@@ -431,8 +444,7 @@ class PosCheckoutUseCaseTest {
 
         assertThatThrownBy(() -> useCase.checkout(
                 new CheckoutRequest(ORDER_ID, UUID.randomUUID(), SHIFT_ID,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
-                USER_ID))
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN)))))
                 .isInstanceOfSatisfying(BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo("POS_SHIFT_REGISTER_MISMATCH"));
 
@@ -448,8 +460,7 @@ class PosCheckoutUseCaseTest {
 
         assertThatThrownBy(() -> useCase.checkout(
                 new CheckoutRequest(ORDER_ID, CASH_REGISTER_ID, SHIFT_ID,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN))),
-                USER_ID))
+                        List.of(new CheckoutRequest.PaymentLine("CASH", BigDecimal.TEN)))))
                 .isInstanceOfSatisfying(BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo("POS_SHIFT_MISMATCH"));
 

@@ -5,6 +5,7 @@ import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.InvalidUploadException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.exception.StorageException;
+import co.posinvent.infrastructure.adapters.out.security.PosUserDetails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -22,6 +25,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String ROLE_PREFIX = "ROLE_";
 
     @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleAuthError(Exception ex) {
@@ -31,8 +35,25 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleForbidden(AccessDeniedException ex) {
+        logForbidden(ex);
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("FORBIDDEN", "No tiene permisos para realizar esta acción"));
+    }
+
+    private void logForbidden(AccessDeniedException ex) {
+        String actorId = "anonimo";
+        Object roles = "[]";
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof PosUserDetails user) {
+            actorId = String.valueOf(user.userId());
+            roles = user.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .filter(authority -> authority != null && authority.startsWith(ROLE_PREFIX))
+                    .map(authority -> authority.substring(ROLE_PREFIX.length()))
+                    .toList();
+        }
+        logger.warn("[Acceso Denegado] Actor: {} | Rol: {} | Mensaje: {}",
+                actorId, roles, ex.getMessage());
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -60,7 +61,7 @@ class RegisterCashCountUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        actor = new CurrentActorProvider.CurrentActor(USER_ID, "CAJERO");
+        actor = new CurrentActorProvider.CurrentActor(USER_ID, Set.of("CAJERO"));
         lenient().when(actorProvider.current()).thenReturn(actor);
         useCase = new RegisterCashCountUseCase(
                 shiftRepository, documentRepo, cashCountRepository, actorProvider, accessGuard);

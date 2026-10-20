@@ -60,8 +60,7 @@ class AccountingDecouplingIntegrationTest extends AbstractIntegrationTest {
 
         assertThatCode(() -> checkoutUseCase.checkout(
                 new CheckoutRequest(ids[1], null, shiftId,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID))
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL)))))
                 .doesNotThrowAnyException();
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
@@ -93,8 +92,7 @@ class AccountingDecouplingIntegrationTest extends AbstractIntegrationTest {
 
         checkoutUseCase.checkout(
                 new CheckoutRequest(orderId, null, shiftId,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = findInvoiceByOrder(orderId);

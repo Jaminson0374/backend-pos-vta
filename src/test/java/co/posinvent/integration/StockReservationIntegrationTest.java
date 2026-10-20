@@ -101,7 +101,7 @@ class StockReservationIntegrationTest extends AbstractIntegrationTest {
                 orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", SALE_PRICE.multiply(ORDER_QUANTITY))));
 
-        checkoutUseCase.checkout(request, TEST_USER_ID);
+        checkoutUseCase.checkout(request);
 
         var stock = stockRepo.findByProductBatchWarehouse(productId, batchId, warehouseId).orElseThrow();
         assertThat(stock.currentQuantity())

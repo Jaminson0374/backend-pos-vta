@@ -93,7 +93,7 @@ class SalePaymentPersistenceIntegrationTest extends AbstractIntegrationTest {
                         new CheckoutRequest.PaymentLine("CASH", new BigDecimal("600.00")),
                         new CheckoutRequest.PaymentLine("CARD", new BigDecimal("400.00"))));
 
-        var result = checkoutUseCase.checkout(request, TEST_USER_ID);
+        var result = checkoutUseCase.checkout(request);
 
         var payments = salePaymentRepo.findBySalesDocumentId(result.invoiceId());
 

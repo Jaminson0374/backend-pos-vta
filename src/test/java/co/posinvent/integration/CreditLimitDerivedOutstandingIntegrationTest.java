@@ -131,8 +131,7 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
     private UUID checkoutDraftInvoice(UUID orderId) {
         checkoutUseCase.checkout(
                 new CheckoutRequest(orderId, null, shiftId,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", INVOICE_TOTAL))),
-                TEST_USER_ID);
+                        List.of(new CheckoutRequest.PaymentLine("CASH", INVOICE_TOTAL))));
 
         return new TransactionTemplate(transactionManager).execute(status -> em.createQuery(
                         "select d.id from SalesDocumentEntity d "

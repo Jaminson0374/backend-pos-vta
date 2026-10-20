@@ -143,8 +143,7 @@ class DevolutionReceivableInvariantIntegrationTest extends AbstractIntegrationTe
     private InvoiceFixture checkoutAndIssueCreditInvoice() {
         checkoutUseCase.checkout(
                 new CheckoutRequest(orderId, null, shiftId,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         return new TransactionTemplate(transactionManager).execute(status -> {
             var invoice = em.createQuery(

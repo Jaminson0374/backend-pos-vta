@@ -107,7 +107,7 @@ class DiscountTotalsIntegrationTest extends AbstractIntegrationTest {
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("25000.00"))),
                 "PCT", new BigDecimal("10"), "Descuento de prueba", null);
 
-        checkoutUseCase.checkout(request, TEST_USER_ID);
+        checkoutUseCase.checkout(request);
 
         var invoice = loadInvoice();
 

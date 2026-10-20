@@ -24,9 +24,11 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -88,6 +90,84 @@ class ShiftOwnershipUseCaseTest {
     }
 
     @Test
+    void adminCannotAssignMissingUser() {
+        actAs(ADMIN_ID, "ADMIN");
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> createShiftUseCase().execute(
+                new ShiftRequest(CASH_REGISTER_ID, OWNER_ID, BigDecimal.ZERO)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no existe");
+
+        verify(shiftRepository, never()).save(any(Shift.class));
+    }
+
+    @Test
+    void adminCannotAssignInactiveUser() {
+        actAs(ADMIN_ID, "ADMIN");
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(cashier(OWNER_ID, false)));
+
+        assertThatThrownBy(() -> createShiftUseCase().execute(
+                new ShiftRequest(CASH_REGISTER_ID, OWNER_ID, BigDecimal.ZERO)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("inactivo");
+
+        verify(shiftRepository, never()).save(any(Shift.class));
+    }
+
+    @Test
+    void adminCannotAssignUserWithoutCashierRole() {
+        actAs(ADMIN_ID, "ADMIN");
+        when(userRepository.findById(OWNER_ID))
+                .thenReturn(Optional.of(user(OWNER_ID, "ADMIN", true)));
+
+        assertThatThrownBy(() -> createShiftUseCase().execute(
+                new ShiftRequest(CASH_REGISTER_ID, OWNER_ID, BigDecimal.ZERO)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("CAJERO");
+
+        verify(shiftRepository, never()).save(any(Shift.class));
+    }
+
+    @Test
+    void multiRoleAdminCanAssignAnotherCashier() {
+        actAs(ADMIN_ID, "CAJERO", "ADMIN");
+        when(shiftRepository.findByCashRegisterIdAndStatus(CASH_REGISTER_ID, ShiftStatus.OPEN))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(cashier(OWNER_ID, true)));
+        when(shiftRepository.save(any(Shift.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = createShiftUseCase().execute(
+                new ShiftRequest(CASH_REGISTER_ID, OWNER_ID, BigDecimal.ZERO));
+
+        assertThat(response.assignedTo()).isEqualTo(OWNER_ID);
+    }
+
+    @Test
+    void contadorCanReadAForeignShift() {
+        var actor = new CurrentActorProvider.CurrentActor(OTHER_CASHIER_ID, Set.of("CONTADOR"));
+
+        assertThatCode(() -> accessGuard.requireRead(shift(OPENER_ID, OWNER_ID), actor))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void foreignCashierCannotReadTheShift() {
+        var actor = new CurrentActorProvider.CurrentActor(OTHER_CASHIER_ID, Set.of("CAJERO"));
+
+        assertThatThrownBy(() -> accessGuard.requireRead(shift(OPENER_ID, OWNER_ID), actor))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void ownerCanReadTheShift() {
+        var actor = new CurrentActorProvider.CurrentActor(OWNER_ID, Set.of("CAJERO"));
+
+        assertThatCode(() -> accessGuard.requireRead(shift(OPENER_ID, OWNER_ID), actor))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     void effectiveOwnerClosesShiftAndClosedByIsRecorded() {
         actAs(OWNER_ID, "CAJERO");
         var shift = shift(OPENER_ID, OWNER_ID);
@@ -140,6 +220,17 @@ class ShiftOwnershipUseCaseTest {
     }
 
     @Test
+    void cashCountHistoryIsDeniedForAForeignCashier() {
+        actAs(OTHER_CASHIER_ID, "CAJERO");
+        when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(shift(OPENER_ID, OWNER_ID)));
+
+        assertThatThrownBy(() -> registerCashCountUseCase().history(SHIFT_ID))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(cashCountRepository);
+    }
+
+    @Test
     void cashCountRecordsTheEffectiveOwnerAsCreator() {
         actAs(OWNER_ID, "CAJERO");
         when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(shift(OPENER_ID, OWNER_ID)));
@@ -176,9 +267,9 @@ class ShiftOwnershipUseCaseTest {
                 shiftRepository, documentRepo, cashCountRepository, actorProvider, accessGuard);
     }
 
-    private void actAs(UUID userId, String role) {
+    private void actAs(UUID userId, String... roles) {
         lenient().when(actorProvider.current())
-                .thenReturn(new CurrentActorProvider.CurrentActor(userId, role));
+                .thenReturn(new CurrentActorProvider.CurrentActor(userId, Set.of(roles)));
     }
 
     private void expectNoDocuments() {
@@ -194,9 +285,13 @@ class ShiftOwnershipUseCaseTest {
     }
 
     private static User cashier(UUID id, boolean active) {
+        return user(id, "CAJERO", active);
+    }
+
+    private static User user(UUID id, String roleName, boolean active) {
         return new User(
                 id, "cashier", "Cashier", "cashier@example.com",
-                new Role(UUID.randomUUID(), "CAJERO", null), active,
+                new Role(UUID.randomUUID(), roleName, null), active,
                 null, null, null, null);
     }
 

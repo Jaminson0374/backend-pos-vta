@@ -97,7 +97,7 @@ class IvaTotalsRegressionIntegrationTest extends AbstractIntegrationTest {
         var request = new CheckoutRequest(orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", new BigDecimal("25000.00"))));
 
-        checkoutUseCase.checkout(request, TEST_USER_ID);
+        checkoutUseCase.checkout(request);
 
         var tx = new TransactionTemplate(transactionManager);
         var invoice = tx.execute(s -> em.createQuery(

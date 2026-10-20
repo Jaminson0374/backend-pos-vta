@@ -109,8 +109,7 @@ class AccountingPeriodIntegrationTest extends AbstractIntegrationTest {
 
         checkoutUseCase.checkout(
                 new CheckoutRequest(orderId, null, shiftId,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = findInvoiceByOrder(orderId);
@@ -139,8 +138,7 @@ class AccountingPeriodIntegrationTest extends AbstractIntegrationTest {
     void openPeriodPostsEntryDatedWithDocumentAndAuthoredByTheUser() {
         checkoutUseCase.checkout(
                 new CheckoutRequest(orderId, null, shiftId,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = findInvoiceByOrder(orderId);

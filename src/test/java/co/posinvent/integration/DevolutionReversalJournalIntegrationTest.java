@@ -97,8 +97,7 @@ class DevolutionReversalJournalIntegrationTest extends AbstractIntegrationTest {
         //    debit COGS 6,000 / credit inventory 6,000).
         checkoutUseCase.checkout(
                 new CheckoutRequest(orderId, null, shiftId,
-                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))),
-                TEST_USER_ID);
+                        List.of(new CheckoutRequest.PaymentLine("CASH", SALE_TOTAL))));
 
         UUID invoiceId = new TransactionTemplate(transactionManager).execute(status -> em.createQuery(
                         "select d from SalesDocumentEntity d "

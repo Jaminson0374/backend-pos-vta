@@ -41,10 +41,11 @@ public class CreateShiftUseCase {
 
         if (assignedTo != null && !assignedTo.equals(actor.userId())) {
             if (!actor.isAdmin()) {
+                SecurityAuditLogger.denied(actor, "ASSIGN_SHIFT", "usuario:" + assignedTo);
                 throw new AccessDeniedException(
                         "Solo un administrador puede asignar el turno a otro usuario.");
             }
-            validateAssignableUser(assignedTo);
+            validateAssignableUser(assignedTo, actor);
         }
 
         // Validate: no existing OPEN shift for same cash register
@@ -74,16 +75,21 @@ public class CreateShiftUseCase {
         return ShiftResponse.from(shift);
     }
 
-    private void validateAssignableUser(UUID assignedTo) {
-        User target = userRepository.findById(assignedTo)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "El usuario asignado no existe."));
+    private void validateAssignableUser(UUID assignedTo, CurrentActorProvider.CurrentActor actor) {
+        String object = "usuario:" + assignedTo;
+        User target = userRepository.findById(assignedTo).orElse(null);
+        if (target == null) {
+            SecurityAuditLogger.denied(actor, "ASSIGN_SHIFT", object);
+            throw new IllegalArgumentException("El usuario asignado no existe.");
+        }
 
         if (!target.isActive()) {
+            SecurityAuditLogger.denied(actor, "ASSIGN_SHIFT", object);
             throw new IllegalArgumentException("El usuario asignado está inactivo.");
         }
 
         if (target.role() == null || !ROLE_CASHIER.equalsIgnoreCase(target.role().name())) {
+            SecurityAuditLogger.denied(actor, "ASSIGN_SHIFT", object);
             throw new IllegalArgumentException("El usuario asignado debe tener rol CAJERO.");
         }
     }

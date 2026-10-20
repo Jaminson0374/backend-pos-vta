@@ -56,11 +56,10 @@ public class PosController {
     @PostMapping("/checkout")
     @PreAuthorize("hasAnyRole('ADMIN','CAJERO')")
     public ResponseEntity<CheckoutResponse> checkout(
-            @Valid @RequestBody CheckoutRequest request,
-            @AuthenticationPrincipal PosUserDetails principal
+            @Valid @RequestBody CheckoutRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(checkoutUseCase.checkout(request, principal.userId()));
+                .body(checkoutUseCase.checkout(request));
     }
 
     /**

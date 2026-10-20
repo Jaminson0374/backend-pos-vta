@@ -32,27 +32,71 @@ class CurrentActorProviderTest {
     }
 
     @Test
-    void resolvesUserIdAndRoleFromPosUserDetails() {
+    void resolvesUserIdAndSingleRoleFromPosUserDetails() {
         authenticate(USER_ID, List.of(new SimpleGrantedAuthority("ROLE_CAJERO")));
 
         var actor = provider.current();
 
         assertThat(actor.userId()).isEqualTo(USER_ID);
-        assertThat(actor.role()).isEqualTo("CAJERO");
+        assertThat(actor.roles()).containsExactly("CAJERO");
+        assertThat(actor.hasRole("CAJERO")).isTrue();
         assertThat(actor.isAdmin()).isFalse();
         assertThat(actor.isContador()).isFalse();
+        assertThat(actor.primaryRoleForDiscountPolicy()).isEqualTo("CAJERO");
     }
 
     @Test
-    void extractsRoleIgnoringNonRoleAuthorities() {
+    void ignoresNonRoleAuthorities() {
         authenticate(USER_ID, List.of(
                 new SimpleGrantedAuthority("PERM_SOMETHING"),
                 new SimpleGrantedAuthority("ROLE_ADMIN")));
 
         var actor = provider.current();
 
-        assertThat(actor.role()).isEqualTo("ADMIN");
+        assertThat(actor.roles()).containsExactly("ADMIN");
         assertThat(actor.isAdmin()).isTrue();
+    }
+
+    @Test
+    void collectsEveryRoleRegardlessOfAuthorityOrder() {
+        authenticate(USER_ID, List.of(
+                new SimpleGrantedAuthority("ROLE_CAJERO"),
+                new SimpleGrantedAuthority("ROLE_ADMIN")));
+
+        var cajeroFirst = provider.current();
+
+        authenticate(USER_ID, List.of(
+                new SimpleGrantedAuthority("ROLE_ADMIN"),
+                new SimpleGrantedAuthority("ROLE_CAJERO")));
+
+        var adminFirst = provider.current();
+
+        assertThat(cajeroFirst.isAdmin()).isTrue();
+        assertThat(adminFirst.isAdmin()).isTrue();
+        assertThat(cajeroFirst.roles()).containsExactlyInAnyOrder("CAJERO", "ADMIN");
+        assertThat(adminFirst.roles()).containsExactlyInAnyOrder("CAJERO", "ADMIN");
+        assertThat(cajeroFirst.primaryRoleForDiscountPolicy()).isEqualTo("ADMIN");
+        assertThat(adminFirst.primaryRoleForDiscountPolicy()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void answersHasAnyRole() {
+        authenticate(USER_ID, List.of(new SimpleGrantedAuthority("ROLE_CONTADOR")));
+
+        var actor = provider.current();
+
+        assertThat(actor.hasAnyRole("ADMIN", "CONTADOR")).isTrue();
+        assertThat(actor.hasAnyRole("ADMIN", "CAJERO")).isFalse();
+    }
+
+    @Test
+    void normalizesRolesToUppercase() {
+        authenticate(USER_ID, List.of(new SimpleGrantedAuthority("ROLE_cajero")));
+
+        var actor = provider.current();
+
+        assertThat(actor.roles()).containsExactly("CAJERO");
+        assertThat(actor.hasRole("cajero")).isTrue();
     }
 
     @Test

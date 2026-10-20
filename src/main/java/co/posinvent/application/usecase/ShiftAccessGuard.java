@@ -15,9 +15,8 @@ import org.springframework.stereotype.Component;
 public class ShiftAccessGuard {
 
     public void requireOperate(Shift shift, CurrentActorProvider.CurrentActor actor) {
-        boolean owner = shift.effectiveOwnerId() != null
-                && shift.effectiveOwnerId().equals(actor.userId());
-        if (!actor.isAdmin() && !owner) {
+        if (!isOwner(shift, actor) && !actor.isAdmin()) {
+            SecurityAuditLogger.denied(actor, "OPERATE", shift.id());
             throw new AccessDeniedException("No tiene permisos para operar este turno.");
         }
     }
@@ -26,6 +25,14 @@ public class ShiftAccessGuard {
         if (actor.isAdmin() || actor.isContador()) {
             return;
         }
-        requireOperate(shift, actor);
+        if (!isOwner(shift, actor)) {
+            SecurityAuditLogger.denied(actor, "READ", shift.id());
+            throw new AccessDeniedException("No tiene permisos para operar este turno.");
+        }
+    }
+
+    private static boolean isOwner(Shift shift, CurrentActorProvider.CurrentActor actor) {
+        return shift.effectiveOwnerId() != null
+                && shift.effectiveOwnerId().equals(actor.userId());
     }
 }

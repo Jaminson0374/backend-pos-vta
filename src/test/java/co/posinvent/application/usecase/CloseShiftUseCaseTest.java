@@ -19,6 +19,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -58,7 +59,7 @@ class CloseShiftUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        actor = new CurrentActorProvider.CurrentActor(USER_ID, "CAJERO");
+        actor = new CurrentActorProvider.CurrentActor(USER_ID, Set.of("CAJERO"));
         lenient().when(actorProvider.current()).thenReturn(actor);
         useCase = new CloseShiftUseCase(
                 shiftRepository, documentRepo, eventPublisher, actorProvider, accessGuard);
