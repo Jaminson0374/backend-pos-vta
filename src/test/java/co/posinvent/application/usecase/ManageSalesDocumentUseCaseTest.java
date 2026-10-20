@@ -5,22 +5,26 @@ import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.*;
 import co.posinvent.domain.service.FefoPicker;
+import co.posinvent.infrastructure.adapters.out.security.CurrentActorProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -66,6 +70,26 @@ class ManageSalesDocumentUseCaseTest {
                 fefoPicker, recordMovement,
                 new DiscountEngineService(productRepo, companyConfigRepo),
                 actorProvider, accessGuard);
+
+        lenient().when(actorProvider.current()).thenReturn(
+                new CurrentActorProvider.CurrentActor(USER_ID, Set.of("CAJERO")));
+    }
+
+    @Test
+    void deniedOperatePropagatesAndWritesNoStockOrDocument() {
+        var item = item(new BigDecimal("5"), BATCH_ID);
+        when(documentRepo.findById(DOC_ID))
+                .thenReturn(Optional.of(order(SalesDocumentStatus.DRAFT, List.of(item))));
+        doThrow(new AccessDeniedException("No tiene permisos para operar este documento."))
+                .when(accessGuard).requireOperate(any(), any(), eq("TRANSITION_SALES_DOCUMENT"));
+
+        assertThatThrownBy(() -> useCase.transitionDocument(DOC_ID, SalesDocumentStatus.CONFIRMED))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("No tiene permisos para operar");
+
+        verify(accessGuard).requireOperate(any(), any(), eq("TRANSITION_SALES_DOCUMENT"));
+        verifyNoInteractions(stockRepo);
+        verify(documentRepo, never()).save(any(SalesDocument.class));
     }
 
     @Test

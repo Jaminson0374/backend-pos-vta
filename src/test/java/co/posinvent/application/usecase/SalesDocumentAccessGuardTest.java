@@ -35,8 +35,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Object-level read rules for sales documents: ADMIN and CONTADOR read everything, a CAJERO
- * reads only documents they created or that belong to a shift they effectively own.
+ * Object-level authorization rules for sales documents: ADMIN and CONTADOR read everything; a
+ * CAJERO reads only documents they created or whose shift they effectively own. Operation is
+ * narrower: ADMIN, creator or effective shift owner, and CONTADOR gets no blanket permission.
  * Every denial must leave one structured audit WARN.
  */
 @ExtendWith(MockitoExtension.class)
@@ -130,7 +131,7 @@ class SalesDocumentAccessGuardTest {
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("No tiene permisos");
 
-        assertDeniedAuditContains("READ_SALES_DOCUMENT");
+        assertDeniedAuditContains("CAJERO", "READ_SALES_DOCUMENT");
     }
 
     @Test
@@ -140,7 +141,7 @@ class SalesDocumentAccessGuardTest {
         assertThatThrownBy(() -> guard.requireRead(actor("CAJERO"), document(FOREIGN_ID, SHIFT_ID), "READ_SALES_DOCUMENT"))
                 .isInstanceOf(AccessDeniedException.class);
 
-        assertDeniedAuditContains("READ_SALES_DOCUMENT");
+        assertDeniedAuditContains("CAJERO", "READ_SALES_DOCUMENT");
     }
 
     @Test
@@ -151,7 +152,7 @@ class SalesDocumentAccessGuardTest {
         assertThatThrownBy(() -> guard.requireRead(actor("CAJERO"), document(FOREIGN_ID, SHIFT_ID), "READ_SALES_DOCUMENT"))
                 .isInstanceOf(AccessDeniedException.class);
 
-        assertDeniedAuditContains("READ_SALES_DOCUMENT");
+        assertDeniedAuditContains("CAJERO", "READ_SALES_DOCUMENT");
     }
 
     @Test
@@ -164,13 +165,99 @@ class SalesDocumentAccessGuardTest {
         assertThat(appender.list).isEmpty();
     }
 
-    private void assertDeniedAuditContains(String operation) {
+    // ── requireOperate ────────────────────────────────────────────────────
+
+    @Test
+    void adminCanOperateForeignDocumentsEvenWithoutAShift() {
+        assertThatCode(() -> guard.requireOperate(
+                actor("ADMIN"), document(FOREIGN_ID, null), "TRANSITION_SALES_DOCUMENT"))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(shiftRepository);
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void creatorCanOperateWithoutLoadingTheShift() {
+        guard.requireOperate(
+                actor("CAJERO"), document(ACTOR_ID, SHIFT_ID), "TRANSITION_SALES_DOCUMENT");
+
+        verify(shiftRepository, never()).findById(SHIFT_ID);
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void shiftAssigneeCanOperateTheShiftDocuments() {
+        when(shiftRepository.findById(SHIFT_ID))
+                .thenReturn(Optional.of(shift(FOREIGN_ID, ACTOR_ID)));
+
+        assertThatCode(() -> guard.requireOperate(
+                actor("CAJERO"), document(FOREIGN_ID, SHIFT_ID), "TRANSITION_SALES_DOCUMENT"))
+                .doesNotThrowAnyException();
+
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void shiftOpenerCanOperateWhenShiftHasNoAssignee() {
+        when(shiftRepository.findById(SHIFT_ID))
+                .thenReturn(Optional.of(shift(ACTOR_ID, null)));
+
+        assertThatCode(() -> guard.requireOperate(
+                actor("CAJERO"), document(FOREIGN_ID, SHIFT_ID), "TRANSITION_SALES_DOCUMENT"))
+                .doesNotThrowAnyException();
+
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void adminAndContadorCanOperate() {
+        var actor = new CurrentActorProvider.CurrentActor(ACTOR_ID, Set.of("ADMIN", "CONTADOR"));
+
+        assertThatCode(() -> guard.requireOperate(
+                actor, document(FOREIGN_ID, null), "TRANSITION_SALES_DOCUMENT"))
+                .doesNotThrowAnyException();
+
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void contadorIsDeniedOperationEvenWhenCreator() {
+        assertThatThrownBy(() -> guard.requireOperate(
+                actor("CONTADOR"), document(ACTOR_ID, null), "TRANSITION_SALES_DOCUMENT"))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("No tiene permisos para operar");
+
+        assertDeniedAuditContains("CONTADOR", "TRANSITION_SALES_DOCUMENT");
+    }
+
+    @Test
+    void contadorIsDeniedOperationEvenOnForeignDocuments() {
+        assertThatThrownBy(() -> guard.requireOperate(
+                actor("CONTADOR"), document(FOREIGN_ID, null), "TRANSITION_SALES_DOCUMENT"))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("No tiene permisos para operar");
+
+        assertDeniedAuditContains("CONTADOR", "TRANSITION_SALES_DOCUMENT");
+    }
+
+    @Test
+    void foreignCashierIsDeniedOperationAndAudited() {
+        assertThatThrownBy(() -> guard.requireOperate(
+                actor("CAJERO"), document(FOREIGN_ID, null), "TRANSITION_SALES_DOCUMENT"))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("No tiene permisos para operar");
+
+        assertDeniedAuditContains("CAJERO", "TRANSITION_SALES_DOCUMENT");
+    }
+
+    private void assertDeniedAuditContains(String role, String operation) {
         assertThat(appender.list).hasSize(1);
         var message = appender.list.get(0).getFormattedMessage();
         assertThat(message)
                 .startsWith("[Acceso Denegado]")
                 .contains(ACTOR_ID.toString())
-                .contains("CAJERO")
+                .contains(role)
                 .contains(operation)
                 .contains("SalesDocument")
                 .contains(DOC_ID.toString());
