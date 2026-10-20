@@ -28,17 +28,11 @@ class UserWarehouseRepositoryAdapter implements UserWarehouseRepository {
 
     @Override
     public void assign(UUID userId, UUID warehouseId) {
-        var id = new UserWarehouseId(userId, warehouseId);
-        if (!jpa.existsById(id)) {
-            jpa.save(new UserWarehouseEntity(id));
-        }
+        jpa.assignIfAbsent(userId, warehouseId);
     }
 
     @Override
     public void remove(UUID userId, UUID warehouseId) {
-        var id = new UserWarehouseId(userId, warehouseId);
-        if (jpa.existsById(id)) {
-            jpa.deleteById(id);
-        }
+        jpa.deleteIfPresent(userId, warehouseId);
     }
 }

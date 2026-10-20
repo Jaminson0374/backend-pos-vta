@@ -3,6 +3,7 @@ package co.posinvent.infrastructure.adapters.in.rest;
 import co.posinvent.application.dto.AssignWarehouseRequest;
 import co.posinvent.application.dto.UserWarehouseResponse;
 import co.posinvent.application.usecase.ManageUserWarehousesUseCase;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class UserWarehouseController {
     @ResponseStatus(HttpStatus.CREATED)
     public UserWarehouseResponse assign(
             @PathVariable UUID userId,
-            @RequestBody AssignWarehouseRequest request
+            @Valid @RequestBody AssignWarehouseRequest request
     ) {
         return useCase.assign(userId, request.warehouseId());
     }
