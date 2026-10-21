@@ -194,6 +194,25 @@ class ManageSalesDocumentUseCaseTest {
     }
 
     @Test
+    void legacyDraftPosInvoiceIssuesWithoutDecrementingStockAgain() {
+        var legacyPosInvoice = new SalesDocument(
+                DOC_ID, SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT, "INV-POS-001",
+                CLIENT_ID, WAREHOUSE_ID, null, null, UUID.randomUUID(),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, USER_ID, OffsetDateTime.now(), OffsetDateTime.now(),
+                List.of(item(new BigDecimal("2"), BATCH_ID)), null, false, null);
+        when(documentRepo.findById(DOC_ID)).thenReturn(Optional.of(legacyPosInvoice));
+        when(documentRepo.save(any(SalesDocument.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.transitionDocument(DOC_ID, SalesDocumentStatus.ISSUED);
+
+        var captor = ArgumentCaptor.forClass(SalesDocument.class);
+        verify(documentRepo).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(SalesDocumentStatus.ISSUED);
+        verifyNoInteractions(stockRepo, fefoPicker);
+    }
+
+    @Test
     void secondCreditInvoiceExceedingDerivedOutstandingIsRejected() {
         var first = creditInvoice(DOC_ID, new BigDecimal("400"));
         var second = creditInvoice(DOC_ID, new BigDecimal("400"));
