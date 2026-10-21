@@ -14,6 +14,7 @@ interface ThirdPartyMapper {
     @Mapping(target = "isAutoretenedor",       source = "autoretenedor")
     @Mapping(target = "isAgenteRetencionIva",  source = "agenteRetencionIva")
     @Mapping(target = "isRegimenSimple",       source = "regimenSimple")
+    @Mapping(target = "isConsumerFinal",       source = "consumerFinal")
     @Mapping(target = "employeeData", expression = "java(mapEmployeeDetails(entity.getEmployeeDetails()))")
     ThirdParty toDomain(ThirdPartyEntity entity);
 
@@ -25,6 +26,7 @@ interface ThirdPartyMapper {
     @Mapping(target = "autoretenedor",       source = "isAutoretenedor")
     @Mapping(target = "agenteRetencionIva",  source = "isAgenteRetencionIva")
     @Mapping(target = "regimenSimple",       source = "isRegimenSimple")
+    @Mapping(target = "consumerFinal",       source = "isConsumerFinal")
     @Mapping(target = "employeeDetails", ignore = true)
     ThirdPartyEntity toEntity(ThirdParty domain);
 
@@ -37,6 +39,7 @@ interface ThirdPartyMapper {
     @Mapping(target = "autoretenedor",       source = "isAutoretenedor")
     @Mapping(target = "agenteRetencionIva",  source = "isAgenteRetencionIva")
     @Mapping(target = "regimenSimple",       source = "isRegimenSimple")
+    @Mapping(target = "consumerFinal",       source = "isConsumerFinal")
     @Mapping(target = "employeeDetails", ignore = true)
     void updateEntity(@MappingTarget ThirdPartyEntity entity, ThirdParty domain);
 

@@ -98,6 +98,7 @@ class CompanyConfigUseCaseTest {
                 null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, true,
                 maxDiscountPct == null ? null : new BigDecimal(maxDiscountPct),
-                cashierMaxDiscountPct == null ? null : new BigDecimal(cashierMaxDiscountPct));
+                cashierMaxDiscountPct == null ? null : new BigDecimal(cashierMaxDiscountPct),
+                null, null, null, null, null, null, null, null, null, null);
     }
 }

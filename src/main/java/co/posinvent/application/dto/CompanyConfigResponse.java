@@ -45,7 +45,17 @@ public record CompanyConfigResponse(
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
     java.math.BigDecimal maxDiscountPct,
-    java.math.BigDecimal cashierMaxDiscountPct
+    java.math.BigDecimal cashierMaxDiscountPct,
+    String dianIdentificationTypeCode,
+    String dv,
+    String municipalityCode,
+    String cityName,
+    String departmentCode,
+    String departmentName,
+    String postalCode,
+    String countryCode,
+    String taxLevelCode,
+    Integer dianEnvironment
 ) {
     public static CompanyConfigResponse from(CompanyConfig c) {
         return new CompanyConfigResponse(
@@ -87,7 +97,17 @@ public record CompanyConfigResponse(
             c.createdAt(),
             c.updatedAt(),
             c.maxDiscountPct(),
-            c.cashierMaxDiscountPct()
+            c.cashierMaxDiscountPct(),
+            c.dianIdentificationTypeCode(),
+            c.dv(),
+            c.municipalityCode(),
+            c.cityName(),
+            c.departmentCode(),
+            c.departmentName(),
+            c.postalCode(),
+            c.countryCode(),
+            c.taxLevelCode(),
+            c.dianEnvironment()
         );
     }
 }

@@ -32,7 +32,14 @@ public record SalesDocumentResponse(
         OffsetDateTime updatedAt,
         List<SaleItemResponse> items,
         LocalDate dueDate,
-        Boolean isCreditSale
+        Boolean isCreditSale,
+        String dianCufe,
+        String dianStatus,
+        String dianProviderInvoiceId,
+        String dianPdfUrl,
+        String dianXmlUrl,
+        String dianQrUrl,
+        OffsetDateTime dianSyncedAt
 ) {
     public static SalesDocumentResponse from(SalesDocument doc) {
         return new SalesDocumentResponse(
@@ -58,7 +65,14 @@ public record SalesDocumentResponse(
                         .map(SaleItemResponse::from)
                         .toList(),
                 doc.dueDate(),
-                doc.isCreditSale()
+                doc.isCreditSale(),
+                doc.dianCufe(),
+                doc.dianStatus(),
+                doc.dianProviderInvoiceId(),
+                doc.dianPdfUrl(),
+                doc.dianXmlUrl(),
+                doc.dianQrUrl(),
+                doc.dianSyncedAt()
         );
     }
 }

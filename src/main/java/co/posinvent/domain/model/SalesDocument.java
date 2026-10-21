@@ -36,7 +36,14 @@ public record SalesDocument(
         String documentDiscountType,
         BigDecimal documentDiscountValue,
         UUID discountAuthorizedBy,
-        String discountReason
+        String discountReason,
+        String dianCufe,
+        String dianStatus,
+        String dianProviderInvoiceId,
+        String dianPdfUrl,
+        String dianXmlUrl,
+        String dianQrUrl,
+        OffsetDateTime dianSyncedAt
 ) {
     public static final String DISCOUNT_NONE = "NONE";
 
@@ -47,6 +54,14 @@ public record SalesDocument(
         if (documentDiscount == null) documentDiscount = BigDecimal.ZERO;
         if (documentDiscountType == null || documentDiscountType.isBlank()) documentDiscountType = DISCOUNT_NONE;
         if (documentDiscountValue == null) documentDiscountValue = BigDecimal.ZERO;
+    }
+
+    /**
+     * Deterministic 0/5/19 grouping from the document lines, validated against the
+     * persisted aggregate columns.
+     */
+    public SalesDocumentTaxSummary taxSummary() {
+        return SalesDocumentTaxSummary.verifiedAgainst(this);
     }
 
     /**
@@ -63,7 +78,9 @@ public record SalesDocument(
                 cashRegisterId, sourceDocumentId, totalNet, totalTax0, totalTax5, totalTax19,
                 totalAmount, createdBy, createdAt, updatedAt, items, dueDate, isCreditSale,
                 reason, discountTotal, documentDiscount, documentDiscountType,
-                documentDiscountValue, discountAuthorizedBy, discountReason);
+                documentDiscountValue, discountAuthorizedBy, discountReason,
+                dianCufe, dianStatus, dianProviderInvoiceId, dianPdfUrl, dianXmlUrl,
+                dianQrUrl, dianSyncedAt);
     }
 
     private void validateTransition(SalesDocumentStatus target) {
@@ -152,6 +169,43 @@ public record SalesDocument(
 
     private InvalidStateTransitionException invalidTransition(SalesDocumentStatus target) {
         return new InvalidStateTransitionException(type, status, target);
+    }
+
+    /** Backwards-compatible constructor for documents without discounts or DIAN sync data. */
+    public SalesDocument(
+            UUID id,
+            SalesDocumentType type,
+            SalesDocumentStatus status,
+            String documentNumber,
+            UUID clientId,
+            UUID warehouseId,
+            UUID shiftId,
+            UUID cashRegisterId,
+            UUID sourceDocumentId,
+            BigDecimal totalNet,
+            BigDecimal totalTax0,
+            BigDecimal totalTax5,
+            BigDecimal totalTax19,
+            BigDecimal totalAmount,
+            UUID createdBy,
+            OffsetDateTime createdAt,
+            OffsetDateTime updatedAt,
+            List<SaleItem> items,
+            LocalDate dueDate,
+            Boolean isCreditSale,
+            String reason,
+            BigDecimal discountTotal,
+            BigDecimal documentDiscount,
+            String documentDiscountType,
+            BigDecimal documentDiscountValue,
+            UUID discountAuthorizedBy,
+            String discountReason
+    ) {
+        this(id, type, status, documentNumber, clientId, warehouseId, shiftId, cashRegisterId,
+                sourceDocumentId, totalNet, totalTax0, totalTax5, totalTax19, totalAmount,
+                createdBy, createdAt, updatedAt, items, dueDate, isCreditSale, reason,
+                discountTotal, documentDiscount, documentDiscountType, documentDiscountValue,
+                discountAuthorizedBy, discountReason, null, null, null, null, null, null, null);
     }
 
     /** Backwards-compatible constructor for documents without discounts. */

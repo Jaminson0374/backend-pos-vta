@@ -227,7 +227,8 @@ public class PosCheckoutUseCase {
                     base.quantity(), base.unitPrice(),
                     base.taxType(), base.taxRate(), line.taxAmount(), base.subtotal(),
                     base.lineNumber(), base.batchId(),
-                    base.discountType(), base.discountValue(), line.lineDiscount(), line.promotionId()
+                    base.discountType(), base.discountValue(), line.lineDiscount(), line.promotionId(),
+                    line.finalBase()
             ));
         }
 

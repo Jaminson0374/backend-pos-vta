@@ -44,7 +44,17 @@ public record CompanyConfig(
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
     BigDecimal maxDiscountPct,
-    BigDecimal cashierMaxDiscountPct
+    BigDecimal cashierMaxDiscountPct,
+    String dianIdentificationTypeCode,
+    String dv,
+    String municipalityCode,
+    String cityName,
+    String departmentCode,
+    String departmentName,
+    String postalCode,
+    String countryCode,
+    String taxLevelCode,
+    Integer dianEnvironment
 ) {
 
     public static final BigDecimal DEFAULT_MAX_DISCOUNT_PCT = new BigDecimal("30");
@@ -54,6 +64,66 @@ public record CompanyConfig(
         if (maxDiscountPct == null) maxDiscountPct = DEFAULT_MAX_DISCOUNT_PCT;
         if (cashierMaxDiscountPct == null) cashierMaxDiscountPct = DEFAULT_CASHIER_MAX_DISCOUNT_PCT;
         if (purchaseIcaRate == null) purchaseIcaRate = BigDecimal.ZERO;
+        if (dianIdentificationTypeCode == null || dianIdentificationTypeCode.isBlank()) {
+            dianIdentificationTypeCode = "31";
+        }
+        if (countryCode == null || countryCode.isBlank()) countryCode = "CO";
+    }
+
+    /**
+     * Backwards-compatible constructor with discount ceilings but without D2 fiscal fields.
+     */
+    public CompanyConfig(
+            Long id,
+            String companyName,
+            String nit,
+            String address,
+            String phone,
+            String email,
+            String economicActivity,
+            String personType,
+            String commonName,
+            boolean manejaAiu,
+            List<String> taxResponsibilityCodes,
+            List<String> fiscalResponsibilityCodes,
+            List<String> taxCodes,
+            java.math.BigDecimal icaRate,
+            String currency,
+            UUID mainWarehouseId,
+            String logoUrl,
+            java.math.BigDecimal moratoryInterestRate,
+            Integer interestGraceDays,
+            String interestCompoundFrequency,
+            String costingMethod,
+            String overheadAllocationBase,
+            java.math.BigDecimal overheadRate,
+            java.util.UUID dianResolutionId,
+            String softwarePin,
+            java.util.UUID certificateId,
+            java.util.UUID legalRepresentativeIdentificationTypeId,
+            String legalRepresentativeDocumentNumber,
+            String legalRepresentativeName,
+            String legalRepresentativePosition,
+            String legalRepresentativeAddress,
+            String legalRepresentativeEmail,
+            boolean autoGenerateJournalEntries,
+            java.math.BigDecimal purchaseRetefuenteRate,
+            java.math.BigDecimal purchaseIcaRate,
+            OffsetDateTime createdAt,
+            OffsetDateTime updatedAt,
+            BigDecimal maxDiscountPct,
+            BigDecimal cashierMaxDiscountPct
+    ) {
+        this(id, companyName, nit, address, phone, email, economicActivity, personType, commonName,
+                manejaAiu, taxResponsibilityCodes, fiscalResponsibilityCodes, taxCodes, icaRate,
+                currency, mainWarehouseId, logoUrl, moratoryInterestRate, interestGraceDays,
+                interestCompoundFrequency, costingMethod, overheadAllocationBase, overheadRate,
+                dianResolutionId, softwarePin, certificateId,
+                legalRepresentativeIdentificationTypeId, legalRepresentativeDocumentNumber,
+                legalRepresentativeName, legalRepresentativePosition, legalRepresentativeAddress,
+                legalRepresentativeEmail, autoGenerateJournalEntries, purchaseRetefuenteRate,
+                purchaseIcaRate, createdAt, updatedAt, maxDiscountPct, cashierMaxDiscountPct,
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     /**

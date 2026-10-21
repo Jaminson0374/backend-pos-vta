@@ -126,7 +126,18 @@ public class ThirdPartyUseCase {
                 request.isAgenteRetencionIva(),
                 request.isRegimenSimple(),
                 request.otherTaxResp(),
-                toEmployeeData(request.employeeData())
+                toEmployeeData(request.employeeData()),
+                request.dianIdentificationTypeCode(),
+                request.dianTaxLevelCode(),
+                request.municipalityCode(),
+                request.cityName(),
+                request.departmentCode(),
+                request.departmentName(),
+                request.postalCode(),
+                request.countryCode(),
+                request.registrationName(),
+                request.additionalAccountId(),
+                Boolean.TRUE.equals(request.isConsumerFinal())
         );
 
         return toResponse(thirdPartyRepository.save(thirdParty));
@@ -184,7 +195,18 @@ public class ThirdPartyUseCase {
                 request.isAgenteRetencionIva(),
                 request.isRegimenSimple(),
                 request.otherTaxResp(),
-                toEmployeeData(request.employeeData())
+                toEmployeeData(request.employeeData()),
+                valueOr(request.dianIdentificationTypeCode(), existing.dianIdentificationTypeCode()),
+                valueOr(request.dianTaxLevelCode(), existing.dianTaxLevelCode()),
+                valueOr(request.municipalityCode(), existing.municipalityCode()),
+                valueOr(request.cityName(), existing.cityName()),
+                valueOr(request.departmentCode(), existing.departmentCode()),
+                valueOr(request.departmentName(), existing.departmentName()),
+                valueOr(request.postalCode(), existing.postalCode()),
+                valueOr(request.countryCode(), existing.countryCode()),
+                valueOr(request.registrationName(), existing.registrationName()),
+                valueOr(request.additionalAccountId(), existing.additionalAccountId()),
+                request.isConsumerFinal() != null ? request.isConsumerFinal() : existing.isConsumerFinal()
         );
 
         return toResponse(thirdPartyRepository.save(updated));
@@ -251,5 +273,9 @@ public class ThirdPartyUseCase {
                 r.isForeigner(), r.natResidentExterior(), r.isDeclarant(),
                 r.associatedSeller(), r.requiresEndowment(), r.isSenior()
         );
+    }
+
+    private static <T> T valueOr(T requested, T existing) {
+        return requested != null ? requested : existing;
     }
 }

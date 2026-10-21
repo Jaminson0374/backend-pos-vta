@@ -326,7 +326,7 @@ public class ManageSalesDocumentUseCase {
                 request.taxType(), taxRate, taxAmount, subtotal,
                 nextLine, request.batchId(),
                 request.discountType(), request.discountValue(), lineDiscount,
-                promo == null ? null : promo.id()
+                promo == null ? null : promo.id(), taxableBase
         );
 
         itemRepo.save(item);
@@ -366,7 +366,7 @@ public class ManageSalesDocumentUseCase {
                 request.taxType(), taxRate, taxAmount, subtotal,
                 item.lineNumber(), request.batchId(),
                 request.discountType(), request.discountValue(), lineDiscount,
-                promo == null ? null : promo.id()
+                promo == null ? null : promo.id(), taxableBase
         );
 
         itemRepo.save(updated);
@@ -449,7 +449,7 @@ public class ManageSalesDocumentUseCase {
         var lineDiscountTotal = BigDecimal.ZERO.setScale(2);
 
         for (var item : items) {
-            net = net.add(item.subtotal().subtract(item.discountAmount()));
+            net = net.add(item.netAmount());
             lineDiscountTotal = lineDiscountTotal.add(item.discountAmount());
             var rate = item.taxRate();
             var amount = item.taxAmount();
@@ -478,7 +478,9 @@ public class ManageSalesDocumentUseCase {
                 doc.createdBy(), doc.createdAt(), doc.updatedAt(),
                 doc.items(), doc.dueDate(), doc.isCreditSale(), doc.reason(),
                 discountTotal, documentDiscount, doc.documentDiscountType(),
-                doc.documentDiscountValue(), doc.discountAuthorizedBy(), doc.discountReason()
+                doc.documentDiscountValue(), doc.discountAuthorizedBy(), doc.discountReason(),
+                doc.dianCufe(), doc.dianStatus(), doc.dianProviderInvoiceId(),
+                doc.dianPdfUrl(), doc.dianXmlUrl(), doc.dianQrUrl(), doc.dianSyncedAt()
         );
 
         documentRepo.save(updated);
@@ -516,7 +518,9 @@ public class ManageSalesDocumentUseCase {
                             r.warehouseId(), r.shiftId(), r.cashRegisterId(), r.sourceDocumentId(),
                             r.totalNet(), r.totalTax0(), r.totalTax5(), r.totalTax19(),
                             r.totalAmount(), r.createdBy(), r.createdAt(), r.updatedAt(),
-                            r.items(), r.dueDate(), r.isCreditSale()
+                            r.items(), r.dueDate(), r.isCreditSale(),
+                            r.dianCufe(), r.dianStatus(), r.dianProviderInvoiceId(),
+                            r.dianPdfUrl(), r.dianXmlUrl(), r.dianQrUrl(), r.dianSyncedAt()
                     ))
                     .orElse(r);
         }

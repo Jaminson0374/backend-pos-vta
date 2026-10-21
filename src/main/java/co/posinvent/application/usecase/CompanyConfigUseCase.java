@@ -120,10 +120,25 @@ public class CompanyConfigUseCase {
                 null,
                 null,
                 maxDiscountPct,
-                cashierMaxDiscountPct
+                cashierMaxDiscountPct,
+                valueOr(request.dianIdentificationTypeCode(),
+                        existing == null ? null : existing.dianIdentificationTypeCode()),
+                valueOr(request.dv(), existing == null ? null : existing.dv()),
+                valueOr(request.municipalityCode(), existing == null ? null : existing.municipalityCode()),
+                valueOr(request.cityName(), existing == null ? null : existing.cityName()),
+                valueOr(request.departmentCode(), existing == null ? null : existing.departmentCode()),
+                valueOr(request.departmentName(), existing == null ? null : existing.departmentName()),
+                valueOr(request.postalCode(), existing == null ? null : existing.postalCode()),
+                valueOr(request.countryCode(), existing == null ? null : existing.countryCode()),
+                valueOr(request.taxLevelCode(), existing == null ? null : existing.taxLevelCode()),
+                valueOr(request.dianEnvironment(), existing == null ? null : existing.dianEnvironment())
         );
 
         var saved = repository.save(config);
         return CompanyConfigResponse.from(saved);
+    }
+
+    private static <T> T valueOr(T requested, T existing) {
+        return requested != null ? requested : existing;
     }
 }

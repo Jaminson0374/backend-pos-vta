@@ -7,9 +7,9 @@ import java.util.UUID;
  * A single sales line.
  *
  * <p>{@code subtotal} stays the GROSS amount ({@code quantity × unitPrice}); the
- * taxable base of the line is {@code subtotal − discountAmount}. The line discount
- * (automatic promotion plus manual discount) is applied BEFORE IVA, reducing the
- * taxable base as required by the DIAN.</p>
+ * taxable base of the line is {@code netAmount}, which includes the line discount and, for POS
+ * sales, the prorated share of the document-level discount. The line discount is applied
+ * BEFORE IVA, reducing the taxable base as required by the DIAN.</p>
  */
 public record SaleItem(
         UUID id,
@@ -26,7 +26,8 @@ public record SaleItem(
         String discountType,
         BigDecimal discountValue,
         BigDecimal discountAmount,
-        UUID promotionId
+        UUID promotionId,
+        BigDecimal netAmount
 ) {
 
     public static final String DISCOUNT_NONE = "NONE";
@@ -37,6 +38,9 @@ public record SaleItem(
         if (discountType == null || discountType.isBlank()) discountType = DISCOUNT_NONE;
         if (discountValue == null) discountValue = BigDecimal.ZERO;
         if (discountAmount == null) discountAmount = BigDecimal.ZERO;
+        if (netAmount == null) {
+            netAmount = subtotal.subtract(discountAmount);
+        }
     }
 
     /** Backwards-compatible constructor for lines without discounts. */
@@ -54,11 +58,38 @@ public record SaleItem(
             UUID batchId
     ) {
         this(id, documentId, productId, quantity, unitPrice, taxType, taxRate, taxAmount, subtotal,
-                lineNumber, batchId, DISCOUNT_NONE, BigDecimal.ZERO, BigDecimal.ZERO, null);
+                lineNumber, batchId, DISCOUNT_NONE, BigDecimal.ZERO, BigDecimal.ZERO, null, null);
     }
 
-    /** Taxable base of the line: gross subtotal minus the line-level discount (never negative). */
+    /** Backwards-compatible constructor for lines with discounts but without an explicit net base. */
+    public SaleItem(
+            UUID id,
+            UUID documentId,
+            UUID productId,
+            BigDecimal quantity,
+            BigDecimal unitPrice,
+            String taxType,
+            BigDecimal taxRate,
+            BigDecimal taxAmount,
+            BigDecimal subtotal,
+            int lineNumber,
+            UUID batchId,
+            String discountType,
+            BigDecimal discountValue,
+            BigDecimal discountAmount,
+            UUID promotionId
+    ) {
+        this(id, documentId, productId, quantity, unitPrice, taxType, taxRate, taxAmount, subtotal,
+                lineNumber, batchId, discountType, discountValue, discountAmount, promotionId, null);
+    }
+
+    /** Taxable base of the line: net after line and (when applicable) document discount. */
     public BigDecimal taxableBase() {
-        return subtotal.subtract(discountAmount).max(BigDecimal.ZERO);
+        return netAmount;
+    }
+
+    /** Explicit DIAN-facing tax percentage for this line. */
+    public BigDecimal taxPercentage() {
+        return taxRate;
     }
 }

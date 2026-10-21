@@ -53,5 +53,17 @@ public record ThirdPartyRequest(
         boolean isRegimenSimple,
         boolean otherTaxResp,
 
-        EmployeeBasicDataRequest employeeData
+        EmployeeBasicDataRequest employeeData,
+
+        @Size(max = 2) String dianIdentificationTypeCode,
+        @Size(max = 30) String dianTaxLevelCode,
+        @Size(max = 5) String municipalityCode,
+        @Size(max = 60) String cityName,
+        @Size(max = 2) String departmentCode,
+        @Size(max = 60) String departmentName,
+        @Size(max = 10) String postalCode,
+        @Size(max = 2) String countryCode,
+        @Size(max = 450) String registrationName,
+        @Size(max = 1) String additionalAccountId,
+        Boolean isConsumerFinal
 ) {}

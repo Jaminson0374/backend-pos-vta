@@ -32,11 +32,6 @@ import java.util.UUID;
 @Service
 public class ElectronicInvoicePayloadService {
 
-    /** Tax rate keys used by the sales document totals, kept in deterministic order. */
-    private static final String TAX_RATE_0 = "0";
-    private static final String TAX_RATE_5 = "5";
-    private static final String TAX_RATE_19 = "19";
-
     /** DIAN fiscal responsibility code for "Regimen Simple de Tributacion". */
     private static final String SIMPLE_REGIME_FISCAL_CODE = "O-47";
     private static final String SIMPLE_REGIME = "SIMPLE";
@@ -144,9 +139,11 @@ public class ElectronicInvoicePayloadService {
         if (document == null) {
             return totals;
         }
-        putIfApplicable(totals, TAX_RATE_0, document.totalTax0());
-        putIfApplicable(totals, TAX_RATE_5, document.totalTax5());
-        putIfApplicable(totals, TAX_RATE_19, document.totalTax19());
+        var summary = document.taxSummary();
+        for (var subtotal : summary.subtotals()) {
+            var rate = subtotal.rate().stripTrailingZeros().toPlainString();
+            putIfApplicable(totals, rate, subtotal.taxAmount());
+        }
         return totals;
     }
 

@@ -1,6 +1,8 @@
 package co.posinvent.application.dto;
 
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -43,5 +45,15 @@ public record CompanyConfigRequest(
     java.math.BigDecimal purchaseIcaRate,
     Boolean autoGenerateJournalEntries,
     java.math.BigDecimal maxDiscountPct,
-    java.math.BigDecimal cashierMaxDiscountPct
+    java.math.BigDecimal cashierMaxDiscountPct,
+    @Size(max = 2) String dianIdentificationTypeCode,
+    @Size(max = 2) String dv,
+    @Size(max = 5) String municipalityCode,
+    @Size(max = 60) String cityName,
+    @Size(max = 2) String departmentCode,
+    @Size(max = 60) String departmentName,
+    @Size(max = 10) String postalCode,
+    @Size(max = 2) String countryCode,
+    @Size(max = 30) String taxLevelCode,
+    @Min(1) @Max(2) Integer dianEnvironment
 ) {}

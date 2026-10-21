@@ -60,7 +60,18 @@ public record ThirdPartyResponse(
         boolean isAgenteRetencionIva,
         boolean isRegimenSimple,
         boolean otherTaxResp,
-        EmployeeBasicData employeeData
+        EmployeeBasicData employeeData,
+        String dianIdentificationTypeCode,
+        String dianTaxLevelCode,
+        String municipalityCode,
+        String cityName,
+        String departmentCode,
+        String departmentName,
+        String postalCode,
+        String countryCode,
+        String registrationName,
+        String additionalAccountId,
+        boolean isConsumerFinal
 ) {
     public static ThirdPartyResponse from(ThirdParty t, BigDecimal outstanding) {
         return new ThirdPartyResponse(
@@ -74,7 +85,11 @@ public record ThirdPartyResponse(
                 t.contactName(), t.contactPhone(), t.contactAddress(), t.contactEmail(),
                 t.taxContactFirstName(), t.taxContactLastName(), t.taxEmail(), t.billingPhone(),
                 t.isGranContribuyente(), t.isAutoretenedor(), t.isAgenteRetencionIva(),
-                t.isRegimenSimple(), t.otherTaxResp(), t.employeeData()
+                t.isRegimenSimple(), t.otherTaxResp(), t.employeeData(),
+                t.dianIdentificationTypeCode(), t.dianTaxLevelCode(), t.municipalityCode(),
+                t.cityName(), t.departmentCode(), t.departmentName(), t.postalCode(),
+                t.countryCode(), t.registrationName(), t.additionalAccountId(),
+                t.isConsumerFinal()
         );
     }
 }

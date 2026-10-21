@@ -113,6 +113,27 @@ public class SalesDocumentEntity {
     @Column(name = "discount_reason", length = 255)
     private String discountReason;
 
+    @Column(name = "dian_cufe", length = 200)
+    private String dianCufe;
+
+    @Column(name = "dian_status", length = 30)
+    private String dianStatus;
+
+    @Column(name = "dian_provider_invoice_id", length = 100)
+    private String dianProviderInvoiceId;
+
+    @Column(name = "dian_pdf_url", columnDefinition = "TEXT")
+    private String dianPdfUrl;
+
+    @Column(name = "dian_xml_url", columnDefinition = "TEXT")
+    private String dianXmlUrl;
+
+    @Column(name = "dian_qr_url", columnDefinition = "TEXT")
+    private String dianQrUrl;
+
+    @Column(name = "dian_synced_at")
+    private OffsetDateTime dianSyncedAt;
+
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("lineNumber ASC")
     private List<SaleItemEntity> items = new ArrayList<>();

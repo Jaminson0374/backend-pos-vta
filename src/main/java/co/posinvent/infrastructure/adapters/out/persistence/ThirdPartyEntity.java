@@ -155,6 +155,39 @@ public class ThirdPartyEntity {
     @Column(name = "other_tax_resp", nullable = false)
     private boolean otherTaxResp;
 
+    @Column(name = "dian_identification_type_code", length = 2)
+    private String dianIdentificationTypeCode;
+
+    @Column(name = "dian_tax_level_code", length = 30)
+    private String dianTaxLevelCode;
+
+    @Column(name = "municipality_code", length = 5)
+    private String municipalityCode;
+
+    @Column(name = "city_name", length = 60)
+    private String cityName;
+
+    @Column(name = "department_code", length = 2)
+    private String departmentCode;
+
+    @Column(name = "department_name", length = 60)
+    private String departmentName;
+
+    @Column(name = "postal_code", length = 10)
+    private String postalCode;
+
+    @Column(name = "country_code", nullable = false, length = 2)
+    private String countryCode = "CO";
+
+    @Column(name = "registration_name", length = 450)
+    private String registrationName;
+
+    @Column(name = "additional_account_id", length = 1)
+    private String additionalAccountId;
+
+    @Column(name = "is_consumer_final", nullable = false)
+    private boolean isConsumerFinal;
+
     @OneToOne(mappedBy = "thirdParty", fetch = FetchType.LAZY, optional = true)
     private EmployeeDetailsEntity employeeDetails;
 

@@ -148,4 +148,34 @@ public class CompanyConfigEntity {
 
     @Column(name = "cashier_max_discount_pct", nullable = false, precision = 5, scale = 2)
     private java.math.BigDecimal cashierMaxDiscountPct = new java.math.BigDecimal("5");
+
+    @Column(name = "dian_identification_type_code", nullable = false, length = 2)
+    private String dianIdentificationTypeCode = "31";
+
+    @Column(length = 2)
+    private String dv;
+
+    @Column(name = "municipality_code", length = 5)
+    private String municipalityCode;
+
+    @Column(name = "city_name", length = 60)
+    private String cityName;
+
+    @Column(name = "department_code", length = 2)
+    private String departmentCode;
+
+    @Column(name = "department_name", length = 60)
+    private String departmentName;
+
+    @Column(name = "postal_code", length = 10)
+    private String postalCode;
+
+    @Column(name = "country_code", nullable = false, length = 2)
+    private String countryCode = "CO";
+
+    @Column(name = "tax_level_code", length = 30)
+    private String taxLevelCode;
+
+    @Column(name = "dian_environment")
+    private Integer dianEnvironment;
 }

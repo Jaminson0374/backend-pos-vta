@@ -57,6 +57,9 @@ public class SaleItemEntity {
     @Column(name = "discount_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
+    @Column(name = "net_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal netAmount = BigDecimal.ZERO;
+
     @Column(name = "promotion_id")
     private UUID promotionId;
 }

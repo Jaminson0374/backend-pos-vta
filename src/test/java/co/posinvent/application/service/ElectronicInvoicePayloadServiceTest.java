@@ -73,7 +73,7 @@ class ElectronicInvoicePayloadServiceTest {
         assertThat(request.issueDate()).isEqualTo("2026-10-01");
         assertThat(request.clientNit()).isEqualTo("900123456");
         assertThat(request.clientName()).isEqualTo("Cliente Test");
-        assertThat(request.totalAmount()).isEqualByComparingTo("120500");
+        assertThat(request.totalAmount()).isEqualByComparingTo("119000");
 
         assertThat(request.items()).hasSize(1);
         var item = request.items().get(0);
@@ -87,8 +87,7 @@ class ElectronicInvoicePayloadServiceTest {
         assertThat(item.subtotal()).isEqualByComparingTo("100000");
 
         // Only non-null, non-zero totals are exposed, keyed by rate.
-        assertThat(request.taxTotals()).containsOnlyKeys("0", "19");
-        assertThat(request.taxTotals().get("0")).isEqualByComparingTo("1000");
+        assertThat(request.taxTotals()).containsOnlyKeys("19");
         assertThat(request.taxTotals().get("19")).isEqualByComparingTo("19000");
 
         var company = request.companyInfo();
@@ -204,17 +203,26 @@ class ElectronicInvoicePayloadServiceTest {
                 UUID.randomUUID(), DOC_ID, productId,
                 new BigDecimal("2"), new BigDecimal("50000"),
                 "IVA_19", new BigDecimal("19"),
-                new BigDecimal("19000"), new BigDecimal("100000"),
+                new BigDecimal("18050"), new BigDecimal("100000"),
                 1, null,
                 SaleItem.DISCOUNT_AMOUNT, new BigDecimal("5000"), new BigDecimal("5000"), null);
     }
 
     private SalesDocument document(List<SaleItem> items) {
+        var net = items.stream()
+                .map(SaleItem::netAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        var tax0 = items.stream().filter(i -> i.taxRate().signum() == 0)
+                .map(SaleItem::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        var tax5 = items.stream().filter(i -> i.taxRate().compareTo(new BigDecimal("5")) == 0)
+                .map(SaleItem::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        var tax19 = items.stream().filter(i -> i.taxRate().compareTo(new BigDecimal("19")) == 0)
+                .map(SaleItem::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        var total = net.add(tax0).add(tax5).add(tax19);
         return new SalesDocument(
                 DOC_ID, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED,
                 "FV-001", CLIENT_ID, null, null, null, null,
-                new BigDecimal("100000"), new BigDecimal("1000"), BigDecimal.ZERO,
-                new BigDecimal("19000"), new BigDecimal("120500"),
+                net, tax0, tax5, tax19, total,
                 null,
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
@@ -225,8 +233,8 @@ class ElectronicInvoicePayloadServiceTest {
         return new SalesDocument(
                 DOC_ID, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED,
                 "FV-001", CLIENT_ID, null, null, null, null,
-                new BigDecimal("95000"), new BigDecimal("1000"), BigDecimal.ZERO,
-                new BigDecimal("18050"), new BigDecimal("114050"),
+                new BigDecimal("95000"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("18050"), new BigDecimal("113050"),
                 null,
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),
                 OffsetDateTime.parse("2026-10-01T10:15:30-05:00"),

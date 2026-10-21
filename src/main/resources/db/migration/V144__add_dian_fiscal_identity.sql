@@ -18,7 +18,7 @@ ALTER TABLE company_config
     ADD COLUMN IF NOT EXISTS postal_code VARCHAR(10),
     ADD COLUMN IF NOT EXISTS country_code VARCHAR(2) NOT NULL DEFAULT 'CO',
     ADD COLUMN IF NOT EXISTS tax_level_code VARCHAR(30),
-    ADD COLUMN IF NOT EXISTS dian_environment SMALLINT;
+    ADD COLUMN IF NOT EXISTS dian_environment INTEGER;
 
 ALTER TABLE company_config
     DROP CONSTRAINT IF EXISTS chk_company_dian_environment,

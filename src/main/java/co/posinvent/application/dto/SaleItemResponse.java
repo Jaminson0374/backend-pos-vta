@@ -16,6 +16,8 @@ public record SaleItemResponse(
         BigDecimal taxRate,
         BigDecimal taxAmount,
         BigDecimal subtotal,
+        BigDecimal netAmount,
+        BigDecimal taxPercentage,
         int lineNumber,
         UUID batchId
 ) {
@@ -31,6 +33,8 @@ public record SaleItemResponse(
                 item.taxRate(),
                 item.taxAmount(),
                 item.subtotal(),
+                item.netAmount(),
+                item.taxPercentage(),
                 item.lineNumber(),
                 item.batchId()
         );
