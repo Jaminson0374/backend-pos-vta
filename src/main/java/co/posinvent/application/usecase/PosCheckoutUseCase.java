@@ -239,10 +239,13 @@ public class PosCheckoutUseCase {
                     "El monto pagado (" + totalPaid + ") es menor al total (" + computed.total() + ")");
         }
 
+        // POS checkout is atomic: stock, payment and numbering already ran in this
+        // transaction. Persist the invoice as ISSUED instead of leaving a DRAFT that
+        // would have to be issued later (and would deduct stock a second time).
         var invoice = new SalesDocument(
                 null,
                 SalesDocumentType.INVOICE,
-                SalesDocumentStatus.DRAFT,
+                SalesDocumentStatus.ISSUED,
                 docNumber,
                 order.clientId(),
                 order.warehouseId(),

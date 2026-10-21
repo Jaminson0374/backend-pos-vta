@@ -136,7 +136,7 @@ class PosCheckoutUseCaseTest {
                 return Optional.of(order);
             }
             return Optional.of(new SalesDocument(
-                    id, SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT,
+                    id, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED,
                     "INV-001", CLIENT_ID, WAREHOUSE_ID, null, CASH_REGISTER_ID, ORDER_ID,
                     new BigDecimal("400000"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     new BigDecimal("400000"), USER_ID,
@@ -250,6 +250,8 @@ class PosCheckoutUseCaseTest {
         var savedInvoiceDoc = docCaptor.getAllValues().get(0);
         var invoicedOrder = docCaptor.getAllValues().get(1);
         assertThat(savedInvoiceDoc.type()).isEqualTo(SalesDocumentType.INVOICE);
+        assertThat(savedInvoiceDoc.status()).isEqualTo(SalesDocumentStatus.ISSUED);
+        assertThat(savedInvoiceDoc.sourceDocumentId()).isEqualTo(ORDER_ID);
         assertThat(savedInvoiceDoc.shiftId()).isEqualTo(SHIFT_ID);
         assertThat(savedInvoiceDoc.cashRegisterId()).isEqualTo(CASH_REGISTER_ID);
         assertThat(invoicedOrder.type()).isEqualTo(SalesDocumentType.ORDER);
@@ -284,7 +286,7 @@ class PosCheckoutUseCaseTest {
                 return Optional.of(order);
             }
             return Optional.of(new SalesDocument(
-                    id, SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT,
+                    id, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED,
                     "INV-002", CLIENT_ID, WAREHOUSE_ID, null, CASH_REGISTER_ID, ORDER_ID,
                     new BigDecimal("400000"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     new BigDecimal("400000"), USER_ID,
@@ -475,7 +477,7 @@ class PosCheckoutUseCaseTest {
                 return Optional.of(confirmedOrder(null));
             }
             return Optional.of(new SalesDocument(
-                    id, SalesDocumentType.INVOICE, SalesDocumentStatus.DRAFT,
+                    id, SalesDocumentType.INVOICE, SalesDocumentStatus.ISSUED,
                     "INV-TEST", CLIENT_ID, WAREHOUSE_ID, SHIFT_ID, CASH_REGISTER_ID, ORDER_ID,
                     new BigDecimal("1000.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     new BigDecimal("1000.00"), USER_ID,

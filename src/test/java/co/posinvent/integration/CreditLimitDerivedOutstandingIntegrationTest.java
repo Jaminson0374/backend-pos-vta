@@ -105,7 +105,7 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
     @Test
     void secondIssuedCreditInvoiceIsRejectedUsingTheArWrittenByTheFirst() {
         // ── First credit invoice: issue it and let the use case write the AR ──
-        var invoice1 = checkoutDraftInvoice(order1Id);
+        var invoice1 = checkoutInvoiceForLegacyCreditFixture(order1Id);
         markCreditSale(invoice1);
         manageSalesDocumentUseCase.transitionDocument(invoice1, SalesDocumentStatus.ISSUED);
 
@@ -114,7 +114,7 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
         assertThat(receivable.outstanding()).isEqualByComparingTo(INVOICE_TOTAL);
 
         // ── Second credit invoice: the first AR already consumes most of the limit ──
-        var invoice2 = checkoutDraftInvoice(order2Id);
+        var invoice2 = checkoutInvoiceForLegacyCreditFixture(order2Id);
         markCreditSale(invoice2);
 
         assertThatThrownBy(() ->
@@ -127,8 +127,11 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
         assertThat(freshInvoiceStatus(invoice2)).isEqualTo(SalesDocumentStatus.DRAFT);
     }
 
-    /** Checks out the seeded order, returning the id of the DRAFT invoice it produced. */
-    private UUID checkoutDraftInvoice(UUID orderId) {
+    /**
+     * Checks out the seeded order. POS now persists the invoice as ISSUED; the credit fixture
+     * rewinds it to DRAFT so the transition can exercise credit validation and AR creation.
+     */
+    private UUID checkoutInvoiceForLegacyCreditFixture(UUID orderId) {
         checkoutUseCase.checkout(
                 new CheckoutRequest(orderId, null, shiftId,
                         List.of(new CheckoutRequest.PaymentLine("CASH", INVOICE_TOTAL))));
@@ -143,12 +146,13 @@ class CreditLimitDerivedOutstandingIntegrationTest extends AbstractIntegrationTe
     }
 
     /**
-     * Turns the draft POS invoice into a credit sale. Only the flag is set: the status transition
-     * and the AR creation remain the use case's responsibility.
+     * Turns the POS invoice into a legacy DRAFT credit fixture. Stock was already consumed by
+     * checkout, so the ISSUED transition must skip the decrement.
      */
     private void markCreditSale(UUID invoiceId) {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var invoice = em.find(SalesDocumentEntity.class, invoiceId);
+            invoice.setStatus(SalesDocumentStatus.DRAFT);
             invoice.setCreditSale(true);
             em.flush();
         });

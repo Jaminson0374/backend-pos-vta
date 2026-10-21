@@ -5,7 +5,6 @@ import co.posinvent.application.usecase.CheckoutRequest;
 import co.posinvent.application.usecase.PosCheckoutUseCase;
 import co.posinvent.application.usecase.PosDevolutionUseCase;
 import co.posinvent.domain.model.Batch;
-import co.posinvent.domain.model.SalesDocumentStatus;
 import co.posinvent.domain.model.SalesDocumentType;
 import co.posinvent.domain.model.Warehouse;
 import co.posinvent.domain.repository.PucAccountRepository;
@@ -107,15 +106,6 @@ class DevolutionReversalJournalIntegrationTest extends AbstractIntegrationTest {
                 .setParameter("orderId", orderId)
                 .getSingleResult()
                 .getId());
-
-        // The POS checkout leaves the invoice DRAFT; a devolution only accepts an ISSUED invoice.
-        // Flip the status directly so this test exercises the reversal accounting alone, without
-        // pulling in the unrelated stock decrement performed by the ISSUE transition.
-        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                em.createQuery("UPDATE SalesDocumentEntity d SET d.status = :issued WHERE d.id = :id")
-                        .setParameter("issued", SalesDocumentStatus.ISSUED)
-                        .setParameter("id", invoiceId)
-                        .executeUpdate());
 
         // 2. Full devolution. Before the fix this threw inside the listener (negative journal lines)
         //    and rolled the devolution back.

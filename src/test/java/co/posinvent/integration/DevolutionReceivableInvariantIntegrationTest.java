@@ -6,7 +6,6 @@ import co.posinvent.application.usecase.CheckoutRequest;
 import co.posinvent.application.usecase.PosCheckoutUseCase;
 import co.posinvent.application.usecase.PosDevolutionUseCase;
 import co.posinvent.domain.model.Batch;
-import co.posinvent.domain.model.SalesDocumentStatus;
 import co.posinvent.domain.model.SalesDocumentType;
 import co.posinvent.domain.model.Warehouse;
 import co.posinvent.domain.repository.ThirdPartyRepository;
@@ -136,9 +135,8 @@ class DevolutionReceivableInvariantIntegrationTest extends AbstractIntegrationTe
     }
 
     /**
-     * Sells the seeded order, then turns the resulting POS invoice into a credit-sale invoice and
-     * seeds the receivable a credit sale would have created. The POS checkout always produces a
-     * DRAFT cash invoice, so this is the smallest fixture that exercises the devolution AR branch.
+     * Sells the seeded order, then turns the resulting ISSUED POS invoice into a credit-sale
+     * invoice and seeds the receivable a credit sale would have created.
      */
     private InvoiceFixture checkoutAndIssueCreditInvoice() {
         checkoutUseCase.checkout(
@@ -154,7 +152,6 @@ class DevolutionReceivableInvariantIntegrationTest extends AbstractIntegrationTe
                     .setParameter("orderId", orderId)
                     .getSingleResult();
 
-            invoice.setStatus(SalesDocumentStatus.ISSUED);
             invoice.setCreditSale(true);
 
             var ar = new AccountsReceivableEntity();

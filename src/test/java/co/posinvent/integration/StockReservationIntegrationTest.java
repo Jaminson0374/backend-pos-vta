@@ -2,9 +2,12 @@ package co.posinvent.integration;
 
 import co.posinvent.application.usecase.CheckoutRequest;
 import co.posinvent.application.usecase.PosCheckoutUseCase;
+import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.Batch;
 import co.posinvent.domain.model.InventoryStock;
+import co.posinvent.domain.model.SalesDocumentStatus;
 import co.posinvent.domain.model.Warehouse;
+import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.StockRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
 import co.posinvent.infrastructure.adapters.out.persistence.TestDataFactory;
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Integration test for stock reservation consumption (audit A1).
@@ -41,6 +45,7 @@ class StockReservationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired private PosCheckoutUseCase checkoutUseCase;
     @Autowired private StockRepository stockRepo;
+    @Autowired private SalesDocumentRepository documentRepo;
     @Autowired private ThirdPartyRepository thirdPartyRepo;
 
     private UUID warehouseId;
@@ -96,17 +101,31 @@ class StockReservationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void checkoutConsumesReservationWithoutCommittedDrift() {
+    void checkoutConsumesReservationOnceAndPersistsTheInvoiceIssued() {
         var request = new CheckoutRequest(
                 orderId, null, shiftId,
                 List.of(new CheckoutRequest.PaymentLine("CASH", SALE_PRICE.multiply(ORDER_QUANTITY))));
 
-        checkoutUseCase.checkout(request);
+        var response = checkoutUseCase.checkout(request);
+
+        var invoice = documentRepo.findByIdWithItems(response.invoiceId()).orElseThrow();
+        assertThat(invoice.status()).isEqualTo(SalesDocumentStatus.ISSUED);
 
         var stock = stockRepo.findByProductBatchWarehouse(productId, batchId, warehouseId).orElseThrow();
         assertThat(stock.currentQuantity())
                 .isEqualByComparingTo(STOCK_QUANTITY.subtract(ORDER_QUANTITY));   // 90
         assertThat(stock.committedQuantity())
                 .isEqualByComparingTo(COMMITTED_QUANTITY.subtract(ORDER_QUANTITY)); // 0
+
+        // A retried checkout is rejected before touching stock again.
+        assertThatThrownBy(() -> checkoutUseCase.checkout(request))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo("POS_ORDER_NOT_CONFIRMED"));
+
+        var unchanged = stockRepo.findByProductBatchWarehouse(productId, batchId, warehouseId).orElseThrow();
+        assertThat(unchanged.currentQuantity())
+                .isEqualByComparingTo(STOCK_QUANTITY.subtract(ORDER_QUANTITY));
+        assertThat(unchanged.committedQuantity())
+                .isEqualByComparingTo(COMMITTED_QUANTITY.subtract(ORDER_QUANTITY));
     }
 }

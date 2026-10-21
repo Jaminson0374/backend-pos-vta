@@ -141,8 +141,15 @@ public class ManageSalesDocumentUseCase {
                 if (Boolean.TRUE.equals(transitioned.isCreditSale())) {
                     validateCreditOnIssue(transitioned);
                 }
-                // Decrement stock on ISSUED
-                decrementStock(transitioned);
+                // POS invoices already consumed stock during checkout. This branch only
+                // runs for legacy DRAFT POS invoices; skip the second decrement so issuing
+                // one of those rows cannot corrupt the kardex.
+                if (isPosOriginInvoice(transitioned)) {
+                    log.warn("Skipping stock decrement for POS-origin invoice {}: "
+                            + "stock was already consumed during checkout", transitioned.id());
+                } else {
+                    decrementStock(transitioned);
+                }
                 // Auto-create CxC for credit sales
                 if (Boolean.TRUE.equals(transitioned.isCreditSale())) {
                     accountsReceivableUseCase.createFromInvoice(transitioned);
@@ -237,6 +244,15 @@ public class ManageSalesDocumentUseCase {
     }
 
     // ── Stock decrement on ISSUED ──────────────────────────────────────────
+
+    /**
+     * A POS invoice is linked to the order that originated it and had its stock consumed
+     * atomically by {@link PosCheckoutUseCase}. New POS invoices are persisted as ISSUED;
+     * this predicate only protects DRAFT rows created before that fix.
+     */
+    private boolean isPosOriginInvoice(SalesDocument doc) {
+        return doc.type() == SalesDocumentType.INVOICE && doc.sourceDocumentId() != null;
+    }
 
     private void decrementStock(SalesDocument doc) {
         for (var item : doc.items()) {
