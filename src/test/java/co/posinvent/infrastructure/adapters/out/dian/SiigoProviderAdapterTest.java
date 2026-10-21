@@ -63,7 +63,7 @@ class SiigoProviderAdapterTest {
                 USERNAME, ACCESS_KEY, PARTNER_ID,
                 BASE_URL, "/auth", "/v1/invoices", "/v1/invoices/status",
                 1000, 2000, 1L, 1L, true, false,
-                0L, 5L, 13156L, 100L, 200L, 300L, 400L);
+                13158L, 13157L, 13156L, 8129L, 8130L, 8131L, 8132L);
         adapter = new SiigoProviderAdapter(builder, properties, new ObjectMapper());
         server = MockRestServiceServer.bindTo(builder).build();
     }
@@ -140,11 +140,49 @@ class SiigoProviderAdapterTest {
     }
 
     @Test
+    void capturesTheSimulatedPascalCaseDianValidationPayload() {
+        expectAuthOnce();
+        server.expect(requestTo(BASE_URL + "/v1/invoices"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "Status": 400,
+                                  "Errors": [
+                                    {
+                                      "Code": "validation_error",
+                                      "Message": "El código postal '080001' no corresponde al municipio '08001'.",
+                                      "Params": ["080001", "08001"],
+                                      "Detail": "Dian validation failed for customer address."
+                                    },
+                                    {
+                                      "Code": "invalid_tax_responsibility",
+                                      "Message": "La responsabilidad fiscal 'O-13' no es válida para el tipo de persona 'Company'.",
+                                      "Params": ["O-13", "Company"],
+                                      "Detail": "Check DIAN tax level codes."
+                                    }
+                                  ]
+                                }
+                                """));
+
+        var response = adapter.sendInvoice(sampleRequest());
+
+        assertThat(response.status()).isEqualTo("REJECTED_BY_DIAN");
+        assertThat(response.errors()).hasSize(2);
+        assertThat(response.errors()).extracting(error -> error.code())
+                .containsExactly("validation_error", "invalid_tax_responsibility");
+        assertThat(response.errors().get(0).message()).contains("código postal");
+        assertThat(response.errors().get(0).params()).containsExactly("080001", "08001");
+        assertThat(response.errors().get(1).detail()).isEqualTo("Check DIAN tax level codes.");
+    }
+
+    @Test
     void mapsPaymentMeansAndTaxCatalogIds() {
         expectAuthOnce();
         server.expect(requestTo(BASE_URL + "/v1/invoices"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(jsonPath("$.payments[0].id").value(100))
+                .andExpect(jsonPath("$.payments[0].id").value(8129))
                 .andExpect(jsonPath("$.payments[0].value").value(1190.00))
                 .andExpect(jsonPath("$.items[0].taxes[0].id").value(13156))
                 .andExpect(jsonPath("$.customer.identification").value("900123456-7"))

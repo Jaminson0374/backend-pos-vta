@@ -417,12 +417,12 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
             var errors = new ArrayList<ProviderError>();
             try {
                 var root = mapper.readTree(body);
-                var array = root.path("errors");
-                if (!array.isArray()) array = root.path("error").path("errors");
+                var array = field(root, "errors");
+                if (!array.isArray()) array = field(field(root, "error"), "errors");
                 if (array.isArray()) {
                     for (JsonNode node : array) {
                         var params = new ArrayList<String>();
-                        var paramsNode = node.path("params");
+                        var paramsNode = field(node, "params");
                         if (paramsNode.isArray()) {
                             paramsNode.forEach(p -> params.add(p.asText()));
                         }
@@ -450,8 +450,23 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
                     null, null, null, errors);
         }
 
-        private static String text(JsonNode node, String field) {
-            var value = node.path(field);
+        /** Accepts both camelCase and PascalCase payloads from Siigo/sandbox variants. */
+        private static JsonNode field(JsonNode node, String name) {
+            if (node == null || node.isMissingNode() || node.isNull()) {
+                return com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+            }
+            var direct = node.get(name);
+            if (direct != null) return direct;
+            var fields = node.fields();
+            while (fields.hasNext()) {
+                var entry = fields.next();
+                if (entry.getKey().equalsIgnoreCase(name)) return entry.getValue();
+            }
+            return com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+        }
+
+        private static String text(JsonNode node, String name) {
+            var value = field(node, name);
             return value.isMissingNode() || value.isNull() ? null : value.asText();
         }
 
