@@ -100,6 +100,24 @@ class SiigoProviderAdapterTest {
     }
 
     @Test
+    void refreshesTheTokenWhenItIsCloseToExpiry() {
+        var shortLivedAuth = """
+                {"access_token":"%s","expires_in":1}
+                """.formatted(ACCESS_TOKEN);
+        server.expect(ExpectedCount.twice(), requestTo(BASE_URL + "/auth"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess(shortLivedAuth, MediaType.APPLICATION_JSON));
+        server.expect(ExpectedCount.twice(), requestTo(BASE_URL + "/v1/invoices"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess(INVOICE_JSON, MediaType.APPLICATION_JSON));
+
+        adapter.sendInvoice(sampleRequest());
+        adapter.sendInvoice(sampleRequest());
+
+        server.verify();
+    }
+
+    @Test
     void capturesStructured400ErrorsWithoutThrowing() {
         expectAuthOnce();
         server.expect(requestTo(BASE_URL + "/v1/invoices"))
