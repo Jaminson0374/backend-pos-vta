@@ -3,6 +3,7 @@ package co.posinvent.infrastructure.adapters.out.persistence;
 import co.posinvent.domain.model.*;
 import co.posinvent.domain.repository.ElectronicInvoiceRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
@@ -55,6 +56,10 @@ class ElectronicInvoiceRepositoryAdapter implements ElectronicInvoiceRepository 
 
         entity.setCufe(domain.cufe());
         entity.setQrCode(domain.qrCode());
+        entity.setProviderInvoiceId(domain.providerInvoiceId());
+        entity.setPdfUrl(domain.pdfUrl());
+        entity.setXmlUrl(domain.xmlUrl());
+        entity.setProviderErrors(toJson(domain.providerErrors()));
         entity.setProviderResponse(toJson(domain.providerResponse()));
         entity.setStatus(domain.status());
         entity.setSentAt(domain.sentAt());
@@ -156,16 +161,29 @@ class ElectronicInvoiceRepositoryAdapter implements ElectronicInvoiceRepository 
                 entity.getStatus(),
                 entity.getSentAt(),
                 entity.getResponseAt(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getProviderInvoiceId(),
+                entity.getPdfUrl(),
+                entity.getXmlUrl(),
+                fromJsonList(entity.getProviderErrors())
         );
     }
 
-    private String toJson(Map<String, Object> map) {
-        if (map == null) return null;
+    private String toJson(Object value) {
+        if (value == null) return null;
         try {
-            return objectMapper.writeValueAsString(map);
+            return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
             return null;
+        }
+    }
+
+    private List<ProviderError> fromJsonList(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<ProviderError>>() {});
+        } catch (JsonProcessingException e) {
+            return List.of();
         }
     }
 

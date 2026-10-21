@@ -84,13 +84,15 @@ public class ElectronicInvoiceJob {
                         invoice.sourceDocumentId(),
                         response.cufe(),
                         response.qrCode(),
-                        Map.of("status", response.status(), "reference", response.providerReference()),
-                        "ACCEPTED_BY_DIAN".equals(response.status())
-                                ? ElectronicInvoiceStatus.ACCEPTED_BY_DIAN
-                                : ElectronicInvoiceStatus.SENT,
+                        providerResponse(response),
+                        statusOf(response),
                         OffsetDateTime.now(),
                         OffsetDateTime.now(),
-                        invoice.createdAt()
+                        invoice.createdAt(),
+                        response.providerInvoiceId(),
+                        response.pdfUrl(),
+                        response.xmlUrl(),
+                        response.errors()
                 ));
 
                 // Mark sync queue item as completed
@@ -99,12 +101,20 @@ public class ElectronicInvoiceJob {
                     repository.updateSyncQueueItem(new DianSyncQueueItem(
                             item.id(), item.electronicInvoiceId(),
                             item.attemptCount() + 1, item.maxAttempts(),
-                            item.nextAttemptAt(), null,
-                            SyncStatus.COMPLETED, item.createdAt()
+                            item.nextAttemptAt(),
+                            response.hasErrors() ? errorSummary(response) : null,
+                            response.hasErrors() ? SyncStatus.FAILED : SyncStatus.COMPLETED,
+                            item.createdAt()
                     ));
                 });
 
-                log.info("DIAN electronic invoice {} sent successfully. CUFE: {}", invoice.id(), response.cufe());
+                if (response.hasErrors()) {
+                    log.warn("DIAN electronic invoice {} rejected by Siigo: {}",
+                            invoice.id(), errorSummary(response));
+                } else {
+                    log.info("DIAN electronic invoice {} sent successfully. CUFE: {}",
+                            invoice.id(), response.cufe());
+                }
             } catch (Exception e) {
                 log.error("Failed to send DIAN invoice {}: {}", invoice.id(), e.getMessage());
                 handleSendFailure(invoice.id(), e.getMessage());
@@ -149,7 +159,9 @@ public class ElectronicInvoiceJob {
                             invoice.get().sourceDocumentId(), invoice.get().cufe(),
                             invoice.get().qrCode(), invoice.get().providerResponse(),
                             newStatus, invoice.get().sentAt(),
-                            OffsetDateTime.now(), invoice.get().createdAt()
+                            OffsetDateTime.now(), invoice.get().createdAt(),
+                            invoice.get().providerInvoiceId(), invoice.get().pdfUrl(),
+                            invoice.get().xmlUrl(), invoice.get().providerErrors()
                     ));
 
                     repository.updateSyncQueueItem(new DianSyncQueueItem(
@@ -177,6 +189,32 @@ public class ElectronicInvoiceJob {
                 handleSendFailure(item.electronicInvoiceId(), e.getMessage());
             }
         }
+    }
+
+    private static ElectronicInvoiceStatus statusOf(ElectronicInvoiceResponse response) {
+        return switch (response.status()) {
+            case "ACCEPTED_BY_DIAN" -> ElectronicInvoiceStatus.ACCEPTED_BY_DIAN;
+            case "REJECTED_BY_DIAN" -> ElectronicInvoiceStatus.REJECTED_BY_DIAN;
+            default -> ElectronicInvoiceStatus.SENT;
+        };
+    }
+
+    private static Map<String, Object> providerResponse(ElectronicInvoiceResponse response) {
+        var map = new java.util.LinkedHashMap<String, Object>();
+        map.put("status", response.status());
+        map.put("reference", response.providerReference());
+        if (response.providerInvoiceId() != null) map.put("provider_invoice_id", response.providerInvoiceId());
+        if (response.pdfUrl() != null) map.put("pdf_url", response.pdfUrl());
+        if (response.xmlUrl() != null) map.put("xml_url", response.xmlUrl());
+        if (!response.errors().isEmpty()) map.put("errors", response.errors());
+        return map;
+    }
+
+    private static String errorSummary(ElectronicInvoiceResponse response) {
+        return response.errors().stream()
+                .map(e -> e.code() + ": " + e.message())
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("Siigo rechazó la factura");
     }
 
     private void handleSendFailure(java.util.UUID invoiceId, String errorMessage) {

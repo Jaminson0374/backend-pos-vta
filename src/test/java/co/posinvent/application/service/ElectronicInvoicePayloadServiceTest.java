@@ -4,6 +4,7 @@ import co.posinvent.domain.model.CompanyConfig;
 import co.posinvent.domain.model.DianResolution;
 import co.posinvent.domain.model.Product;
 import co.posinvent.domain.model.SaleItem;
+import co.posinvent.domain.model.SalePayment;
 import co.posinvent.domain.model.SalesDocument;
 import co.posinvent.domain.model.SalesDocumentStatus;
 import co.posinvent.domain.model.SalesDocumentType;
@@ -11,6 +12,7 @@ import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.repository.CompanyConfigRepository;
 import co.posinvent.domain.repository.DianResolutionRepository;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.SalePaymentRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +40,7 @@ class ElectronicInvoicePayloadServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private CompanyConfigRepository companyConfigRepository;
     @Mock private DianResolutionRepository dianResolutionRepository;
+    @Mock private SalePaymentRepository salePaymentRepository;
 
     private ElectronicInvoicePayloadService service;
 
@@ -52,7 +56,13 @@ class ElectronicInvoicePayloadServiceTest {
                 thirdPartyRepository,
                 productRepository,
                 companyConfigRepository,
-                dianResolutionRepository);
+                dianResolutionRepository,
+                salePaymentRepository);
+
+        lenient().when(salePaymentRepository.findBySalesDocumentId(DOC_ID))
+                .thenReturn(List.of(new SalePayment(
+                        UUID.randomUUID(), DOC_ID, "CASH", new BigDecimal("1000000"),
+                        UUID.randomUUID(), null, null)));
     }
 
     @Test
@@ -74,6 +84,10 @@ class ElectronicInvoicePayloadServiceTest {
         assertThat(request.clientNit()).isEqualTo("900123456");
         assertThat(request.clientName()).isEqualTo("Cliente Test");
         assertThat(request.totalAmount()).isEqualByComparingTo("119000");
+        assertThat(request.currency()).isEqualTo("COP");
+        assertThat(request.payments()).hasSize(1);
+        assertThat(request.payments().get(0).dianCode()).isEqualTo("10");
+        assertThat(request.payments().get(0).amount()).isEqualByComparingTo("119000");
 
         assertThat(request.items()).hasSize(1);
         var item = request.items().get(0);

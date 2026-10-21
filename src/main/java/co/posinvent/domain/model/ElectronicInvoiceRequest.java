@@ -13,8 +13,31 @@ public record ElectronicInvoiceRequest(
     Map<String, BigDecimal> taxTotals,
     BigDecimal totalAmount,
     CompanyInfo companyInfo,
-    BigDecimal discountTotal
+    BigDecimal discountTotal,
+    ClientInfo client,
+    List<Payment> payments,
+    String currency,
+    String observations
 ) {
+    public ElectronicInvoiceRequest {
+        if (payments == null) payments = List.of();
+    }
+
+    /** Backwards-compatible constructor for callers that only need the original core fields. */
+    public ElectronicInvoiceRequest(
+            String documentNumber,
+            String issueDate,
+            String clientNit,
+            String clientName,
+            List<InvoiceItem> items,
+            Map<String, BigDecimal> taxTotals,
+            BigDecimal totalAmount,
+            CompanyInfo companyInfo,
+            BigDecimal discountTotal
+    ) {
+        this(documentNumber, issueDate, clientNit, clientName, items, taxTotals, totalAmount,
+                companyInfo, discountTotal, null, List.of(), null, null);
+    }
     public record InvoiceItem(
         String productCode,
         String productName,
@@ -37,5 +60,33 @@ public record ElectronicInvoiceRequest(
         String taxRegime,
         String resolutionNumber,
         String softwarePin
+    ) {}
+
+    /** Fiscal identity of the acquirer as required by Siigo's invoice customer object. */
+    public record ClientInfo(
+        String identificationTypeCode,
+        String identification,
+        String dv,
+        String personType,
+        String name,
+        String lastName,
+        String address,
+        String cityName,
+        String municipalityCode,
+        String departmentCode,
+        String departmentName,
+        String postalCode,
+        String countryCode,
+        String taxLevelCode,
+        String email,
+        String phone
+    ) {}
+
+    /** One tender line. `dianCode` is metadata; Siigo receives its own payment type id. */
+    public record Payment(
+        String method,
+        String dianCode,
+        BigDecimal amount,
+        String dueDate
     ) {}
 }

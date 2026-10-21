@@ -31,6 +31,17 @@ app:
       access-key: ${SIIGO_ACCESS_KEY:}
       partner-id: ${SIIGO_PARTNER_ID:}
       base-url: ${SIIGO_BASE_URL:https://api.siigo.com}
+      document-type-id: ${SIIGO_DOCUMENT_TYPE_ID:1}
+      seller-id: ${SIIGO_SELLER_ID:}
+      stamp-send: ${SIIGO_STAMP_SEND:true}
+      mail-send: ${SIIGO_MAIL_SEND:false}
+      tax-id-iva-0: ${SIIGO_TAX_ID_IVA_0:}
+      tax-id-iva-5: ${SIIGO_TAX_ID_IVA_5:}
+      tax-id-iva-19: ${SIIGO_TAX_ID_IVA_19:}
+      payment-type-cash: ${SIIGO_PAYMENT_TYPE_CASH:}
+      payment-type-card: ${SIIGO_PAYMENT_TYPE_CARD:}
+      payment-type-transfer: ${SIIGO_PAYMENT_TYPE_TRANSFER:}
+      payment-type-check: ${SIIGO_PAYMENT_TYPE_CHECK:}
 
 ---
 spring:

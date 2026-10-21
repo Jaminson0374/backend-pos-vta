@@ -34,6 +34,19 @@ public class ElectronicInvoiceEntity {
     @Column(name = "qr_code", columnDefinition = "TEXT")
     private String qrCode;
 
+    @Column(name = "provider_invoice_id", length = 100)
+    private String providerInvoiceId;
+
+    @Column(name = "pdf_url", columnDefinition = "TEXT")
+    private String pdfUrl;
+
+    @Column(name = "xml_url", columnDefinition = "TEXT")
+    private String xmlUrl;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "provider_errors", columnDefinition = "jsonb")
+    private String providerErrors;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "provider_response", columnDefinition = "jsonb")
     private String providerResponse;

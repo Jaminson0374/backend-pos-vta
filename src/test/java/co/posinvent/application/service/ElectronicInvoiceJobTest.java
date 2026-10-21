@@ -5,6 +5,7 @@ import co.posinvent.domain.model.ElectronicInvoice;
 import co.posinvent.domain.model.ElectronicInvoiceRequest;
 import co.posinvent.domain.model.ElectronicInvoiceResponse;
 import co.posinvent.domain.model.ElectronicInvoiceStatus;
+import co.posinvent.domain.model.ProviderError;
 import co.posinvent.domain.model.SyncStatus;
 import co.posinvent.domain.repository.ElectronicInvoiceProvider;
 import co.posinvent.domain.repository.ElectronicInvoiceRepository;
@@ -141,6 +142,34 @@ class ElectronicInvoiceJobTest {
         var queueCaptor = ArgumentCaptor.forClass(DianSyncQueueItem.class);
         verify(repository).updateSyncQueueItem(queueCaptor.capture());
         assertThat(queueCaptor.getValue().status()).isEqualTo(SyncStatus.FAILED);
+    }
+
+    @Test
+    void persistsStructuredProviderErrorsAndFailsTheQueue() {
+        var request = request();
+        when(payloadService.build(SALES_DOCUMENT_ID, DOCUMENT_NUMBER)).thenReturn(request);
+        when(repository.save(any(ElectronicInvoice.class)))
+                .thenReturn(savedInvoice(ElectronicInvoiceStatus.PENDING_SEND));
+        when(provider.sendInvoice(request)).thenReturn(new ElectronicInvoiceResponse(
+                null, null, "REJECTED_BY_DIAN", "HTTP-400", null, null, null,
+                List.of(new ProviderError("invalid_postal_code", "Código postal inválido",
+                        List.of("customer.address.postal_code"), "detail"))));
+        when(repository.findSyncQueueItemByInvoiceId(INVOICE_ID))
+                .thenReturn(Optional.of(syncItem(0, 5)));
+
+        job.processInvoice(SALES_DOCUMENT_ID, DOCUMENT_NUMBER, null);
+
+        var invoiceCaptor = ArgumentCaptor.forClass(ElectronicInvoice.class);
+        verify(repository, times(2)).save(invoiceCaptor.capture());
+        var persisted = invoiceCaptor.getAllValues().get(1);
+        assertThat(persisted.status()).isEqualTo(ElectronicInvoiceStatus.REJECTED_BY_DIAN);
+        assertThat(persisted.providerErrors()).hasSize(1);
+        assertThat(persisted.providerErrors().get(0).code()).isEqualTo("invalid_postal_code");
+
+        var queueCaptor = ArgumentCaptor.forClass(DianSyncQueueItem.class);
+        verify(repository).updateSyncQueueItem(queueCaptor.capture());
+        assertThat(queueCaptor.getValue().status()).isEqualTo(SyncStatus.FAILED);
+        assertThat(queueCaptor.getValue().lastError()).contains("invalid_postal_code");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

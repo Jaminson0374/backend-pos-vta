@@ -1,6 +1,8 @@
 package co.posinvent.application.service;
 
+import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.CompanyConfig;
+import co.posinvent.domain.model.DianPaymentMeans;
 import co.posinvent.domain.model.ElectronicInvoiceRequest;
 import co.posinvent.domain.model.SaleItem;
 import co.posinvent.domain.model.SalesDocument;
@@ -8,12 +10,14 @@ import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.repository.CompanyConfigRepository;
 import co.posinvent.domain.repository.DianResolutionRepository;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.SalePaymentRepository;
 import co.posinvent.domain.repository.SalesDocumentRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,19 +46,22 @@ public class ElectronicInvoicePayloadService {
     private final ProductRepository productRepository;
     private final CompanyConfigRepository companyConfigRepository;
     private final DianResolutionRepository dianResolutionRepository;
+    private final SalePaymentRepository salePaymentRepository;
 
     public ElectronicInvoicePayloadService(
             SalesDocumentRepository salesDocumentRepository,
             ThirdPartyRepository thirdPartyRepository,
             ProductRepository productRepository,
             CompanyConfigRepository companyConfigRepository,
-            DianResolutionRepository dianResolutionRepository
+            DianResolutionRepository dianResolutionRepository,
+            SalePaymentRepository salePaymentRepository
     ) {
         this.salesDocumentRepository = salesDocumentRepository;
         this.thirdPartyRepository = thirdPartyRepository;
         this.productRepository = productRepository;
         this.companyConfigRepository = companyConfigRepository;
         this.dianResolutionRepository = dianResolutionRepository;
+        this.salePaymentRepository = salePaymentRepository;
     }
 
     @Transactional(readOnly = true)
@@ -71,7 +78,11 @@ public class ElectronicInvoicePayloadService {
                 resolveTaxTotals(document),
                 document != null ? document.totalAmount() : null,
                 resolveCompanyInfo(),
-                document != null ? document.discountTotal() : null
+                document != null ? document.discountTotal() : null,
+                client != null ? toClientInfo(client) : null,
+                resolvePayments(document),
+                resolveCurrency(),
+                document != null ? "Venta POS " + document.documentNumber() : null
         );
     }
 
@@ -126,8 +137,71 @@ public class ElectronicInvoicePayloadService {
                 saleItem.taxRate(),
                 saleItem.taxAmount(),
                 saleItem.subtotal(),
-                saleItem.discountAmount()
+                saleItem.subtotal().subtract(saleItem.netAmount())
         );
+    }
+
+    private ElectronicInvoiceRequest.ClientInfo toClientInfo(ThirdParty client) {
+        var personType = client.personType() == ThirdParty.PersonType.JURIDICA
+                ? "Company"
+                : "Person";
+        return new ElectronicInvoiceRequest.ClientInfo(
+                client.dianIdentificationTypeCode(),
+                client.numIdentification(),
+                client.dv(),
+                personType,
+                client.registrationName() != null ? client.registrationName() : client.name(),
+                client.lastName(),
+                client.address(),
+                client.cityName(),
+                client.municipalityCode(),
+                client.departmentCode(),
+                client.departmentName(),
+                client.postalCode(),
+                client.countryCode(),
+                client.dianTaxLevelCode(),
+                client.email(),
+                client.phone()
+        );
+    }
+
+    /**
+     * Siigo requires the sum of payments to equal the invoice total. POS tenders may exceed the
+     * total because they include change, so we cap each line at the remaining amount.
+     */
+    private List<ElectronicInvoiceRequest.Payment> resolvePayments(SalesDocument document) {
+        if (document == null || document.id() == null || document.totalAmount() == null
+                || document.totalAmount().signum() <= 0) {
+            return List.of();
+        }
+        var persisted = salePaymentRepository.findBySalesDocumentId(document.id());
+        if (persisted.isEmpty()) {
+            throw new BusinessException("DIAN_PAYMENT_TOTAL_MISMATCH",
+                    "La factura no tiene medios de pago persistidos para enviar a Siigo.");
+        }
+        var remaining = document.totalAmount();
+        var result = new ArrayList<ElectronicInvoiceRequest.Payment>();
+        for (var payment : persisted) {
+            if (remaining.signum() <= 0) break;
+            var amount = payment.amount() != null ? payment.amount() : BigDecimal.ZERO;
+            if (amount.signum() <= 0) continue;
+            var allocated = amount.min(remaining).setScale(2, RoundingMode.HALF_UP);
+            var means = DianPaymentMeans.fromInternal(payment.method());
+            result.add(new ElectronicInvoiceRequest.Payment(
+                    payment.method(), means.code(), allocated, resolveIssueDate(document)));
+            remaining = remaining.subtract(allocated);
+        }
+        if (remaining.signum() > 0) {
+            throw new BusinessException("DIAN_PAYMENT_TOTAL_MISMATCH",
+                    "La suma de pagos no cubre el total de la factura. Faltan " + remaining);
+        }
+        return result;
+    }
+
+    private String resolveCurrency() {
+        return companyConfigRepository.findConfig()
+                .map(CompanyConfig::currency)
+                .orElse("COP");
     }
 
     /**

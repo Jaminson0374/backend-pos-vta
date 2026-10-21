@@ -26,5 +26,19 @@ public record DianSiigoProperties(
         @DefaultValue("5000")
         int connectTimeoutMs,
         @DefaultValue("10000")
-        int readTimeoutMs
+        int readTimeoutMs,
+        @DefaultValue("1")
+        Long documentTypeId,
+        Long sellerId,
+        @DefaultValue("true")
+        boolean stampSend,
+        @DefaultValue("false")
+        boolean mailSend,
+        Long taxIdIva0,
+        Long taxIdIva5,
+        Long taxIdIva19,
+        Long paymentTypeCash,
+        Long paymentTypeCard,
+        Long paymentTypeTransfer,
+        Long paymentTypeCheck
 ) {}
