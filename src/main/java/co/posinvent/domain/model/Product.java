@@ -100,12 +100,21 @@ public record Product(
             case "IVA_19" -> 19;
             default -> 0;
         };
+        return calculateSalePrice(costPrice, profitMargin, BigDecimal.valueOf(ivaRate));
+    }
 
-        BigDecimal withMargin = costPrice.multiply(
+    /** Calculates the sale price with the percentage stored in the tax catalog. */
+    public static BigDecimal calculateSalePrice(BigDecimal costPrice, BigDecimal profitMargin,
+                                                BigDecimal taxPercentage) {
+        if (costPrice == null) {
+            return BigDecimal.ZERO;
+        }
+        var margin = defaultDecimal(profitMargin);
+        var rate = taxPercentage == null ? BigDecimal.ZERO : taxPercentage;
+        var withMargin = costPrice.multiply(
                 BigDecimal.ONE.add(margin.divide(HUNDRED, 10, RoundingMode.HALF_UP)));
-        BigDecimal withTax = withMargin.multiply(
-                BigDecimal.ONE.add(new BigDecimal(ivaRate).divide(HUNDRED, 10, RoundingMode.HALF_UP)));
-
+        var withTax = withMargin.multiply(
+                BigDecimal.ONE.add(rate.divide(HUNDRED, 10, RoundingMode.HALF_UP)));
         return withTax.setScale(4, RoundingMode.HALF_UP);
     }
 
@@ -296,10 +305,17 @@ public record Product(
             BigDecimal margin,
             String errorCode,
             String message) {
+        // The domain only knows the legacy fixed rates; custom catalog taxes are
+        // validated by ProductUseCase with the Tax percentage.
+        if (!isKnownTaxCode(taxType)) return;
         var expectedPrice = calculateSalePrice(costPrice, margin, taxType);
         if (price.compareTo(expectedPrice) != 0) {
             throw new BusinessException(errorCode, message);
         }
+    }
+
+    private static boolean isKnownTaxCode(String taxType) {
+        return "EXENTO".equals(taxType) || "IVA_5".equals(taxType) || "IVA_19".equals(taxType);
     }
 
     private static <T> List<T> safeList(List<T> items) {

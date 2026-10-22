@@ -277,7 +277,7 @@ class ProductTest {
                 costPrice,
                 null,
                 null,
-                Product.calculateSalePrice(costPrice, null, null),
+                Product.calculateSalePrice(costPrice, null, (String) null),
                 null,
                 null,
                 null,

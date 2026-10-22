@@ -12,12 +12,14 @@ import co.posinvent.application.dto.ProductResponse;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.model.Product;
+import co.posinvent.domain.model.Tax;
 import co.posinvent.domain.model.Product.ProductImage;
 import co.posinvent.domain.model.Product.ProductPriceEntry;
 import co.posinvent.domain.model.Product.ProductPromotion;
 import co.posinvent.domain.model.Product.ProductSupplier;
 import co.posinvent.domain.model.Product.ProductWarehouse;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.TaxRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,9 +32,18 @@ import java.util.UUID;
 public class ProductUseCase {
 
     private final ProductRepository productRepository;
+    private final TaxRepository taxRepository;
 
-    public ProductUseCase(ProductRepository productRepository) {
+    public ProductUseCase(ProductRepository productRepository, TaxRepository taxRepository) {
         this.productRepository = productRepository;
+        this.taxRepository = taxRepository;
+    }
+
+    private Tax resolveTax(String taxType) {
+        var code = taxType == null || taxType.isBlank() ? "EXENTO" : taxType.trim();
+        return taxRepository.findByCode(code)
+                .orElseThrow(() -> new BusinessException("INVALID_TAX_TYPE",
+                        "El impuesto no existe en el catálogo: " + code));
     }
 
     // -------------------------------------------------------------------------
@@ -108,7 +119,9 @@ public class ProductUseCase {
                     "Ya existe un producto con el código: " + request.productCode());
         }
 
-        BigDecimal salePrice = Product.calculateSalePrice(request.costPrice(), request.profitMargin(), request.taxType());
+        var tax = resolveTax(request.taxType());
+        BigDecimal salePrice = Product.calculateSalePrice(
+                request.costPrice(), request.profitMargin(), tax.percentage());
 
         var product = new Product(
                 null,
@@ -126,7 +139,7 @@ public class ProductUseCase {
                 request.unitOfMeasureId(),
                 request.costPrice(),
                 request.profitMargin(),
-                request.taxType(),
+                tax.code(),
                 salePrice,
                 request.costingMethod(),
                 request.initialStock(),
@@ -180,7 +193,9 @@ public class ProductUseCase {
                     "Ya existe un producto con el código: " + request.productCode());
         }
 
-        BigDecimal salePrice = Product.calculateSalePrice(request.costPrice(), request.profitMargin(), request.taxType());
+        var tax = resolveTax(request.taxType());
+        BigDecimal salePrice = Product.calculateSalePrice(
+                request.costPrice(), request.profitMargin(), tax.percentage());
 
         var updated = new Product(
                 existing.id(),
@@ -198,7 +213,7 @@ public class ProductUseCase {
                 request.unitOfMeasureId(),
                 request.costPrice(),
                 request.profitMargin(),
-                request.taxType(),
+                tax.code(),
                 salePrice,
                 request.costingMethod(),
                 request.initialStock(),

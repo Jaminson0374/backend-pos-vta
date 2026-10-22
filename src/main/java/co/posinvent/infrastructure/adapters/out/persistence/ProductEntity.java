@@ -75,7 +75,7 @@ class ProductEntity {
     @Column(name = "profit_margin", nullable = false, precision = 5, scale = 2)
     private BigDecimal profitMargin;
 
-    @Column(name = "tax_type", nullable = false, length = 10)
+    @Column(name = "tax_code", nullable = false, length = 50)
     private String taxType;
 
     @Column(name = "sale_price", nullable = false, precision = 15, scale = 4)

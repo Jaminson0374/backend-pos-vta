@@ -3,7 +3,9 @@ package co.posinvent.application.usecase;
 import co.posinvent.application.dto.ProductRequest;
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.Product;
+import co.posinvent.domain.model.Tax;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.TaxRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +21,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,12 +32,22 @@ class ProductUseCaseTest {
 
     @Mock
     private ProductRepository productRepository;
+    @Mock
+    private TaxRepository taxRepository;
 
     private ProductUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new ProductUseCase(productRepository);
+        lenient().when(taxRepository.findByCode(anyString())).thenAnswer(invocation -> {
+            var code = invocation.getArgument(0, String.class);
+            var percentage = code.endsWith("19") ? new BigDecimal("19")
+                    : code.endsWith("5") ? new BigDecimal("5")
+                    : BigDecimal.ZERO;
+            return java.util.Optional.of(new Tax(
+                    UUID.randomUUID(), code, code, percentage, null, "01", null, 0, true));
+        });
+        useCase = new ProductUseCase(productRepository, taxRepository);
     }
 
     @Test

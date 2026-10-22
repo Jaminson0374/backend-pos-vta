@@ -2,9 +2,11 @@ package co.posinvent.application.usecase;
 
 import co.posinvent.domain.model.CustomPrice;
 import co.posinvent.domain.model.Product;
+import co.posinvent.domain.model.Tax;
 import co.posinvent.domain.model.ThirdParty;
 import co.posinvent.domain.repository.CustomPriceRepository;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.TaxRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +20,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -26,6 +30,7 @@ class PriceEngineServiceTest {
     @Mock private CustomPriceRepository customPriceRepo;
     @Mock private ProductRepository productRepo;
     @Mock private ThirdPartyRepository thirdPartyRepo;
+    @Mock private TaxRepository taxRepo;
 
     private PriceEngineService service;
 
@@ -35,7 +40,15 @@ class PriceEngineServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PriceEngineService(customPriceRepo, productRepo, thirdPartyRepo);
+        lenient().when(taxRepo.findByCode(anyString())).thenAnswer(invocation -> {
+            var code = invocation.getArgument(0, String.class);
+            var percentage = code.endsWith("19") ? new BigDecimal("19")
+                    : code.endsWith("5") ? new BigDecimal("5")
+                    : BigDecimal.ZERO;
+            return java.util.Optional.of(new Tax(
+                    UUID.randomUUID(), code, code, percentage, null, "01", null, 0, true));
+        });
+        service = new PriceEngineService(customPriceRepo, productRepo, thirdPartyRepo, taxRepo);
     }
 
     // ── Tier 1: Custom price ──────────────────────────────────────────

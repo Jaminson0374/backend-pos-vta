@@ -3,6 +3,7 @@ package co.posinvent.application.usecase;
 import co.posinvent.domain.exception.ResourceNotFoundException;
 import co.posinvent.domain.repository.CustomPriceRepository;
 import co.posinvent.domain.repository.ProductRepository;
+import co.posinvent.domain.repository.TaxRepository;
 import co.posinvent.domain.repository.ThirdPartyRepository;
 import org.springframework.stereotype.Service;
 
@@ -13,23 +14,24 @@ import java.util.UUID;
 @Service
 public class PriceEngineService {
 
-    private static final BigDecimal TAX_19 = new BigDecimal("19");
-    private static final BigDecimal TAX_5 = new BigDecimal("5");
     private static final BigDecimal TAX_0 = BigDecimal.ZERO;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     private final CustomPriceRepository customPriceRepo;
     private final ProductRepository productRepo;
     private final ThirdPartyRepository thirdPartyRepo;
+    private final TaxRepository taxRepo;
 
     public PriceEngineService(
             CustomPriceRepository customPriceRepo,
             ProductRepository productRepo,
-            ThirdPartyRepository thirdPartyRepo
+            ThirdPartyRepository thirdPartyRepo,
+            TaxRepository taxRepo
     ) {
         this.customPriceRepo = customPriceRepo;
         this.productRepo = productRepo;
         this.thirdPartyRepo = thirdPartyRepo;
+        this.taxRepo = taxRepo;
     }
 
     public PriceResult resolvePrice(UUID productId, UUID clientId) {
@@ -69,11 +71,10 @@ public class PriceEngineService {
     }
 
     private BigDecimal resolveTaxRate(String taxType) {
-        return switch (taxType) {
-            case "IVA_19" -> TAX_19;
-            case "IVA_5" -> TAX_5;
-            default -> TAX_0;
-        };
+        if (taxType == null || taxType.isBlank()) return TAX_0;
+        return taxRepo.findByCode(taxType)
+                .map(tax -> tax.percentage())
+                .orElse(TAX_0);
     }
 
     private BigDecimal calculateTax(BigDecimal price, BigDecimal rate) {
