@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Slice tests for the POS DIAN-status endpoint
  * ({@code GET /api/v1/pos/invoices/{salesDocumentId}/dian}). {@code ADMIN} and {@code CAJERO}
- * must read the Siigo/DIAN status and CUFE, {@code VENDEDOR} must get 403, and a missing
+ * must read the provider/DIAN status and CUFE, {@code VENDEDOR} must get 403, and a missing
  * electronic invoice must surface as 404 so the cashier can poll cleanly.
  */
 @WebMvcTest(controllers = PosController.class)

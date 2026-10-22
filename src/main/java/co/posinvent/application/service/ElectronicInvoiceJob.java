@@ -109,7 +109,7 @@ public class ElectronicInvoiceJob {
                 });
 
                 if (response.hasErrors()) {
-                    log.warn("DIAN electronic invoice {} rejected by Siigo: {}",
+                    log.warn("DIAN electronic invoice {} rejected by provider: {}",
                             invoice.id(), errorSummary(response));
                 } else {
                     log.info("DIAN electronic invoice {} sent successfully. CUFE: {}",
@@ -214,7 +214,7 @@ public class ElectronicInvoiceJob {
         return response.errors().stream()
                 .map(e -> e.code() + ": " + e.message())
                 .reduce((a, b) -> a + "; " + b)
-                .orElse("Siigo rechazó la factura");
+                .orElse("El proveedor rechazó la factura");
     }
 
     private void handleSendFailure(java.util.UUID invoiceId, String errorMessage) {

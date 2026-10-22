@@ -53,7 +53,7 @@ class TaxRepositoryAdapter implements TaxRepository {
         entity.setPercentage(tax.percentage());
         entity.setObservation(tax.observation());
         entity.setDianCode(tax.dianCode());
-        entity.setSiigoTaxId(tax.siigoTaxId());
+        entity.setProviderExternalId(tax.providerExternalId());
         entity.setSortOrder(tax.sortOrder());
         entity.setActive(tax.active());
         return mapper.toDomain(jpa.save(entity));

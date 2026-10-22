@@ -13,7 +13,7 @@ import java.util.Map;
  * <p>This is the single source for the provider payload. It intentionally recomputes from
  * {@link SaleItem#netAmount()} and {@link SaleItem#taxAmount()} instead of trusting the
  * aggregate columns, then validates those columns against the result. A mismatch must fail
- * closed: Siigo would reject the document if its own totals differ from ours.</p>
+ * closed: the provider would reject the document if its own totals differ from ours.</p>
  */
 public record SalesDocumentTaxSummary(
         List<TaxRateSubtotal> subtotals,

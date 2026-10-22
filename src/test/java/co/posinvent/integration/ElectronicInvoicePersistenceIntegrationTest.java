@@ -64,7 +64,7 @@ class ElectronicInvoicePersistenceIntegrationTest extends AbstractIntegrationTes
     void providerResponseJsonbRoundTripsAsMap() {
         var providerResponse = Map.<String, Object>of(
                 "status", "ACCEPTED_BY_DIAN",
-                "reference", "SIIGO-REF-1",
+                "reference", "PROVIDER-REF-1",
                 "attempt", 3);
 
         var saved = invoiceRepo.save(new ElectronicInvoice(
@@ -85,7 +85,7 @@ class ElectronicInvoicePersistenceIntegrationTest extends AbstractIntegrationTes
         assertThat(reloaded.providerResponse()).isNotNull();
         assertThat(reloaded.providerResponse())
                 .containsEntry("status", "ACCEPTED_BY_DIAN")
-                .containsEntry("reference", "SIIGO-REF-1");
+                .containsEntry("reference", "PROVIDER-REF-1");
         assertThat(reloaded.providerResponse().get("attempt")).isEqualTo(3);
     }
 }

@@ -166,7 +166,7 @@ public class ElectronicInvoicePayloadService {
     }
 
     /**
-     * Siigo requires the sum of payments to equal the invoice total. POS tenders may exceed the
+     * El proveedor requiere que la suma of payments to equal the invoice total. POS tenders may exceed the
      * total because they include change, so we cap each line at the remaining amount.
      */
     private List<ElectronicInvoiceRequest.Payment> resolvePayments(SalesDocument document) {
@@ -177,7 +177,7 @@ public class ElectronicInvoicePayloadService {
         var persisted = salePaymentRepository.findBySalesDocumentId(document.id());
         if (persisted.isEmpty()) {
             throw new BusinessException("DIAN_PAYMENT_TOTAL_MISMATCH",
-                    "La factura no tiene medios de pago persistidos para enviar a Siigo.");
+                    "La factura no tiene medios de pago persistidos para enviar al proveedor.");
         }
         var remaining = document.totalAmount();
         var result = new ArrayList<ElectronicInvoiceRequest.Payment>();

@@ -480,7 +480,7 @@ public class ManageSalesDocumentUseCase {
                 discountTotal, documentDiscount, doc.documentDiscountType(),
                 doc.documentDiscountValue(), doc.discountAuthorizedBy(), doc.discountReason(),
                 doc.dianCufe(), doc.dianStatus(), doc.dianProviderInvoiceId(),
-                doc.dianPdfUrl(), doc.dianXmlUrl(), doc.dianQrUrl(), doc.dianSyncedAt()
+                doc.dianPdfUrl(), doc.dianXmlUrl(), doc.dianQrUrl(), doc.providerSyncedAt()
         );
 
         documentRepo.save(updated);
@@ -520,7 +520,7 @@ public class ManageSalesDocumentUseCase {
                             r.totalAmount(), r.createdBy(), r.createdAt(), r.updatedAt(),
                             r.items(), r.dueDate(), r.isCreditSale(),
                             r.dianCufe(), r.dianStatus(), r.dianProviderInvoiceId(),
-                            r.dianPdfUrl(), r.dianXmlUrl(), r.dianQrUrl(), r.dianSyncedAt()
+                            r.dianPdfUrl(), r.dianXmlUrl(), r.dianQrUrl(), r.providerSyncedAt()
                     ))
                     .orElse(r);
         }

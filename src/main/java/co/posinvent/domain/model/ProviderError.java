@@ -2,7 +2,7 @@ package co.posinvent.domain.model;
 
 import java.util.List;
 
-/** One validation error returned by Siigo for a rejected invoice payload. */
+/** One validation error returned by the provider for a rejected invoice payload. */
 public record ProviderError(
         String code,
         String message,

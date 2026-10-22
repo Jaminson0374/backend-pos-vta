@@ -115,7 +115,7 @@ class ElectronicInvoiceJobTest {
         when(payloadService.build(SALES_DOCUMENT_ID, DOCUMENT_NUMBER)).thenReturn(request);
         when(repository.save(any(ElectronicInvoice.class)))
                 .thenReturn(savedInvoice(ElectronicInvoiceStatus.PENDING_SEND));
-        when(provider.sendInvoice(request)).thenThrow(new RuntimeException("siigo unavailable"));
+        when(provider.sendInvoice(request)).thenThrow(new RuntimeException("provider unavailable"));
         when(repository.findSyncQueueItemByInvoiceId(INVOICE_ID))
                 .thenReturn(Optional.of(syncItem(0, 5)));
 
@@ -123,7 +123,7 @@ class ElectronicInvoiceJobTest {
 
         var queueCaptor = ArgumentCaptor.forClass(DianSyncQueueItem.class);
         verify(repository).updateSyncQueueItem(queueCaptor.capture());
-        assertThat(queueCaptor.getValue().lastError()).isEqualTo("siigo unavailable");
+        assertThat(queueCaptor.getValue().lastError()).isEqualTo("provider unavailable");
         assertThat(queueCaptor.getValue().status()).isEqualTo(SyncStatus.PENDING);
     }
 

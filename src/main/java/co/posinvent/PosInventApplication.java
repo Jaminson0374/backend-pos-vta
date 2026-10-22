@@ -1,7 +1,7 @@
 package co.posinvent;
 
 import co.posinvent.infrastructure.config.CertificateCryptoProperties;
-import co.posinvent.infrastructure.config.DianSiigoProperties;
+import co.posinvent.infrastructure.config.DianProviderProperties;
 import co.posinvent.infrastructure.config.JwtProperties;
 import co.posinvent.infrastructure.config.MediaProperties;
 import co.posinvent.infrastructure.config.RateLimitProperties;
@@ -19,7 +19,7 @@ import org.springframework.web.client.RestClient;
 @EnableAsync
 @EnableScheduling
 @EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)
-@EnableConfigurationProperties({JwtProperties.class, MediaProperties.class, DianSiigoProperties.class, CertificateCryptoProperties.class, RateLimitProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, MediaProperties.class, DianProviderProperties.class, CertificateCryptoProperties.class, RateLimitProperties.class})
 public class PosInventApplication {
 
 	public static void main(String[] args) {
@@ -28,7 +28,7 @@ public class PosInventApplication {
 
 	/**
 	 * Provides the {@link RestClient.Builder} used by HTTP client adapters (for example the
-	 * Siigo DIAN provider). Spring Boot 4 auto-configures this bean only through the separate
+	 * DIAN provider). Spring Boot 4 auto-configures this bean only through the separate
 	 * {@code spring-boot-starter-restclient} starter, which this project does not depend on,
 	 * so a minimal builder is declared here instead of adding a dependency.
 	 */

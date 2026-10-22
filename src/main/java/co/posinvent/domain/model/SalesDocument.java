@@ -43,7 +43,7 @@ public record SalesDocument(
         String dianPdfUrl,
         String dianXmlUrl,
         String dianQrUrl,
-        OffsetDateTime dianSyncedAt
+        OffsetDateTime providerSyncedAt
 ) {
     public static final String DISCOUNT_NONE = "NONE";
 
@@ -80,7 +80,7 @@ public record SalesDocument(
                 reason, discountTotal, documentDiscount, documentDiscountType,
                 documentDiscountValue, discountAuthorizedBy, discountReason,
                 dianCufe, dianStatus, dianProviderInvoiceId, dianPdfUrl, dianXmlUrl,
-                dianQrUrl, dianSyncedAt);
+                dianQrUrl, providerSyncedAt);
     }
 
     private void validateTransition(SalesDocumentStatus target) {

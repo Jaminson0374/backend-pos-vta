@@ -47,7 +47,7 @@ class TaxUseCaseTest {
         assertThat(captor.getValue().code()).isEqualTo("IVA_19");
         assertThat(captor.getValue().percentage()).isEqualByComparingTo("19");
         assertThat(captor.getValue().dianCode()).isEqualTo("01");
-        assertThat(captor.getValue().siigoTaxId()).isEqualTo("13156");
+        assertThat(captor.getValue().providerExternalId()).isEqualTo("13156");
         assertThat(response.code()).isEqualTo("IVA_19");
     }
 
@@ -78,8 +78,8 @@ class TaxUseCaseTest {
     }
 
     private TaxRequest request(String code, String description, String percentage,
-                               String dianCode, String siigoTaxId) {
+                               String dianCode, String providerExternalId) {
         return new TaxRequest(code, description, new BigDecimal(percentage),
-                "obs", dianCode, siigoTaxId, 1, true);
+                "obs", dianCode, providerExternalId, 1, true);
     }
 }

@@ -6,7 +6,7 @@ import co.posinvent.domain.model.ElectronicInvoiceRequest;
 import co.posinvent.domain.model.ProviderError;
 import co.posinvent.domain.model.ElectronicInvoiceResponse;
 import co.posinvent.domain.repository.ElectronicInvoiceProvider;
-import co.posinvent.infrastructure.config.DianSiigoProperties;
+import co.posinvent.infrastructure.config.DianProviderProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -63,7 +63,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
     private static final long DEFAULT_TOKEN_TTL_SECONDS = 3600L;
 
     private final RestClient.Builder restClientBuilder;
-    private final DianSiigoProperties properties;
+    private final DianProviderProperties properties;
     private final ObjectMapper objectMapper;
 
     /**
@@ -77,7 +77,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
     private String accessToken;
     private long accessTokenExpiresAtMillis;
 
-    SiigoProviderAdapter(RestClient.Builder restClientBuilder, DianSiigoProperties properties,
+    SiigoProviderAdapter(RestClient.Builder restClientBuilder, DianProviderProperties properties,
                          ObjectMapper objectMapper) {
         this.restClientBuilder = restClientBuilder;
         this.properties = properties;
@@ -184,7 +184,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
         return local;
     }
 
-    private static void applyTimeouts(RestClient.Builder builder, DianSiigoProperties props) {
+    private static void applyTimeouts(RestClient.Builder builder, DianProviderProperties props) {
         var httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(props.connectTimeoutMs()))
                 .build();
@@ -222,7 +222,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
         private SiigoInvoiceMapper() {}
 
         static SiigoInvoiceRequest toInvoiceRequest(ElectronicInvoiceRequest request,
-                                                     DianSiigoProperties properties) {
+                                                     DianProviderProperties properties) {
             var items = new ArrayList<SiigoItem>();
             if (request.items() != null) {
                 for (var item : request.items()) {
@@ -300,7 +300,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
         }
 
         private static SiigoItem toItem(ElectronicInvoiceRequest.InvoiceItem item,
-                                        DianSiigoProperties properties) {
+                                        DianProviderProperties properties) {
             var taxes = new ArrayList<SiigoTax>();
             if (item.taxRate() != null
                     && (item.taxRate().signum() > 0
@@ -318,7 +318,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
         }
 
         private static List<SiigoPayment> toPayments(ElectronicInvoiceRequest request,
-                                                     DianSiigoProperties properties) {
+                                                     DianProviderProperties properties) {
             if (request.payments() == null || request.payments().isEmpty()) {
                 throw new BusinessException("DIAN_PAYMENT_TOTAL_MISMATCH",
                         "Siigo exige al menos un medio de pago para la factura.");
@@ -334,7 +334,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
             return result;
         }
 
-        private static Long requiredDocumentType(DianSiigoProperties properties) {
+        private static Long requiredDocumentType(DianProviderProperties properties) {
             if (properties.documentTypeId() == null) {
                 throw new BusinessException("DIAN_SIIGO_CONFIG_MISSING",
                         "Falta app.dian.siigo.document-type-id para el tipo de factura de Siigo.");
@@ -342,7 +342,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
             return properties.documentTypeId();
         }
 
-        private static Long requiredSeller(DianSiigoProperties properties) {
+        private static Long requiredSeller(DianProviderProperties properties) {
             if (properties.sellerId() == null) {
                 throw new BusinessException("DIAN_SIIGO_CONFIG_MISSING",
                         "Falta app.dian.siigo.seller-id para el vendedor de Siigo.");
@@ -350,7 +350,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
             return properties.sellerId();
         }
 
-        private static Long taxId(BigDecimal rate, DianSiigoProperties properties) {
+        private static Long taxId(BigDecimal rate, DianProviderProperties properties) {
             if (rate.compareTo(BigDecimal.ZERO) == 0) return required(properties.taxIdIva0(), "tax-id-iva-0");
             if (rate.compareTo(new BigDecimal("5")) == 0) return required(properties.taxIdIva5(), "tax-id-iva-5");
             if (rate.compareTo(new BigDecimal("19")) == 0) return required(properties.taxIdIva19(), "tax-id-iva-19");
@@ -358,7 +358,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
                     "Tarifa no soportada por el catálogo de Siigo: " + rate);
         }
 
-        private static Long paymentTypeId(String method, DianSiigoProperties properties) {
+        private static Long paymentTypeId(String method, DianProviderProperties properties) {
             var means = DianPaymentMeans.fromInternal(method);
             return switch (means) {
                 case CASH -> required(properties.paymentTypeCash(), "payment-type-cash");
@@ -440,7 +440,7 @@ class SiigoProviderAdapter implements ElectronicInvoiceProvider {
             if (errors.isEmpty()) {
                 errors.add(new ProviderError(
                         "DIAN_PROVIDER_HTTP_" + httpStatus,
-                        "Siigo rechazó la factura sin un detalle estructurado.",
+                        "El proveedor rechazó la factura sin un detalle estructurado.",
                         List.of(),
                         null
                 ));

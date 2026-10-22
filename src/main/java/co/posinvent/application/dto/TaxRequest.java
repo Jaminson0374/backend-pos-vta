@@ -14,7 +14,7 @@ public record TaxRequest(
         @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal percentage,
         @Size(max = 500) String observation,
         @Size(max = 2) String dianCode,
-        @Size(max = 50) String siigoTaxId,
+        @Size(max = 50) String providerExternalId,
         Integer sortOrder,
         Boolean active
 ) {}

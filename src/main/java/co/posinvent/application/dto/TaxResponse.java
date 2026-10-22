@@ -12,13 +12,13 @@ public record TaxResponse(
         BigDecimal percentage,
         String observation,
         String dianCode,
-        String siigoTaxId,
+        String providerExternalId,
         int sortOrder,
         boolean active
 ) {
     public static TaxResponse from(Tax t) {
         return new TaxResponse(
                 t.id(), t.code(), t.description(), t.percentage(), t.observation(),
-                t.dianCode(), t.siigoTaxId(), t.sortOrder(), t.active());
+                t.dianCode(), t.providerExternalId(), t.sortOrder(), t.active());
     }
 }

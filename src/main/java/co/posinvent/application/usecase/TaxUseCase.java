@@ -65,7 +65,7 @@ public class TaxUseCase {
                 .orElseThrow(() -> new ResourceNotFoundException("Impuesto", id));
         repository.save(new Tax(
                 existing.id(), existing.code(), existing.description(), existing.percentage(),
-                existing.observation(), existing.dianCode(), existing.siigoTaxId(),
+                existing.observation(), existing.dianCode(), existing.providerExternalId(),
                 existing.sortOrder(), false));
     }
 
@@ -77,7 +77,7 @@ public class TaxUseCase {
                 request.percentage(),
                 request.observation(),
                 request.dianCode(),
-                request.siigoTaxId(),
+                request.providerExternalId(),
                 request.sortOrder() != null ? request.sortOrder() : 0,
                 request.active() == null || request.active()
         );

@@ -39,7 +39,7 @@ public record SalesDocumentResponse(
         String dianPdfUrl,
         String dianXmlUrl,
         String dianQrUrl,
-        OffsetDateTime dianSyncedAt
+        OffsetDateTime providerSyncedAt
 ) {
     public static SalesDocumentResponse from(SalesDocument doc) {
         return new SalesDocumentResponse(
@@ -72,7 +72,7 @@ public record SalesDocumentResponse(
                 doc.dianPdfUrl(),
                 doc.dianXmlUrl(),
                 doc.dianQrUrl(),
-                doc.dianSyncedAt()
+                doc.providerSyncedAt()
         );
     }
 }

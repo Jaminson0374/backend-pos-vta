@@ -62,7 +62,7 @@ public record ElectronicInvoiceRequest(
         String softwarePin
     ) {}
 
-    /** Fiscal identity of the acquirer as required by Siigo's invoice customer object. */
+    /** Fiscal identity of the acquirer as required by the provider invoice customer object. */
     public record ClientInfo(
         String identificationTypeCode,
         String identification,
@@ -82,7 +82,7 @@ public record ElectronicInvoiceRequest(
         String phone
     ) {}
 
-    /** One tender line. `dianCode` is metadata; Siigo receives its own payment type id. */
+    /** One tender line. `dianCode` is metadata; the provider receives its own payment type id. */
     public record Payment(
         String method,
         String dianCode,

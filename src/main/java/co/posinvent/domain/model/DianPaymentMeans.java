@@ -3,7 +3,7 @@ package co.posinvent.domain.model;
 import co.posinvent.domain.exception.BusinessException;
 
 /**
- * DIAN payment means codes used by the fiscal payload. Siigo maps these concepts to its own
+ * DIAN payment means codes used by the fiscal payload. The provider maps these concepts to its own
  * `payment_types` catalog IDs; the two identifiers are related but not interchangeable.
  */
 public enum DianPaymentMeans {

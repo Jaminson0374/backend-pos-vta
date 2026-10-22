@@ -131,8 +131,8 @@ public class SalesDocumentEntity {
     @Column(name = "dian_qr_url", columnDefinition = "TEXT")
     private String dianQrUrl;
 
-    @Column(name = "dian_synced_at")
-    private OffsetDateTime dianSyncedAt;
+    @Column(name = "provider_synced_at")
+    private OffsetDateTime providerSyncedAt;
 
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("lineNumber ASC")

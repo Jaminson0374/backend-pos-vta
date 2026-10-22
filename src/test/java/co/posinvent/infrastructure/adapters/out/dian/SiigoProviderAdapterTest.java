@@ -2,7 +2,7 @@ package co.posinvent.infrastructure.adapters.out.dian;
 
 import co.posinvent.domain.exception.BusinessException;
 import co.posinvent.domain.model.ElectronicInvoiceRequest;
-import co.posinvent.infrastructure.config.DianSiigoProperties;
+import co.posinvent.infrastructure.config.DianProviderProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,7 +59,7 @@ class SiigoProviderAdapterTest {
     @BeforeEach
     void setUp() {
         builder = RestClient.builder();
-        var properties = new DianSiigoProperties(
+        var properties = new DianProviderProperties(
                 USERNAME, ACCESS_KEY, PARTNER_ID,
                 BASE_URL, "/auth", "/v1/invoices", "/v1/invoices/status",
                 1000, 2000, 1L, 1L, true, false,

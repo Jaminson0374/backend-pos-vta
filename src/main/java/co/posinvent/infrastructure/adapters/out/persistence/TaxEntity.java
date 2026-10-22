@@ -38,6 +38,6 @@ class TaxEntity {
     @Column(name = "dian_code", length = 2)
     private String dianCode;
 
-    @Column(name = "siigo_tax_id", length = 50)
-    private String siigoTaxId;
+    @Column(name = "provider_external_id", length = 50)
+    private String providerExternalId;
 }

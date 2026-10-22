@@ -10,7 +10,7 @@ public record Tax(
         BigDecimal percentage,
         String observation,
         String dianCode,
-        String siigoTaxId,
+        String providerExternalId,
         int sortOrder,
         boolean active
 ) {
