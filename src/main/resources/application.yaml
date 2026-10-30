@@ -42,6 +42,25 @@ app:
       payment-type-card: ${SIIGO_PAYMENT_TYPE_CARD:}
       payment-type-transfer: ${SIIGO_PAYMENT_TYPE_TRANSFER:}
       payment-type-check: ${SIIGO_PAYMENT_TYPE_CHECK:}
+    thefactory:
+      token-empresa: ${FACTORY_API_TOKEN:}
+      token-password: ${FACTORY_API_PASSWORD:}
+      base-url: ${FACTORY_API_URL:https://demoemision21.thefactoryhka.com.co/ws/v1.0/Service.svc}
+      test-env: ${FACTORY_TEST_ENV:true}
+      connect-timeout-ms: ${FACTORY_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${FACTORY_READ_TIMEOUT_MS:15000}
+      numbering-range: ${FACTORY_NUMBERING_RANGE:}
+      document-type: ${FACTORY_DOCUMENT_TYPE:01}
+      operation-type: ${FACTORY_OPERATION_TYPE:05}
+      currency: ${FACTORY_CURRENCY:COP}
+      tax-code-iva: ${FACTORY_TAX_CODE_IVA:01}
+      tax-code-inc: ${FACTORY_TAX_CODE_INC:04}
+      unit-measure: ${FACTORY_UNIT_MEASURE:UN}
+      payment-method: ${FACTORY_PAYMENT_METHOD:1}
+      discount-code: ${FACTORY_DISCOUNT_CODE:00}
+      final-consumer-identification: ${FACTORY_FINAL_CONSUMER_IDENTIFICATION:222222222222}
+      final-consumer-identification-type: ${FACTORY_FINAL_CONSUMER_IDENTIFICATION_TYPE:13}
+      final-consumer-name: ${FACTORY_FINAL_CONSUMER_NAME:Consumidor final}
 
 ---
 spring:
