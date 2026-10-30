@@ -40,5 +40,9 @@ media/
 ### Local artifacts ###
 /backend.log
 
+### Local sensitive artifacts ###
+backup.sql
+log_errores.txt
+
 ### Local environment ###
 .env
