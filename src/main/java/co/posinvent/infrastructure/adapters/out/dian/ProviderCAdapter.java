@@ -11,16 +11,16 @@ import java.security.MessageDigest;
 import java.util.Base64;
 
 /**
- * Mock implementation of the DIAN ElectronicInvoiceProvider interface.
+ * Mock implementation of the DIAN {@link ElectronicInvoiceProvider} interface.
  *
- * Since the real Provider C SDK may not be available, this generates a fake CUFE
- * (SHA-256 of timestamp + document number) and a placeholder QR code.
+ * <p>It is the default provider ({@code app.dian.provider=mock} or unset) and exists so the
+ * POS can run end to end without fiscal credentials. It generates a deterministic-looking
+ * fake CUFE (SHA-256 of document number, timestamp, and total), a placeholder QR payload,
+ * and always reports {@code ACCEPTED_BY_DIAN}. It never contacts DIAN and never signs
+ * anything, so its output has no fiscal validity.</p>
  *
- * TODO: Replace with real Provider C integration when the SDK is available:
- *       - Connect to the official DIAN Habilitación/Envío API
- *       - Use the real certificate (from digital_certificates table) for signing
- *       - Use the real resolution number + prefix for authorization
- *       - Implement real status checking endpoint
+ * <p>Real integrations live behind {@code app.dian.provider}: {@code siigo} uses the Siigo
+ * REST API and {@code thefactory} uses The Factory HKA SOAP sandbox.</p>
  */
 @Service
 @ConditionalOnProperty(name = "app.dian.provider", havingValue = "mock", matchIfMissing = true)
@@ -28,11 +28,6 @@ class ProviderCAdapter implements ElectronicInvoiceProvider {
 
     @Override
     public ElectronicInvoiceResponse sendInvoice(ElectronicInvoiceRequest request) {
-        // TODO: Replace with real Provider C API call
-        // 1. Sign the invoice XML with the company's digital certificate
-        // 2. Send to DIAN's Envío endpoint
-        // 3. Parse the response for CUFE, QR, and status
-
         var cufe = generateMockCufe(request);
         var qrCode = generateMockQr(request, cufe);
 
@@ -46,9 +41,6 @@ class ProviderCAdapter implements ElectronicInvoiceProvider {
 
     @Override
     public ElectronicInvoiceResponse checkStatus(String cufe) {
-        // TODO: Replace with real DIAN status check
-        // GET /api/dian/status/{cufe} from the real Provider C API
-
         return new ElectronicInvoiceResponse(
                 cufe,
                 null,
